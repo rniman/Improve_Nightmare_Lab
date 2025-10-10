@@ -1,0 +1,380 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Helper">
+      <UniqueIdentifier>{ea7f42e0-49bd-44ef-b4e1-d51230ea01d8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Server">
+      <UniqueIdentifier>{00acebcd-2466-497b-9b5c-bc3a509b7e9c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TextureBlendShader">
+      <UniqueIdentifier>{b460d140-9be7-4706-b33a-96e7421f4a9c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Data">
+      <UniqueIdentifier>{67e44d8b-5ad6-4e04-a960-57d859c4b84f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="HLSL%28cso%29">
+      <UniqueIdentifier>{3dd8ca27-e1c0-4bd3-9930-17a1f308172b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="HLSL%28cso%29\OutLine">
+      <UniqueIdentifier>{0e288363-9c9e-4027-a136-273d128fc452}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Particle">
+      <UniqueIdentifier>{e75b5546-0935-4a85-b146-b8ee7821198f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="HLSL%28cso%29\Lobby">
+      <UniqueIdentifier>{f8633c7c-af7d-4a58-9d75-83aea60ad5d3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SwordTrail">
+      <UniqueIdentifier>{e1bc8f89-06e7-4fb1-a7a5-86f73ec0613f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Script">
+      <UniqueIdentifier>{35cb9766-724e-407f-8749-106f509e09e5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="HLSL%28cso%29\Particle">
+      <UniqueIdentifier>{0d7d2a93-78bf-405e-953f-fb45952d1aaa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="HLSL%28cso%29\Trail">
+      <UniqueIdentifier>{57430c1a-be6a-45d7-a060-2c79ebdf9b2f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="리소스 파일">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Blur">
+      <UniqueIdentifier>{f9ad5bc5-4377-4948-8c23-c3874ba70eb3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="targetver.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Client.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="GameFramework.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Scene.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="stdafx.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Timer.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="GlobalDefine.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Object.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Mesh.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Shader.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12.h">
+      <Filter>Helper</Filter>
+    </ClInclude>
+    <ClInclude Include="DDSTextureLoader12.h">
+      <Filter>Helper</Filter>
+    </ClInclude>
+    <ClInclude Include="TCPClient.h">
+      <Filter>Server</Filter>
+    </ClInclude>
+    <ClInclude Include="Player.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="PlayerController.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="EnvironmentObject.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Collision.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="TextureBlendAnimationShader.h">
+      <Filter>TextureBlendShader</Filter>
+    </ClInclude>
+    <ClInclude Include="TextureBlendMesh.h">
+      <Filter>TextureBlendShader</Filter>
+    </ClInclude>
+    <ClInclude Include="TextureBlendObject.h">
+      <Filter>TextureBlendShader</Filter>
+    </ClInclude>
+    <ClInclude Include="TeleportLocation.h">
+      <Filter>Data</Filter>
+    </ClInclude>
+    <ClInclude Include="ParticleShader.h">
+      <Filter>Particle</Filter>
+    </ClInclude>
+    <ClInclude Include="ParticleMesh.h">
+      <Filter>Particle</Filter>
+    </ClInclude>
+    <ClInclude Include="ParticleObject.h">
+      <Filter>Particle</Filter>
+    </ClInclude>
+    <ClInclude Include="SharedObject.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Trail.h">
+      <Filter>SwordTrail</Filter>
+    </ClInclude>
+    <ClInclude Include="CTrailShader.h">
+      <Filter>SwordTrail</Filter>
+    </ClInclude>
+    <ClInclude Include="Component.h">
+      <Filter>Script</Filter>
+    </ClInclude>
+    <ClInclude Include="BlurComputeShader.h">
+      <Filter>Blur</Filter>
+    </ClInclude>
+    <ClInclude Include="Sound.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Client.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="GameFramework.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Scene.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Timer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Object.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Mesh.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Shader.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="DDSTextureLoader12.cpp">
+      <Filter>Helper</Filter>
+    </ClCompile>
+    <ClCompile Include="TCPClient.cpp">
+      <Filter>Server</Filter>
+    </ClCompile>
+    <ClCompile Include="Player.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PlayerController.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="EnvironmentObject.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Collision.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="TextureBlendAnimationShader.cpp">
+      <Filter>TextureBlendShader</Filter>
+    </ClCompile>
+    <ClCompile Include="TextureBlendMesh.cpp">
+      <Filter>TextureBlendShader</Filter>
+    </ClCompile>
+    <ClCompile Include="TextureBlendObject.cpp">
+      <Filter>TextureBlendShader</Filter>
+    </ClCompile>
+    <ClCompile Include="ParticleShader.cpp">
+      <Filter>Particle</Filter>
+    </ClCompile>
+    <ClCompile Include="ParticleMesh.cpp">
+      <Filter>Particle</Filter>
+    </ClCompile>
+    <ClCompile Include="ParticleObject.cpp">
+      <Filter>Particle</Filter>
+    </ClCompile>
+    <ClCompile Include="SharedObject.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Trail.cpp">
+      <Filter>SwordTrail</Filter>
+    </ClCompile>
+    <ClCompile Include="CTrailShader.cpp">
+      <Filter>SwordTrail</Filter>
+    </ClCompile>
+    <ClCompile Include="Component.cpp">
+      <Filter>Script</Filter>
+    </ClCompile>
+    <ClCompile Include="BlurComputeShader.cpp">
+      <Filter>Blur</Filter>
+    </ClCompile>
+    <ClCompile Include="Sound.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Client.rc">
+      <Filter>리소스 파일</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="small.ico">
+      <Filter>리소스 파일</Filter>
+    </Image>
+    <Image Include="Client.ico">
+      <Filter>리소스 파일</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Shaders.hlsl" />
+    <FxCompile Include="Light.hlsl" />
+    <FxCompile Include="BlendAnimation.hlsl">
+      <Filter>TextureBlendShader</Filter>
+    </FxCompile>
+    <FxCompile Include="VSStandard.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="VSInstanceStandard.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="VSSkinnedAnimationStandard.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="VSPostProcessing.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="VSUserInterface.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="VSBlend.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="PSStandard.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="PSShadow.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="PSPostProcessing.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="PSTransparent.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="PSUserInterface.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="PSBlend.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="VSOutLine.hlsl">
+      <Filter>HLSL%28cso%29\OutLine</Filter>
+    </FxCompile>
+    <FxCompile Include="VSOutLineMask.hlsl">
+      <Filter>HLSL%28cso%29\OutLine</Filter>
+    </FxCompile>
+    <FxCompile Include="PSOutLine.hlsl">
+      <Filter>HLSL%28cso%29\OutLine</Filter>
+    </FxCompile>
+    <FxCompile Include="VSStandardOutLine.hlsl">
+      <Filter>HLSL%28cso%29\OutLine</Filter>
+    </FxCompile>
+    <FxCompile Include="VSStandardOutLineMask.hlsl">
+      <Filter>HLSL%28cso%29\OutLine</Filter>
+    </FxCompile>
+    <FxCompile Include="VSInstanceOutLineMask.hlsl">
+      <Filter>HLSL%28cso%29\OutLine</Filter>
+    </FxCompile>
+    <FxCompile Include="VSInstanceOutLine.hlsl">
+      <Filter>HLSL%28cso%29\OutLine</Filter>
+    </FxCompile>
+    <FxCompile Include="PSPostProcessingWithSSAO.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="PSLobbyUI.hlsl">
+      <Filter>HLSL%28cso%29\Lobby</Filter>
+    </FxCompile>
+    <FxCompile Include="PSLobbyStandard.hlsl">
+      <Filter>HLSL%28cso%29\Lobby</Filter>
+    </FxCompile>
+    <FxCompile Include="VSLobbyUI.hlsl">
+      <Filter>HLSL%28cso%29\Lobby</Filter>
+    </FxCompile>
+    <FxCompile Include="VSLobbyStandard.hlsl">
+      <Filter>HLSL%28cso%29\Lobby</Filter>
+    </FxCompile>
+    <FxCompile Include="PSFullScreen.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="ParticleShader.hlsl">
+      <Filter>HLSL%28cso%29\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="VSParticleStreamOutput.hlsl">
+      <Filter>HLSL%28cso%29\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="GSParticleStreamOutput.hlsl">
+      <Filter>HLSL%28cso%29\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="VSParticleDraw.hlsl">
+      <Filter>HLSL%28cso%29\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="GSParticleDraw.hlsl">
+      <Filter>HLSL%28cso%29\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="PSParticleDraw.hlsl">
+      <Filter>HLSL%28cso%29\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="VS_TRAIL.hlsl">
+      <Filter>HLSL%28cso%29\Trail</Filter>
+    </FxCompile>
+    <FxCompile Include="PS_TRAIL.hlsl">
+      <Filter>HLSL%28cso%29\Trail</Filter>
+    </FxCompile>
+    <FxCompile Include="VSTextureToScreen.hlsl">
+      <Filter>Blur</Filter>
+    </FxCompile>
+    <FxCompile Include="CSBloom.hlsl">
+      <Filter>Blur</Filter>
+    </FxCompile>
+    <FxCompile Include="CSBloomOff.hlsl">
+      <Filter>Blur</Filter>
+    </FxCompile>
+    <FxCompile Include="PSTextureToScreen.hlsl">
+      <Filter>Blur</Filter>
+    </FxCompile>
+    <FxCompile Include="PSFullScreenAnime.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shadow.hlsl" />
+    <None Include="Common.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </None>
+    <None Include="NoiseData.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </None>
+  </ItemGroup>
+</Project>
