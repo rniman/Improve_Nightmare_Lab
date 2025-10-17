@@ -50,7 +50,7 @@ CCamera::CCamera(const shared_ptr<CCamera>& pCamera)
 		m_nMode = 0x00;
 
 		m_xmf4FogColor = XMFLOAT4(0.1f, 0.1f, 0.1f, 1.0f);
-		m_xmf4FogInfo = XMFLOAT4(1.0f, 10.0f, 0.1f, 1.0f);
+		m_xmf4FogInfo = XMFLOAT4(1.0f, 10.0f, 0.5f, 1.0f);
 
 		m_iPartitionPos = -1;
 		m_Floor = -1;

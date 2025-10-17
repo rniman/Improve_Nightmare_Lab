@@ -462,7 +462,7 @@ CBlueSuitPlayer::CBlueSuitPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	m_xmf2RadarUIPos = XMFLOAT2{ 0.0f,0.0f };
 
 	m_pCamera->SetFogColor(XMFLOAT4(0.1f, 0.1f, 0.1f, 0.1f));
-	m_pCamera->SetFogInfo(XMFLOAT4(0.0f, 10.0f, 0.05f, 1.0f));
+	m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f, 1.0f));
 
 	//m_xmf3Scale = XMFLOAT3(1.25f,1.25f,1.25f);
 
@@ -588,7 +588,7 @@ void CBlueSuitPlayer::Update(float fElapsedTime)
 			m_fInterruption = 0.0f;
 		}
 	}
-	m_pCamera->SetFogInfo(XMFLOAT4(0.0f, 10.0f, 0.05f + m_fInterruption / 8, 1.0f));
+	m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f + m_fInterruption / 4, 1.0f));
 
 	if (m_bRunning)
 	{
@@ -749,9 +749,9 @@ void CBlueSuitPlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 				fEndingElapsedTime = fMaxFogTime;
 			}
 
-			float fFogDensity = 1 - fEndingElapsedTime / fMaxFogTime;
+			float fFogDensity = fEndingElapsedTime / 2 * fMaxFogTime + 0.5f;
 
-			XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(1.0f, 0.0f, 0.0f, fFogDensity);
+			XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(1.0f, 0.0f, fFogDensity, 1.0f);
 			XMFLOAT4 xmf4EndingFogColor = XMFLOAT4(0.1f + fEndingElapsedTime * 0.15f, 0.1f, 0.1f, 0.1f);
 			m_pCamera->SetFogColor(xmf4EndingFogColor);
 			m_pCamera->SetFogInfo(xmf4EndingFogInfo);
@@ -765,9 +765,9 @@ void CBlueSuitPlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 				fEndingElapsedTime = fMaxFogTime;
 			}
 
-			float fFogDensity = 1 - fEndingElapsedTime / fMaxFogTime;
+			float fFogDensity = fEndingElapsedTime / 2 * fMaxFogTime + 0.5f;
 
-			XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(0.1f, 0.0f, 1.0f, fFogDensity);
+			XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(0.1f, 0.0f, fFogDensity, 1.0f);
 			XMFLOAT4 xmf4EndingFogColor = XMFLOAT4(0.1f + fEndingElapsedTime, 0.1f + fEndingElapsedTime, 0.1f + fEndingElapsedTime, 0.1f + fEndingElapsedTime);
 			m_pCamera->SetFogColor(xmf4EndingFogColor);
 			m_pCamera->SetFogInfo(xmf4EndingFogInfo);
@@ -783,9 +783,9 @@ void CBlueSuitPlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 		}
 
 		// 시간에 따른 안개 밀도 계산 (0.0에서 1.0까지 증가)
-		float fFogDensity = 1 - fEndingElapsedTime / fMaxFogTime;
+		float fFogDensity = fEndingElapsedTime / 2 * fMaxFogTime + 0.5f;
 
-		XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(1.0f, 0.0f, 0.0f, fFogDensity);
+		XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(1.0f, 0.0f, fFogDensity, 1.0f);
 		XMFLOAT4 xmf4EndingFogColor = XMFLOAT4(0.1f + fEndingElapsedTime * 0.15f, 0.1f, 0.1f, 0.1f);
 		m_pCamera->SetFogColor(xmf4EndingFogColor);
 		m_pCamera->SetFogInfo(xmf4EndingFogInfo);
@@ -1323,7 +1323,7 @@ CZombiePlayer::CZombiePlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	:CPlayer(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, pContext)
 {
 	m_pCamera->SetFogColor(XMFLOAT4(0.5f, 0.5f, 0.5f, 0.5f));
-	m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.05f, 1.0f));
+	m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f, 1.0f));
 	m_pCamera->SetUpdateUseRotate(false);
 
 	m_xmf3Scale = XMFLOAT3(1.5f, 1.5f, 1.0f);
@@ -1443,9 +1443,9 @@ void CZombiePlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 		}
 
 		// 시간에 따른 안개 밀도 계산 (0.0에서 1.0까지 증가)
-		float fFogDensity = 1 - fEndingElapsedTime / fMaxFogTime;
+		float fFogDensity = fEndingElapsedTime / 2 * fMaxFogTime + 0.5f;
 
-		XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(1.0f, 0.0f, 0.0f, fFogDensity);
+		XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(1.0f, 0.0f, fFogDensity, 1.0f);
 		XMFLOAT4 xmf4EndingFogColor = XMFLOAT4(0.6f - fEndingElapsedTime / 3.0f * 0.5f, 0.6f - fEndingElapsedTime / 3.0f * 0.5f, 0.6f - fEndingElapsedTime / 3.0f * 0.5f, 0.6f - fEndingElapsedTime / 3.0f * 0.5f);
 		m_pCamera->SetFogColor(xmf4EndingFogColor);
 		m_pCamera->SetFogInfo(xmf4EndingFogInfo);
@@ -1461,9 +1461,9 @@ void CZombiePlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 		}
 
 		// 시간에 따른 안개 밀도 계산 (0.0에서 1.0까지 증가)
-		float fFogDensity = 1 - fEndingElapsedTime / fMaxFogTime;
+		float fFogDensity = fEndingElapsedTime / 2 * fMaxFogTime + 0.5f;
 
-		XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(1.0f, 0.0f, 0.0f, fFogDensity);
+		XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(1.0f, 0.0f, fFogDensity, 1.0f);
 		XMFLOAT4 xmf4EndingFogColor = XMFLOAT4(0.5f, 0.5f, 0.5f, 0.5f);
 		m_pCamera->SetFogColor(xmf4EndingFogColor);
 		m_pCamera->SetFogInfo(xmf4EndingFogInfo);
@@ -1643,7 +1643,8 @@ void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, 
 	wchar_t text[128]; // 변환된 유니코드 문자열을 저장할 버퍼
 	
 	// 부동 소수점 값을 문자열로 변환 후 유니코드 문자열로 저장
-	if (m_bGameStartWait) {
+	if (m_bGameStartWait) 
+	{
 		static int iPrevCount = 10;
 		// 카운트 투명도 조절
 		static float opacity = 1.0f;
@@ -1651,13 +1652,14 @@ void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, 
 		m_fGameStartCount -= gGameTimer.GetTimeElapsed();
 		opacity -= gGameTimer.GetTimeElapsed();
 
-		if (m_fGameStartCount <= 0.1f) {
+		if (m_fGameStartCount <= 0.1f) 
+		{
 			m_bGameStartWait = false;
 
 			// 기본으로 되돌림.
 			m_bInterruption = false;
 			m_pCamera->SetFogColor(XMFLOAT4(0.5f, 0.5f, 0.5f, 0.5f));
-			m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.05f, 1.0f));
+			m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f, 1.0f));
 		}
 		int iCeilGameStartCount = ceil(m_fGameStartCount);
 		if (iPrevCount > iCeilGameStartCount) {
@@ -1728,6 +1730,6 @@ void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, 
 			}
 		}
 		m_pCamera->SetFogColor(XMFLOAT4(fogColorValue, fogColorValue, fogColorValue, fogColorValue));
-		m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.05f + m_fInterruption / 8, 1.0f));
+		m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f + m_fInterruption / 2, 1.0f));
 	}
 }
