@@ -161,7 +161,7 @@ void CTexture::SetUavGpuDescriptorHandle(int nIndex, D3D12_GPU_DESCRIPTOR_HANDLE
 
 void CTexture::UpdateSrvShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, int nRootParameterIndex, int nDescriptorHandlesIndex)
 {
-	pd3dCommandList->SetComputeRootDescriptorTable(m_vnRootParameterIndices[0], m_vd3dSrvGpuDescriptorHandles[0]);
+	pd3dCommandList->SetComputeRootDescriptorTable(m_vnRootParameterIndices[0], m_vd3dSrvGpuDescriptorHandles[nDescriptorHandlesIndex]);
 }
 
 void CTexture::UpdateUavShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, int nRootParameterIndex, int nDescriptorHandlesIndex)

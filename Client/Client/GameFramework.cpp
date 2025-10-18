@@ -1245,7 +1245,7 @@ void CGameFramework::LoadingRender()
 //#define _WITH_PLAYER_TOP
 void CGameFramework::FrameAdvance()
 {
-	gGameTimer.Tick(60.0f);
+	gGameTimer.Tick();
 
 	SoundManager& soundManager = SoundManager::GetInstance();
 	soundManager.UpdateSystem();

@@ -138,13 +138,13 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 
 	pd3dDescriptorRanges[16].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
 	pd3dDescriptorRanges[16].NumDescriptors = 1;
-	pd3dDescriptorRanges[16].BaseShaderRegister = 0; //u0: RWTexture2D
+	pd3dDescriptorRanges[16].BaseShaderRegister = 0; //u0: RWTexture2D 
 	pd3dDescriptorRanges[16].RegisterSpace = 0;
 	pd3dDescriptorRanges[16].OffsetInDescriptorsFromTableStart = 0;
 
 	pd3dDescriptorRanges[17].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	pd3dDescriptorRanges[17].NumDescriptors = 1;
-	pd3dDescriptorRanges[17].BaseShaderRegister = 14; //t13: ÇÎÆþ¿ë Rtv
+	pd3dDescriptorRanges[17].BaseShaderRegister = 14; //t14: ÇÎÆþ¿ë Rtv
 	pd3dDescriptorRanges[17].RegisterSpace = 0;
 	pd3dDescriptorRanges[17].OffsetInDescriptorsFromTableStart = 0;
 
@@ -385,8 +385,12 @@ void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, const shared_pt
 			m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
 		}
 	}
+
 	int nRootParameters = pTexture->GetRootParameters();
-	for (int j = 0; j < nRootParameters; j++) pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
+	for (int j = 0; j < nRootParameters; j++) 
+	{
+		pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
+	}
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE CScene::CreateShaderResourceView(ID3D12Device* pd3dDevice, ID3D12Resource* pd3dResource, DXGI_FORMAT dxgiSrvFormat)
@@ -411,11 +415,11 @@ D3D12_GPU_DESCRIPTOR_HANDLE CScene::CreateShaderResourceView(ID3D12Device* pd3dD
 void CScene::CreateUnorderedAccessViews(ID3D12Device* pd3dDevice, const shared_ptr<CTexture>& pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
 {
 	m_nCntUav++;
-	
+
 	m_d3dUavCPUDescriptorNextHandle.ptr += (::gnCbvSrvUavDescriptorIncrementSize * nDescriptorHeapIndex);
 	m_d3dUavGPUDescriptorNextHandle.ptr += (::gnCbvSrvUavDescriptorIncrementSize * nDescriptorHeapIndex);
-	
-	if (pTexture) 
+
+	if (pTexture)
 	{
 		int nTextures = pTexture->GetTextures();
 		for (int i = 0; i < nTextures; i++)
@@ -428,9 +432,12 @@ void CScene::CreateUnorderedAccessViews(ID3D12Device* pd3dDevice, const shared_p
 			m_d3dUavGPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
 		}
 	}
-	
+
 	int nRootParameters = pTexture->GetRootParameters();
-	for (int j = 0; j < nRootParameters; j++) pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
+	for (int j = 0; j < nRootParameters; j++)
+	{
+		pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
+	}
 }
 
 /// <CScene>
@@ -588,7 +595,7 @@ void CLobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	int nCntCbv = 3000;
 	int nCntSrv = 1000;
-	int nCntUav = 1;
+	int nCntUav = 3;
 
 	CreateCbvSrvUavDescriptorHeaps(pd3dDevice, nCntCbv, nCntSrv, nCntUav);
 
@@ -998,8 +1005,7 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	m_vFullScreenProcessingShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
 	m_vFullScreenProcessingShader->BuildObjects(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), L"Main", m_apPlayer[mainPlayerId]);
 
-	m_pTextureToScreenShaderShader = make_shared<CTextureToScreenShader>(m_pBlurComputeShader->GetTextureSrv());
-	//m_pTextureToScreenShaderShader = make_shared<CTextureToScreenShader>();
+	m_pTextureToScreenShaderShader = make_shared<CTextureToScreenShader>(m_pBlurComputeShader->GetTextureComposite());
 	m_pTextureToScreenShaderShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), 1, nullptr, DXGI_FORMAT_D24_UNORM_S8_UINT);
 }
 
@@ -1645,10 +1651,10 @@ bool CMainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM 
 				m_pPostProcessingShader->SetPipelineIndex(0);
 			break;
 		case 'N':
-			if (m_pBlurComputeShader->GetPipeLineIndex() == 0)
-				m_pBlurComputeShader->SetPipeLineIndex(1);
+			if (m_pBlurComputeShader->IsBlur())
+				m_pBlurComputeShader->SetBlur(false);
 			else
-				m_pBlurComputeShader->SetPipeLineIndex(0);
+				m_pBlurComputeShader->SetBlur(true);
 			break;
 		case VK_UP://		m_pcbMappedLights->bias	0.00119999994	float
 			//m_pcbMappedLights->bias += 0.0001f;
@@ -1938,7 +1944,7 @@ void CMainScene::ForwardRender(int nGameState, ID3D12GraphicsCommandList* pd3dCo
 			shader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
 		}
 	}
-	else if (nGameState != GAME_STATE::BLUE_SUIT_WIN || GAME_STATE::ZOMBIE_WIN)
+	else if (!(nGameState == GAME_STATE::BLUE_SUIT_WIN || nGameState == GAME_STATE::ZOMBIE_WIN))
 	{
 		m_vForwardRenderShader[USER_INTERFACE_SHADER]->Render(pd3dCommandList, pCamera, m_pMainPlayer);
 	}
@@ -1950,7 +1956,16 @@ void CMainScene::BlurDispatch(ID3D12GraphicsCommandList* pd3dCommandList, const 
 	pd3dCommandList->SetComputeRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
 	pCamera->UpdateComputeShaderVariables(pd3dCommandList);
 
-	m_pBlurComputeShader->Dispatch(pd3dCommandList, 0);
+	if(!m_pBlurComputeShader->IsBlur())
+	{
+		m_pBlurComputeShader->Dispatch(pd3dCommandList, 0);
+	}
+	else
+	{
+		m_pBlurComputeShader->PassFirst(pd3dCommandList, 1);
+		m_pBlurComputeShader->PassSecond(pd3dCommandList, 2);
+		m_pBlurComputeShader->PassComposite(pd3dCommandList, 3);
+	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
 	pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());

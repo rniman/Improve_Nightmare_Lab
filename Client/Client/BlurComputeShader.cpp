@@ -10,11 +10,6 @@ CTextureToScreenShader::CTextureToScreenShader(shared_ptr<CTexture>& pTexture)
 
 D3D12_INPUT_LAYOUT_DESC CTextureToScreenShader::CreateInputLayout()
 {
-	/*D3D12_INPUT_LAYOUT_DESC d3dInputLayoutDesc;
-	d3dInputLayoutDesc.pInputElementDescs = NULL;
-	d3dInputLayoutDesc.NumElements = 0;
-
-	return(d3dInputLayoutDesc);*/
 	UINT nInputElementDescs = 2;
 	D3D12_INPUT_ELEMENT_DESC* pd3dInputElementDescs = new D3D12_INPUT_ELEMENT_DESC[nInputElementDescs];
 
@@ -48,14 +43,11 @@ D3D12_DEPTH_STENCIL_DESC CTextureToScreenShader::CreateDepthStencilState()
 	d3dDepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
 
 	return(d3dDepthStencilDesc);
-	//return CShader::CreateDepthStencilState();
 }
 
 D3D12_SHADER_BYTECODE CTextureToScreenShader::CreateVertexShader()
 {
 	return CShader::ReadCompiledShaderFromFile(L"cso/VSTextureToScreen.cso", m_pd3dVertexShaderBlob.GetAddressOf());
-
-	//return CShader::ReadCompiledShaderFromFile(L"cso/VSPostProcessing.cso", m_pd3dVertexShaderBlob.GetAddressOf());
 }
 
 D3D12_SHADER_BYTECODE CTextureToScreenShader::CreatePixelShader()
@@ -91,9 +83,7 @@ void CTextureToScreenShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12Graphi
 		m_vpd3dPipelineState.emplace_back();
 	}
 
-	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat); //m_ppd3dPipelineStates[0] 생성
-
-	//CreateCbvSrvUavDescriptorHeaps(pd3dDevice, 0, 2, 0);
+	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
@@ -105,8 +95,10 @@ void CTextureToScreenShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, 
 		pd3dCommandList->SetPipelineState(m_vpd3dPipelineState[0].Get());
 	}
 
-	//if (m_pd3dCbvSrvUavDescriptorHeap) pd3dCommandList->SetDescriptorHeaps(1, &m_pd3dCbvSrvUavDescriptorHeap);
-	if (m_pTexture) m_pTexture->UpdateShaderVariables(pd3dCommandList);
+	if (m_pTexture) 
+	{
+		m_pTexture->UpdateShaderVariables(pd3dCommandList);
+	}
 
 	pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pd3dCommandList->DrawInstanced(6, 1, 0, 0);
@@ -160,15 +152,24 @@ void CComputeShader::Dispatch(ID3D12GraphicsCommandList* pd3dCommandList, UINT c
 
 D3D12_SHADER_BYTECODE CBlurComputeShader::CreateComputeShader(ID3DBlob** ppd3dShaderBlob)
 {
-	if(m_PipeLineIndex == 0)
-		return CShader::ReadCompiledShaderFromFile(L"cso/CSBloom.cso", m_pd3dComputeShaderBlob.GetAddressOf());
-	else
+	switch (m_PipeLineIndex)
+	{
+	case 0:
 		return CShader::ReadCompiledShaderFromFile(L"cso/CSBloomOff.cso", m_pd3dComputeShaderBlob.GetAddressOf());
+	case 1:
+		return CShader::ReadCompiledShaderFromFile(L"cso/CSBlurVertical.cso", m_pd3dComputeShaderBlob.GetAddressOf());
+	case 2:
+		return CShader::ReadCompiledShaderFromFile(L"cso/CSBlurHorizontal.cso", m_pd3dComputeShaderBlob.GetAddressOf());
+	case 3:
+		return CShader::ReadCompiledShaderFromFile(L"cso/CSComposite.cso", m_pd3dComputeShaderBlob.GetAddressOf());
+	default:
+		break;
+	}
 }
 
 void CBlurComputeShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dRootSignature, UINT cxThreadGroups, UINT cyThreadGroups, UINT czThreadGroups)
 {
-	m_nPipelineState = 2;
+	m_nPipelineState = 4;
 	m_vpd3dPipelineState.reserve(m_nPipelineState);
 	for (int i = 0; i < m_nPipelineState; ++i)
 	{
@@ -181,19 +182,67 @@ void CBlurComputeShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCo
 
 void CBlurComputeShader::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	m_pTextureUav = make_shared<CTexture>(1, RESOURCE_TEXTURE2D, 0, 1, 0, 1);
-	m_pTextureSrv = make_shared<CTexture>(1, RESOURCE_TEXTURE2D, 0, 1, 1, 0);
-	
-	m_pTextureSrv->CreateTexture(pd3dDevice, 0, RESOURCE_TEXTURE2D, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, 1, 0, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, NULL);
-	m_pTextureUav->CreateTexture(pd3dDevice, 0, RESOURCE_TEXTURE2D, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, 1, 0, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL);
-	
+	m_pTextureFirPassUav = make_shared<CTexture>(1, RESOURCE_TEXTURE2D, 0, 2, 1, 1);
+	m_pTextureSecPassUav = make_shared<CTexture>(1, RESOURCE_TEXTURE2D, 0, 2, 1, 1);
+	m_pTextureCompositeUav = make_shared<CTexture>(1, RESOURCE_TEXTURE2D, 0, 2, 1, 1);
 
-	ID3D12Resource* pd3dSource = m_pTextureUav->GetResource(0);
-	ID3D12Resource* pd3dDestination = m_pTextureSrv->GetResource(0);
-	pd3dCommandList->CopyResource(pd3dDestination, pd3dSource);
-	
-	CScene::CreateShaderResourceViews(pd3dDevice, m_pTextureSrv, 0, 17);
-	CScene::CreateUnorderedAccessViews(pd3dDevice, m_pTextureUav, 0, 16);
+	m_pTextureFirPassUav->CreateTexture(
+		pd3dDevice,
+		0,
+		RESOURCE_TEXTURE2D,
+		FRAME_BUFFER_WIDTH,
+		FRAME_BUFFER_HEIGHT,
+		1,
+		0,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		NULL
+	);
+	m_pTextureSecPassUav->CreateTexture(
+		pd3dDevice, 
+		0, 
+		RESOURCE_TEXTURE2D, 
+		FRAME_BUFFER_WIDTH,
+		FRAME_BUFFER_HEIGHT, 
+		1, 
+		0, 
+		DXGI_FORMAT_R8G8B8A8_UNORM, 
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		NULL
+	);
+	m_pTextureCompositeUav->CreateTexture(
+		pd3dDevice,
+		0,
+		RESOURCE_TEXTURE2D,
+		FRAME_BUFFER_WIDTH,
+		FRAME_BUFFER_HEIGHT,
+		1,
+		0,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		NULL
+	);
+
+	// SRV 디스크립터 힙 생성
+	CScene::CreateShaderResourceViews(pd3dDevice, m_pTextureFirPassUav, 0, 0);
+	CScene::CreateShaderResourceViews(pd3dDevice, m_pTextureSecPassUav, 0, 0);
+	CScene::CreateShaderResourceViews(pd3dDevice, m_pTextureCompositeUav, 0, 0);
+
+	// UAV 디스크립터 힙 생성
+	CScene::CreateUnorderedAccessViews(pd3dDevice, m_pTextureFirPassUav, 0, 0);
+	CScene::CreateUnorderedAccessViews(pd3dDevice, m_pTextureSecPassUav, 0, 0);
+	CScene::CreateUnorderedAccessViews(pd3dDevice, m_pTextureCompositeUav, 0, 0);
+
+	// 0번 인덱스의 파라미터는 17(SRV), 1번 인덱스의 파라미터는 16(UAV)
+	m_pTextureFirPassUav->SetRootParameterIndex(1, 16);
+	m_pTextureFirPassUav->SetRootParameterIndex(0, 17);
+	m_pTextureSecPassUav->SetRootParameterIndex(1, 16);
+	m_pTextureSecPassUav->SetRootParameterIndex(0, 17);
+	m_pTextureCompositeUav->SetRootParameterIndex(1, 16);
+	m_pTextureCompositeUav->SetRootParameterIndex(0, 17);
 
 	m_cxThreadGroups = ceil(FRAME_BUFFER_WIDTH / 32.0f);	//50
 	m_cyThreadGroups = ceil(FRAME_BUFFER_HEIGHT / 32.0f);	//32
@@ -201,7 +250,6 @@ void CBlurComputeShader::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12G
 
 void CBlurComputeShader::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
 {
-
 }
 
 void CBlurComputeShader::ReleaseShaderVariables()
@@ -214,19 +262,43 @@ void CBlurComputeShader::ReleaseUploadBuffers()
 
 void CBlurComputeShader::Dispatch(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState)
 {
-	if (m_vpd3dPipelineState[m_nCurPipeLineIndex])
+	if (m_vpd3dPipelineState[nPipelineState])
 	{
-		pd3dCommandList->SetPipelineState(m_vpd3dPipelineState[m_nCurPipeLineIndex].Get());
+		pd3dCommandList->SetPipelineState(m_vpd3dPipelineState[nPipelineState].Get());
 	}
 	UpdateShaderVariables(pd3dCommandList);
 
-	if (m_pTextureUav)
+	if (m_pTextureCompositeUav)
 	{
-		m_pTextureUav->UpdateUavShaderVariable(pd3dCommandList, 16, 0);
+		m_pTextureCompositeUav->UpdateUavShaderVariable(pd3dCommandList, 16, 0);
 	}
-	if (m_pTextureSrv)
+	if (m_pTextureRtv)
 	{
-		m_pTextureSrv->UpdateSrvShaderVariable(pd3dCommandList, 17, 0);
+		m_pTextureRtv->UpdateSrvShaderVariable(pd3dCommandList, 10, 0);
+	}
+
+	for (int i = 0; i < 1; i++)
+	{
+		ID3D12Resource* pd3dSource = m_pTextureCompositeUav->GetResource(0);
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dSource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+		pd3dCommandList->Dispatch(m_cxThreadGroups, m_cyThreadGroups, m_czThreadGroups);
+
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dSource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	}
+}
+
+void CBlurComputeShader::PassFirst(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState)
+{
+	if (m_vpd3dPipelineState[nPipelineState])
+	{
+		pd3dCommandList->SetPipelineState(m_vpd3dPipelineState[nPipelineState].Get());
+	}
+	UpdateShaderVariables(pd3dCommandList);
+
+	if (m_pTextureFirPassUav)
+	{
+		m_pTextureFirPassUav->UpdateUavShaderVariable(pd3dCommandList, 16, 0);
 	}
 	if (m_pTextureRtv)
 	{
@@ -237,10 +309,76 @@ void CBlurComputeShader::Dispatch(ID3D12GraphicsCommandList* pd3dCommandList, in
 	{
 		pd3dCommandList->Dispatch(m_cxThreadGroups, m_cyThreadGroups, m_czThreadGroups);
 
-		ID3D12Resource* pd3dSource = m_pTextureUav->GetResource(0);
-		::SynchronizeResourceTransition(pd3dCommandList, pd3dSource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-		ID3D12Resource* pd3dDestination = m_pTextureSrv->GetResource(0);
-		pd3dCommandList->CopyResource(pd3dDestination, pd3dSource);
-		::SynchronizeResourceTransition(pd3dCommandList, pd3dSource, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		ID3D12Resource* pd3dTargetSource = m_pTextureFirPassUav->GetResource(0);
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dTargetSource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		ID3D12Resource* pd3dIdleSource = m_pTextureCompositeUav->GetResource(0);
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dIdleSource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	}
+}
+
+void CBlurComputeShader::PassSecond(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState)
+{
+	if (m_vpd3dPipelineState[nPipelineState])
+	{
+		pd3dCommandList->SetPipelineState(m_vpd3dPipelineState[nPipelineState].Get());
+	}
+	UpdateShaderVariables(pd3dCommandList);
+
+	if (m_pTextureFirPassUav)
+	{
+		m_pTextureFirPassUav->UpdateSrvShaderVariable(pd3dCommandList, 17, 0);
+	}
+	if (m_pTextureSecPassUav)
+	{
+		m_pTextureSecPassUav->UpdateUavShaderVariable(pd3dCommandList, 16, 0);
+	}
+	if (m_pTextureRtv)
+	{
+		m_pTextureRtv->UpdateSrvShaderVariable(pd3dCommandList, 10, 0);
+	}
+
+	for (int i = 0; i < 1; i++)
+	{
+		pd3dCommandList->Dispatch(m_cxThreadGroups, m_cyThreadGroups, m_czThreadGroups);
+
+		ID3D12Resource* pd3dTargetSource = m_pTextureSecPassUav->GetResource(0);
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dTargetSource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		ID3D12Resource* pd3dIdleSource = m_pTextureFirPassUav->GetResource(0);
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dIdleSource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	}
+}
+
+void CBlurComputeShader::PassComposite(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState)
+{
+	if (m_vpd3dPipelineState[nPipelineState])
+	{
+		pd3dCommandList->SetPipelineState(m_vpd3dPipelineState[nPipelineState].Get());
+	}
+	UpdateShaderVariables(pd3dCommandList);
+
+	if (m_pTextureSecPassUav)
+	{
+		m_pTextureSecPassUav->UpdateSrvShaderVariable(pd3dCommandList, 17, 0);
+	}
+	if (m_pTextureCompositeUav)
+	{
+		m_pTextureCompositeUav->UpdateUavShaderVariable(pd3dCommandList, 16, 0);
+	}
+	if (m_pTextureRtv)
+	{
+		m_pTextureRtv->UpdateSrvShaderVariable(pd3dCommandList, 10, 0);
+	}
+
+	for (int i = 0; i < 1; i++)
+	{
+		pd3dCommandList->Dispatch(m_cxThreadGroups, m_cyThreadGroups, m_czThreadGroups);
+
+		ID3D12Resource* pd3dTargetSource = m_pTextureCompositeUav->GetResource(0);
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dTargetSource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		ID3D12Resource* pd3dIdleSource = m_pTextureSecPassUav->GetResource(0);
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dIdleSource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	}
 }

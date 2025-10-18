@@ -60,17 +60,23 @@ public:
 	virtual void ReleaseUploadBuffers();
 
 	virtual void Dispatch(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState);
+	
+	virtual void PassFirst(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState);
+	virtual void PassSecond(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState);
+	virtual void PassComposite(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState);
 
 	void SetTextureRtv(shared_ptr<CTexture>& pTexture) { m_pTextureRtv = pTexture; }
-	shared_ptr<CTexture>& GetTextureSrv() { return m_pTextureSrv; }
 
-	void SetPipeLineIndex(int nIndex) { m_nCurPipeLineIndex = nIndex; }
-	int GetPipeLineIndex() const { return m_nCurPipeLineIndex; }
+	shared_ptr<CTexture>& GetTextureComposite() { return m_pTextureCompositeUav; }
+
+	void SetBlur(bool bBlur) { m_bBlur = bBlur; }
+	bool IsBlur() { return m_bBlur; }
 private:
-	shared_ptr<CTexture> m_pTextureUav;	// 컴퓨트 셰이더 Uav 텍스쳐
-	shared_ptr<CTexture> m_pTextureSrv;	// 컴퓨트 셰이더 Srv 텍스쳐(ping pong을 위한)
-	shared_ptr<CTexture> m_pTextureRtv; // G-Buffer로 썼던것
+	shared_ptr<CTexture> m_pTextureFirPassUav;		// 컴퓨트 셰이더 Uav 텍스쳐
+	shared_ptr<CTexture> m_pTextureSecPassUav;		// 컴퓨트 셰이더 Uav 텍스쳐(ping pong을 위한)
+	shared_ptr<CTexture> m_pTextureCompositeUav;	// 컴퓨트 셰이더 최종 텍스쳐
+	shared_ptr<CTexture> m_pTextureRtv;				// G-Buffer로 썼던것
 
-	int m_nCurPipeLineIndex = 0;
+	bool m_bBlur = true;
 };
 

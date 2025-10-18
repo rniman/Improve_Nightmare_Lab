@@ -1,5 +1,8 @@
 #include "Common.hlsl"
-RWTexture2D<float4> gtxtRWOutput : register(u0);
+// 1차 블러 패스의 결과
+Texture2D<float4> gInputTexture : register(t14);
+// 2차 블러 패스의 출력
+RWTexture2D<float4> gOutputTexture : register(u0);
 
 static const float bayer_matrix_8x8[64] =
 {
@@ -14,33 +17,43 @@ static const float bayer_matrix_8x8[64] =
 };
 
 [numthreads(32, 32, 1)]
-void CSBloomOff(uint3 n3DispatchThreadID : SV_DispatchThreadID)
+void CSComposite(uint3 n3DispatchThreadID : SV_DispatchThreadID)
 {
+    // 1. 씬 컬러와 포지션 로드
     float4 finalColor = DFLightTexture[n3DispatchThreadID.xy];
     float4 positionW = DFPositionTexture[n3DispatchThreadID.xy];
-
+    
+    // 2. 안개 계산 및 적용
     float3 vCameraPosition = gvCameraPosition.xyz;
     float3 vPostionToCamera = vCameraPosition - positionW.xyz;
     float fDistanceToCamera = length(vPostionToCamera);
-  
+    
     float fFogDensity = gvfFogInfo.z;
     float fFogFactor = saturate(exp(-fDistanceToCamera * fFogDensity));
     finalColor = lerp(gvFogColor, finalColor, fFogFactor);
     
-    // --- 디더링 추가 시작 (적용 부분) ---
-    // 1. 현재 쓰레드의 화면 좌표를 가져옵니다.
-    int2 screenPos = n3DispatchThreadID.xy;
+    // 3. 최종 블러 결과물 로드 (계산 X)
+    float4 blurredColor = gInputTexture[n3DispatchThreadID.xy];
 
-    // 2. 화면 좌표를 이용해 8x8 매트릭스에서 사용할 인덱스를 구합니다.
+    // 4. 블룸 합성
+    if(length(blurredColor.xyz) < 1.f)
+    {
+        finalColor *= (1.0f - length(blurredColor.xyz));
+        finalColor += blurredColor;
+    }
+    else
+    {
+        finalColor *= blurredColor * 2.0f;
+    }
+    
+    // 5. 디더링
+    int2 screenPos = n3DispatchThreadID.xy;
     int ditherX = screenPos.x % 8;
     int ditherY = screenPos.y % 8;
-
-    // 3. Bayer 매트릭스에서 값을 가져와 -0.5 ~ 0.5 범위로 정규화하고 8비트 단계에 맞게 스케일링합니다.
     float ditherValue = bayer_matrix_8x8[ditherY * 8 + ditherX];
     float ditherOffset = (ditherValue / 64.0 - 0.5) / 255.0;
-
-    // 4. 최종 색상(RGB)에 디더링 오프셋을 더합니다.
     finalColor.rgb += ditherOffset;
-    
-    gtxtRWOutput[n3DispatchThreadID.xy] = finalColor;
+        
+    // 6. 최종 출력
+    gOutputTexture[n3DispatchThreadID.xy] = finalColor;
 }

@@ -355,7 +355,7 @@
     <FxCompile Include="VSTextureToScreen.hlsl">
       <Filter>Blur</Filter>
     </FxCompile>
-    <FxCompile Include="CSBloom.hlsl">
+    <FxCompile Include="CSBlurHorizontal.hlsl">
       <Filter>Blur</Filter>
     </FxCompile>
     <FxCompile Include="CSBloomOff.hlsl">
@@ -366,6 +366,12 @@
     </FxCompile>
     <FxCompile Include="PSFullScreenAnime.hlsl">
       <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="CSBlurVertical.hlsl">
+      <Filter>Blur</Filter>
+    </FxCompile>
+    <FxCompile Include="CSComposite.hlsl">
+      <Filter>Blur</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
