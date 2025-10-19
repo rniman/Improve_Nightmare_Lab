@@ -126,8 +126,11 @@ void CComputeShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 	d3dPipelineStateDesc.CachedPSO = d3dCachedPipelineState;
 	d3dPipelineStateDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 	
-	HRESULT hResult = pd3dDevice->CreateComputePipelineState(&d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void**)m_vpd3dPipelineState[m_PipeLineIndex++].GetAddressOf());
-	if (pd3dComputeShaderBlob) pd3dComputeShaderBlob->Release();
+	HRESULT hResult = pd3dDevice->CreateComputePipelineState(&d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void**)m_vpd3dPipelineState[m_nPipeLineIndex++].GetAddressOf());
+	if (pd3dComputeShaderBlob) 
+	{
+		pd3dComputeShaderBlob->Release();
+	}
 
 	m_cxThreadGroups = cxThreadGroups;
 	m_cyThreadGroups = cyThreadGroups;
@@ -152,7 +155,7 @@ void CComputeShader::Dispatch(ID3D12GraphicsCommandList* pd3dCommandList, UINT c
 
 D3D12_SHADER_BYTECODE CBlurComputeShader::CreateComputeShader(ID3DBlob** ppd3dShaderBlob)
 {
-	switch (m_PipeLineIndex)
+	switch (m_nPipeLineIndex)
 	{
 	case 0:
 		return CShader::ReadCompiledShaderFromFile(L"cso/CSBloomOff.cso", m_pd3dComputeShaderBlob.GetAddressOf());
@@ -274,7 +277,7 @@ void CBlurComputeShader::Dispatch(ID3D12GraphicsCommandList* pd3dCommandList, in
 	}
 	if (m_pTextureRtv)
 	{
-		m_pTextureRtv->UpdateSrvShaderVariable(pd3dCommandList, 10, 0);
+		m_pTextureRtv->UpdateSrvShaderVariableForCompute(pd3dCommandList, 0, 0);
 	}
 
 	for (int i = 0; i < 1; i++)
@@ -302,7 +305,7 @@ void CBlurComputeShader::PassFirst(ID3D12GraphicsCommandList* pd3dCommandList, i
 	}
 	if (m_pTextureRtv)
 	{
-		m_pTextureRtv->UpdateSrvShaderVariable(pd3dCommandList, 10, 0);
+		m_pTextureRtv->UpdateSrvShaderVariableForCompute(pd3dCommandList, 0, 0);
 	}
 
 	for (int i = 0; i < 1; i++)
@@ -327,7 +330,7 @@ void CBlurComputeShader::PassSecond(ID3D12GraphicsCommandList* pd3dCommandList, 
 
 	if (m_pTextureFirPassUav)
 	{
-		m_pTextureFirPassUav->UpdateSrvShaderVariable(pd3dCommandList, 17, 0);
+		m_pTextureFirPassUav->UpdateSrvShaderVariableForCompute(pd3dCommandList, 0, 0);
 	}
 	if (m_pTextureSecPassUav)
 	{
@@ -335,7 +338,7 @@ void CBlurComputeShader::PassSecond(ID3D12GraphicsCommandList* pd3dCommandList, 
 	}
 	if (m_pTextureRtv)
 	{
-		m_pTextureRtv->UpdateSrvShaderVariable(pd3dCommandList, 10, 0);
+		m_pTextureRtv->UpdateSrvShaderVariableForCompute(pd3dCommandList, 0, 0);
 	}
 
 	for (int i = 0; i < 1; i++)
@@ -360,7 +363,7 @@ void CBlurComputeShader::PassComposite(ID3D12GraphicsCommandList* pd3dCommandLis
 
 	if (m_pTextureSecPassUav)
 	{
-		m_pTextureSecPassUav->UpdateSrvShaderVariable(pd3dCommandList, 17, 0);
+		m_pTextureSecPassUav->UpdateSrvShaderVariableForCompute(pd3dCommandList, 0, 0);
 	}
 	if (m_pTextureCompositeUav)
 	{
@@ -368,7 +371,7 @@ void CBlurComputeShader::PassComposite(ID3D12GraphicsCommandList* pd3dCommandLis
 	}
 	if (m_pTextureRtv)
 	{
-		m_pTextureRtv->UpdateSrvShaderVariable(pd3dCommandList, 10, 0);
+		m_pTextureRtv->UpdateSrvShaderVariableForCompute(pd3dCommandList, 0, 0);
 	}
 
 	for (int i = 0; i < 1; i++)

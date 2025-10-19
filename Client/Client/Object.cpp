@@ -159,9 +159,9 @@ void CTexture::SetUavGpuDescriptorHandle(int nIndex, D3D12_GPU_DESCRIPTOR_HANDLE
 	m_vd3dUavGpuDescriptorHandles[nIndex] = d3dUavGpuDescriptorHandle;
 }
 
-void CTexture::UpdateSrvShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, int nRootParameterIndex, int nDescriptorHandlesIndex)
+void CTexture::UpdateSrvShaderVariableForCompute(ID3D12GraphicsCommandList* pd3dCommandList, int nRootParameterIndex, int nDescriptorHandlesIndex)
 {
-	pd3dCommandList->SetComputeRootDescriptorTable(m_vnRootParameterIndices[0], m_vd3dSrvGpuDescriptorHandles[nDescriptorHandlesIndex]);
+	pd3dCommandList->SetComputeRootDescriptorTable(m_vnRootParameterIndices[nRootParameterIndex], m_vd3dSrvGpuDescriptorHandles[nDescriptorHandlesIndex]);
 }
 
 void CTexture::UpdateUavShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, int nRootParameterIndex, int nDescriptorHandlesIndex)
@@ -186,6 +186,21 @@ void CTexture::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
 	else
 	{
 		pd3dCommandList->SetGraphicsRootDescriptorTable(m_vnRootParameterIndices[0], m_vd3dSrvGpuDescriptorHandles[0]);
+	}
+}
+
+void CTexture::UpdateShaderVariablesForCompute(ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	if (m_nRootParameters == m_nTextures)
+	{
+		for (int i = 0; i < m_nRootParameters; i++)
+		{
+			pd3dCommandList->SetComputeRootDescriptorTable(m_vnRootParameterIndices[i], m_vd3dSrvGpuDescriptorHandles[i]);
+		}
+	}
+	else
+	{
+		pd3dCommandList->SetComputeRootDescriptorTable(m_vnRootParameterIndices[0], m_vd3dSrvGpuDescriptorHandles[0]);
 	}
 }
 

@@ -20,12 +20,5 @@ float4 PSPostProcessing(PS_POSTPROCESSING_OUT input) : SV_Target
     
     cColor += cEmissiveColor;
     
-    //**FOG Calculation**//
-    //float3 vCameraPosition = gvCameraPosition.xyz;
-    //float3 vPostionToCamera = vCameraPosition - positionW.xyz;
-    //float fDistanceToCamera = length(vPostionToCamera);
-    //float fFogFactor = saturate(1.0f / pow(gvfFogInfo.y + gvfFogInfo.x, pow(fDistanceToCamera * gvfFogInfo.z, 2))) * gvfFogInfo.w;
-    //cColor = lerp(gvFogColor, cColor, fFogFactor);
-    
     return cColor;
 }

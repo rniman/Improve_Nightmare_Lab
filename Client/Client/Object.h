@@ -67,6 +67,7 @@ public:
 
 	void UpdateShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, int nParameterIndex, int nTextureIndex);
 	void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList);
+	void UpdateShaderVariablesForCompute(ID3D12GraphicsCommandList* pd3dCommandList);
 	void ReleaseShaderVariables();
 
 	//	void LoadTextureFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, wchar_t* pszFileName, UINT nIndex);
@@ -79,8 +80,7 @@ public:
 	void SetSrvGpuDescriptorHandle(int nIndex, D3D12_GPU_DESCRIPTOR_HANDLE d3dSrvGpuDescriptorHandle);
 	void SetUavGpuDescriptorHandle(int nIndex, D3D12_GPU_DESCRIPTOR_HANDLE d3dUavGpuDescriptorHandle);
 
-
-	void UpdateSrvShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, int nRootParameterIndex, int nDescriptorHandlesIndex);
+	void UpdateSrvShaderVariableForCompute(ID3D12GraphicsCommandList* pd3dCommandList, int nRootParameterIndex, int nDescriptorHandlesIndex);
 	void UpdateUavShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, int nRootParameterIndex, int nDescriptorHandlesIndex);
 
 	//리소스를 넘겨받고 리소스를 저장함.

@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Scene.h"
 #include "Shader.h"
+#include "PostProcessingShader.h"
 #include "ParticleShader.h"
 #include "TextureBlendAnimationShader.h"
 #include "Player.h"
@@ -202,7 +203,7 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 
 	pd3dRootParameters[10].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 	pd3dRootParameters[10].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[10].DescriptorTable.pDescriptorRanges = &pd3dDescriptorRanges[10]; //Deferred Render Texture + HDR
+	pd3dRootParameters[10].DescriptorTable.pDescriptorRanges = &pd3dDescriptorRanges[10]; //Deferred Render Texture
 	pd3dRootParameters[10].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 	pd3dRootParameters[11].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -237,7 +238,7 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 
 	pd3dRootParameters[17].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 	pd3dRootParameters[17].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[17].DescriptorTable.pDescriptorRanges = &pd3dDescriptorRanges[17]; //RWTexture2D
+	pd3dRootParameters[17].DescriptorTable.pDescriptorRanges = &pd3dDescriptorRanges[17]; //SRV
 	pd3dRootParameters[17].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 	D3D12_STATIC_SAMPLER_DESC d3dSamplerDescs[3];
@@ -253,7 +254,7 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 	d3dSamplerDescs[0].MaxLOD = D3D12_FLOAT32_MAX;
 	d3dSamplerDescs[0].ShaderRegister = 0;
 	d3dSamplerDescs[0].RegisterSpace = 0;
-	d3dSamplerDescs[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	d3dSamplerDescs[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 
 	d3dSamplerDescs[1].Filter = D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
@@ -595,7 +596,7 @@ void CLobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	int nCntCbv = 3000;
 	int nCntSrv = 1000;
-	int nCntUav = 3;
+	int nCntUav = 6;
 
 	CreateCbvSrvUavDescriptorHeaps(pd3dDevice, nCntCbv, nCntSrv, nCntUav);
 
@@ -993,10 +994,12 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	//[0523] 이제 좀비 플레이어 외에도 사용, COutLineShader 내부에서 m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0)을 사용하기위해서 필요
 	dynamic_cast<COutLineShader*>(m_vForwardRenderShader[OUT_LINE_SHADER].get())->SetPostProcessingShader(m_pPostProcessingShader);
 
-	//컴퓨트 셰이더
+	// 블러 컴퓨트 셰이더
 	m_pBlurComputeShader = make_shared<CBlurComputeShader>();
 	m_pBlurComputeShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
 	m_pBlurComputeShader->SetTextureRtv(m_pPostProcessingShader->GetTexture());
+
+	
 
 	//[0626] 
 
@@ -1911,21 +1914,27 @@ void CMainScene::FinalRender(ID3D12GraphicsCommandList* pd3dCommandList, const s
 
 	Render(pd3dCommandList, pCamera, 0);
 
-	m_pPostProcessingShader->TransitionRenderTargetToCommon(pd3dCommandList);
+	//m_pPostProcessingShader->TransitionRenderTargetToCommon(pd3dCommandList);
+	m_pPostProcessingShader->TransitionGBuffer(pd3dCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
 
+	// 불투명 객체 최종 렌더링
 	FLOAT ClearValue[4] = { 1.0f,1.0f,1.0f,1.0f };
-
-	ClearValue[3] = 1.0f;
 	pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, ClearValue, 0, NULL);
-
 	m_pPostProcessingShader->OnPrepareRenderTargetForLight(pd3dCommandList, 0, NULL, &d3dDsvCPUDescriptorHandle);
-
-	//OM 최종타겟으로 재설정
-	//pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
-	//불투명 객체 최종 렌더링
 	pd3dCommandList->SetGraphicsRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
-	m_pPostProcessingShader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
+	
+	// SSAO (컴퓨트 셰이더)
+	pd3dCommandList->SetComputeRootSignature(m_pd3dGraphicsRootSignature.Get());
+	pd3dCommandList->SetComputeRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
+	pCamera->UpdateComputeShaderVariables(pd3dCommandList);
 
+	m_pPostProcessingShader->PrepareDispatch(pd3dCommandList);
+	m_pPostProcessingShader->DispatchPostProcessing(pd3dCommandList);
+	m_pPostProcessingShader->DispatchBilateralBlurHorizontal(pd3dCommandList);
+	m_pPostProcessingShader->DispatchBilateralBlurVertical(pd3dCommandList);
+
+	pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());
+	m_pPostProcessingShader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
 	m_pPostProcessingShader->TransitionRenderTargetToCommonForLight(pd3dCommandList);
 
 	pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
@@ -1936,7 +1945,7 @@ void CMainScene::ForwardRender(int nGameState, ID3D12GraphicsCommandList* pd3dCo
 	//D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
 	//pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
-	// 투명 객체 렌더링
+	// 투명 객체 렌더링 및 외곽선 
 	if (nGameState == GAME_STATE::IN_GAME)
 	{
 		for (auto& shader : m_vForwardRenderShader)
@@ -1944,7 +1953,7 @@ void CMainScene::ForwardRender(int nGameState, ID3D12GraphicsCommandList* pd3dCo
 			shader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
 		}
 	}
-	else if (!(nGameState == GAME_STATE::BLUE_SUIT_WIN || nGameState == GAME_STATE::ZOMBIE_WIN))
+	else if (nGameState == GAME_STATE::BLUE_SUIT_WIN || nGameState == GAME_STATE::ZOMBIE_WIN)
 	{
 		m_vForwardRenderShader[USER_INTERFACE_SHADER]->Render(pd3dCommandList, pCamera, m_pMainPlayer);
 	}

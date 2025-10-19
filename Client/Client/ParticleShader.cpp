@@ -40,7 +40,7 @@ D3D12_STREAM_OUTPUT_DESC ParticleShader::CreateStreamOutput()
 	D3D12_STREAM_OUTPUT_DESC d3dStreamOutputDesc;
 	::ZeroMemory(&d3dStreamOutputDesc, sizeof(D3D12_STREAM_OUTPUT_DESC));
 
-	if (m_PipeLineIndex == 0)
+	if (m_nPipeLineIndex == 0)
 	{
 		UINT nStreamOutputDecls = 5;
 		D3D12_SO_DECLARATION_ENTRY* pd3dStreamOutputDecls = new D3D12_SO_DECLARATION_ENTRY[nStreamOutputDecls];
@@ -128,7 +128,7 @@ D3D12_DEPTH_STENCIL_DESC ParticleShader::CreateDepthStencilState()
 
 D3D12_SHADER_BYTECODE ParticleShader::CreateVertexShader()
 {
-	if (m_PipeLineIndex == 0) {
+	if (m_nPipeLineIndex == 0) {
 		return CShader::ReadCompiledShaderFromFile(L"cso/VSParticleStreamOutput.cso", m_pd3dVertexShaderBlob.GetAddressOf());
 		//return(CShader::CompileShaderFromFile(L"ParticleShader.hlsl", "VSParticleStreamOutput", "vs_5_1", m_pd3dVertexShaderBlob.GetAddressOf()));
 	}
@@ -140,7 +140,7 @@ D3D12_SHADER_BYTECODE ParticleShader::CreateVertexShader()
 
 D3D12_SHADER_BYTECODE ParticleShader::CreatePixelShader()
 {
-	if (m_PipeLineIndex == 0) {
+	if (m_nPipeLineIndex == 0) {
 		return(CShader::CreatePixelShader());
 	}
 	else {
@@ -151,7 +151,7 @@ D3D12_SHADER_BYTECODE ParticleShader::CreatePixelShader()
 
 D3D12_SHADER_BYTECODE ParticleShader::CreateGeometryShader()
 {
-	if (m_PipeLineIndex == 0) {
+	if (m_nPipeLineIndex == 0) {
 		return CShader::ReadCompiledShaderFromFile(L"cso/GSParticleStreamOutput.cso", m_pd3dGeometryShaderBlob.GetAddressOf());
 		//return(CShader::CompileShaderFromFile(L"ParticleShader.hlsl", "GSParticleStreamOutput", "gs_5_1", m_pd3dGeometryShaderBlob.GetAddressOf()));
 	}
@@ -193,7 +193,7 @@ void ParticleShader::CreateParticleShader(ID3D12Device* pd3dDevice, ID3D12Graphi
 	m_d3dPipelineStateDesc.SampleDesc.Count = 1;
 	m_d3dPipelineStateDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
-	HRESULT hResult = pd3dDevice->CreateGraphicsPipelineState(&m_d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void**)m_vpd3dPipelineState[m_PipeLineIndex++].GetAddressOf());
+	HRESULT hResult = pd3dDevice->CreateGraphicsPipelineState(&m_d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void**)m_vpd3dPipelineState[m_nPipeLineIndex++].GetAddressOf());
 
 	if (m_d3dPipelineStateDesc.InputLayout.pInputElementDescs) delete[] m_d3dPipelineStateDesc.InputLayout.pInputElementDescs;
 }

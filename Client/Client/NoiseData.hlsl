@@ -1,4 +1,4 @@
-float3 noise[8 * 8] =
+static const float3 noise[8 * 8] =
 {
 float3(0.42745, 0.62353, 0.92941),
 float3(0.56471, 0.41569, 1.00000),

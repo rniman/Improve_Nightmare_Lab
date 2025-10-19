@@ -52,6 +52,9 @@
     <Filter Include="Blur">
       <UniqueIdentifier>{f9ad5bc5-4377-4948-8c23-c3874ba70eb3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="HLSL%28cso%29\PostProcessing">
+      <UniqueIdentifier>{a0c6b706-0cb7-4f52-a33e-28c15821c7df}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="targetver.h">
@@ -150,6 +153,9 @@
     <ClInclude Include="Sound.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="PostProcessingShader.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Client.cpp">
@@ -233,6 +239,9 @@
     <ClCompile Include="Sound.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="PostProcessingShader.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Client.rc">
@@ -277,9 +286,6 @@
     <FxCompile Include="PSShadow.hlsl">
       <Filter>HLSL%28cso%29</Filter>
     </FxCompile>
-    <FxCompile Include="PSPostProcessing.hlsl">
-      <Filter>HLSL%28cso%29</Filter>
-    </FxCompile>
     <FxCompile Include="PSTransparent.hlsl">
       <Filter>HLSL%28cso%29</Filter>
     </FxCompile>
@@ -309,9 +315,6 @@
     </FxCompile>
     <FxCompile Include="VSInstanceOutLine.hlsl">
       <Filter>HLSL%28cso%29\OutLine</Filter>
-    </FxCompile>
-    <FxCompile Include="PSPostProcessingWithSSAO.hlsl">
-      <Filter>HLSL%28cso%29</Filter>
     </FxCompile>
     <FxCompile Include="PSLobbyUI.hlsl">
       <Filter>HLSL%28cso%29\Lobby</Filter>
@@ -372,6 +375,21 @@
     </FxCompile>
     <FxCompile Include="CSComposite.hlsl">
       <Filter>Blur</Filter>
+    </FxCompile>
+    <FxCompile Include="PSPostProcessingWithSSAO.hlsl">
+      <Filter>HLSL%28cso%29\PostProcessing</Filter>
+    </FxCompile>
+    <FxCompile Include="PSPostProcessing.hlsl">
+      <Filter>HLSL%28cso%29\PostProcessing</Filter>
+    </FxCompile>
+    <FxCompile Include="CSSSAOProcessing.hlsl">
+      <Filter>HLSL%28cso%29\PostProcessing</Filter>
+    </FxCompile>
+    <FxCompile Include="CSBilateralBlurHorizontal.hlsl">
+      <Filter>HLSL%28cso%29\PostProcessing</Filter>
+    </FxCompile>
+    <FxCompile Include="CSBilateralBlurVertical.hlsl">
+      <Filter>HLSL%28cso%29\PostProcessing</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
