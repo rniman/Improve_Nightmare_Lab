@@ -1042,7 +1042,7 @@ void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	m_pLights = new LIGHT[MAX_LIGHTS];
 	::ZeroMemory(m_pLights, sizeof(LIGHT) * MAX_LIGHTS);
 
-	m_xmf4GlobalAmbient = XMFLOAT4(0.15f, 0.15f, 0.15f, 1.0f);
+	m_xmf4GlobalAmbient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
 
 	for (int i = 0; i < MAX_SURVIVOR;++i) {
 		m_pLightCamera.push_back(make_shared<CLightCamera>());

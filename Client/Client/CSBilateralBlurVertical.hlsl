@@ -2,24 +2,14 @@
 Texture2D<float4> gInputTexture : register(t14);
 RWTexture2D<float4> gOutputTexture : register(u0);
 
-static float gGaussianWeights[16] =
+static float gGaussianWeights[6] =
 {
-    0.055,
-    0.055,
-    0.053,
-    0.051,
-    0.048,
-    0.044,
-    0.04,
-    0.036,
-    0.031,
-    0.027,
-    0.023,
-    0.019,
-    0.015,
-    0.012,
-    0.01,
-    0.007,
+    0.164,
+    0.151,
+    0.119,
+    0.08,
+    0.046,
+    0.022
 };
 
 [numthreads(32, 32, 1)]
@@ -32,10 +22,10 @@ void CSBilateralBlurVertical(uint3 n3DispatchThreadID : SV_DispatchThreadID)
     
     float4 blurredSSAO = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float fTotalWeight = 0.0f;
-    int radius = 15;
+    int radius = 5;
     
-    float fDepthThreshold = 0.1f;
-    float fNormalThreshold = 0.95f;
+    float fDepthThreshold = 0.01f;
+    float fNormalThreshold = 0.98f;
     
     for(int y = -radius; y <= radius; y++)
     {
