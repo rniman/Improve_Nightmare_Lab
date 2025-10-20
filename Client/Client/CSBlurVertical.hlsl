@@ -1,7 +1,10 @@
 #include "Common.hlsl"
-// 1차 블러 패스의 출력
+
+// 출력 리소스
+// u0: 수직 블러 결과를 쓸 RWTexture (UAV)
 RWTexture2D<float4> gOutputTexture : register(u0);
 
+// 가우시안 블러 가중치
 static float weight[16] =
 {
     0.055,
