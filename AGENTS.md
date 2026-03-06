@@ -159,6 +159,7 @@ Relevant documents (create if they don't exist yet):
 | `docs/rendering_pipeline.md` | Rendering flow and shader pipeline |
 | `docs/coding_convention.md` | Code style and naming conventions |
 | `docs/git_convention.md` | Commit message and branch naming rules |
+| `docs/refactoring_plan.md` | Incremental refactoring priorities, order, and safety checks |
 | `docs/code_smells.md` | Known issues and technical debt |
 
 When structural refactoring changes system responsibilities,
