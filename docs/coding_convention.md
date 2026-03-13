@@ -190,7 +190,8 @@ const int* const p;  // 둘 다 불변
 1. **Self-documenting code 우선** - 주석보다 명확한 코드가 최선
 2. **최소주의** - 코드로 표현 불가능한 것만 주석으로
 3. **What보다 Why** - 무엇을 하는지보다 왜 하는지 설명
-4. **한글 작성** - 모든 주석은 한글로 작성 (업계 표준 용어는 영어 유지)
+4. **주석 스타일** - 한 줄 `//`, 블록/헤더 `/* ... */`(짧게), API 문서화는 `///`만 사용
+5. **주석 언어** - C/C++ 코드는 한글 주석 허용, `*.hlsl` 주석은 영어(ASCII)만 사용
 
 ---
 
@@ -198,18 +199,10 @@ const int* const p;  // 둘 다 불변
 
 **헤더 파일(.h)의 public 인터페이스에만 적용**
 ```cpp
-/**
- * @brief 프레임 임시 데이터를 위한 선형 할당자
- * 
- * 상세 설명이 필요한 경우 여기에 작성
- * 
- * @param size 할당할 바이트 크기
- * @param alignment 정렬 요구사항 (기본: 16)
- * @return 할당된 메모리 포인터, 실패 시 nullptr
- * 
- * @note 스레드 안전하지 않음
- * @warning 할당된 메모리는 Reset() 전까지 유효
- */
+/// @brief 프레임 임시 데이터를 위한 선형 할당자
+/// @param size 할당할 바이트 크기
+/// @param alignment 정렬 요구사항 (기본: 16)
+/// @return 할당된 메모리 포인터, 실패 시 nullptr
 void* Allocate(size_t size, size_t alignment = 16);
 ```
 
