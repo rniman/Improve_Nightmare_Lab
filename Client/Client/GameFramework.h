@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "Timer.h"
 #include "Scene.h"
 #include "TCPClient.h"
@@ -25,137 +25,125 @@ constexpr UINT EDIT_INPUT_ADDRESS_ID{ 2 };
 class CGameFramework
 {
 public:
+	// ìƒì„±/ì†Œë©¸
 	CGameFramework();
 	~CGameFramework();
 
+	// Lifecycle
 	bool OnCreate(HINSTANCE hInstance, HWND hMainWnd);
 	void OnDestroy();
-	void OnDestroyEntryWindow();
-
-	void CreateEntryWindow(HWND hWnd);
-
-	void CreateSwapChain();
-	void CreateDirect3DDevice();
-	void CreateCommandQueueAndList();
-
-	void CreateRtvAndDsvDescriptorHeaps();
-
-	void CreateRenderTargetViews();
-	void CreateDepthStencilView();
-
-	void ChangeSwapChainState();
-
-	void CreateMainScene();
-
 	void BuildObjects();
 	void ReleaseObjects();
 
+	// Entry UI
+	void CreateEntryWindow(HWND hWnd);
+	void OnDestroyEntryWindow();
+	void OnButtonClick(HWND hWnd);
+
+	// DX12 Setup
+	void CreateSwapChain();
+	void CreateDirect3DDevice();
+	void CreateCommandQueueAndList();
+	void CreateRtvAndDsvDescriptorHeaps();
+	void CreateRenderTargetViews();
+	void CreateDepthStencilView();
+	void ChangeSwapChainState();
+
+	// Frame
 	void ProcessInput();
 	void AnimateObjects();
 	void AnimateEnding();
-	//void ProcessCollide();
 	void PreRenderTasks(shared_ptr<CMainScene>& pMainScene);
 	void FrameAdvance();
 	void LoadingRender();
-
 	void WaitForGpuComplete();
 	void MoveToNextFrame();
+	void UpdateFrameworkShaderVariable();
 
-	void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	// Window message dispatch
+	void OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	void OnProcessingCommandMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	void OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-
+	void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	void OnProcessingEndGameMessage(WPARAM& wParam);
 
-	INT8 GetClientIdFromTcpClient() const { return m_pTcpClient->GetMainClientId(); }
+	// Text rendering
+	void PrepareDrawText();
+	void RenderTextUI();
 
-	static UCHAR* GetKeysBuffer();
-	static int GetMainClientId() { return m_nMainClientId; }
+	// Interface
+	INT8 GetClientIdFromTcpClient() const { return m_pTcpClient->GetMainClientId(); }
 	void SetPlayerObjectOfClient(int nClientId);
 
 	void SetConnected(bool bConnected) { m_bConnected = bConnected; }
 	bool IsConnected() const { return m_bConnected; }
-
 	bool IsTcpClient() const { return m_bTcpClient; }
-	void OnButtonClick(HWND hWnd);
-
 	void SetMousePoint(POINT ptMouse) { m_ptOldCursorPos = ptMouse; }
-
-	static int GetSwapChainNum() { return m_nSwapChainBuffers; }
-
 	void SetGameState(int nGameState) { m_nGameState = nGameState; }
 
-	//x == WIDTH , y == HEIGHT
+	// Static Interface
+	static UCHAR* GetKeysBuffer();
+	static int GetMainClientId() { return m_nMainClientId; }
+	static int GetSwapChainNum() { return m_nSwapChainBuffers; }
 	static POINT GetClientWindowSize();
+
+	// Shared public state (legacy)
+	static std::shared_ptr<CPlayer> m_pMainPlayer; // í´ë¼ì´ì–¸íŠ¸IDì— í•´ë‹¹í•˜ëŠ” ì¸ë±ìŠ¤ê°€ í•´ë‹¹ í´ë¼ì´ì–¸íŠ¸ì˜ Mainí”Œë ˆì´ì–´ë¡œ ì„¤ì •ëœë‹¤
+	static shared_ptr<CPlayer>& GetMainPlayer()	{ return m_pMainPlayer; }
+
+	static ComPtr<IDWriteTextFormat> m_idwGameCountTextFormat;
+	static ComPtr<IDWriteTextFormat> m_idwSpeakerTextFormat;
+
 private:
+	/* ìœˆë„ìš° í”Œë«í¼ ê´€ë ¨ ë©¤ë²„ */
+	HINSTANCE m_hInstance = nullptr;
+	HWND m_hWnd = nullptr;
 
-	D3D12_VIEWPORT m_d3dViewport;
-	D3D12_RECT m_d3dScissorRect;
-	//ºäÆ÷Æ®¿Í ¾¾Àú »ç°¢ÇüÀÌ´Ù.
+	static int m_nWndClientWidth;
+	static int m_nWndClientHeight;
 
-	HINSTANCE							m_hInstance;
-	HWND								m_hWnd;
+	_TCHAR m_pszFrameRate[200] = {};
 
-	//[0723] À©µµ¿ìÀÇ »çÀÌÁî¸¦ ÂüÁ¶°¡´ÉÇÏµµ·Ï º¯°æ
-	static int									m_nWndClientWidth;
-	static int									m_nWndClientHeight;
+	/* Input ê´€ë ¨ */
+	static UCHAR m_pKeysBuffer[256];
+	POINT m_ptOldCursorPos = {};
 
-	ComPtr<IDXGIFactory4>				m_dxgiFactory;
-	ComPtr<IDXGISwapChain3>				m_dxgiSwapChain;
-	ComPtr<ID3D12Device>				m_d3d12Device;
-	bool								m_bMsaa4xEnable = false;
-	UINT								m_nMsaa4xQualityLevels = 0;
+	/* DX12 ë©¤ë²„ */
+	ComPtr<IDXGIFactory4> m_dxgiFactory;
+	ComPtr<IDXGISwapChain3> m_dxgiSwapChain;
+	ComPtr<ID3D12Device> m_d3d12Device;
+	bool m_bMsaa4xEnable = false;
+	UINT m_nMsaa4xQualityLevels = 0;
 
-	static const UINT					m_nSwapChainBuffers = 2;
-	UINT								m_nSwapChainBufferIndex;
+	static const UINT m_nSwapChainBuffers = 2;
+	UINT m_nSwapChainBufferIndex = 0;
 
-	std::array<ComPtr<ID3D12Resource>, m_nSwapChainBuffers>			m_d3dSwapChainBackBuffers;
-	ComPtr<ID3D12DescriptorHeap>									m_d3dRtvDescriptorHeap;
-	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, m_nSwapChainBuffers>	m_pd3dSwapChainBackBufferRTVCPUHandles;
+	std::array<ComPtr<ID3D12Resource>, m_nSwapChainBuffers> m_d3dSwapChainBackBuffers;
+	ComPtr<ID3D12DescriptorHeap> m_d3dRtvDescriptorHeap;
+	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, m_nSwapChainBuffers> m_pd3dSwapChainBackBufferRTVCPUHandles{};
 
-	ComPtr<ID3D12Resource>				m_d3dDepthStencilBuffer;
-	ComPtr<ID3D12DescriptorHeap>		m_d3dDsvDescriptorHeap;
+	ComPtr<ID3D12Resource> m_d3dDepthStencilBuffer;
+	ComPtr<ID3D12DescriptorHeap> m_d3dDsvDescriptorHeap;
 
-	ComPtr<ID3D12CommandAllocator>		m_d3dCommandAllocator[m_nSwapChainBuffers];
-	ComPtr<ID3D12CommandQueue>			m_d3dCommandQueue;
-	ComPtr<ID3D12GraphicsCommandList>	m_d3dCommandList;
+	ComPtr<ID3D12CommandAllocator> m_d3dCommandAllocator[m_nSwapChainBuffers];
+	ComPtr<ID3D12CommandQueue> m_d3dCommandQueue;
+	ComPtr<ID3D12GraphicsCommandList> m_d3dCommandList;
 
-	ComPtr<ID3D12Fence>						m_d3dFence;
-	std::array<UINT64, m_nSwapChainBuffers>	m_nFenceValues;
-	HANDLE									m_hFenceEvent;
+	ComPtr<ID3D12Fence> m_d3dFence;
+	std::array<UINT64, m_nSwapChainBuffers>	m_nFenceValues{};
+	HANDLE m_hFenceEvent = nullptr;
 
 #if defined(_DEBUG)
-	ID3D12Debug*						m_pd3dDebugController;
+	ID3D12Debug* m_pd3dDebugController = nullptr;
 #endif
 
-	//CGameTimer							m_GameTimer;
-	
-	shared_ptr<CScene>					m_pScene;
+	/* ì”¬ê³¼ í”Œë ˆì´ì–´ */
+	shared_ptr<CScene> m_pScene;
+	std::array<shared_ptr<CPlayer>, MAX_CLIENT> m_apPlayer; // í´ë¼ì´ì–¸íŠ¸IDì™€ ì¸ë±ìŠ¤ëŠ” ë™ì¼í•˜ë‹¤.
+	weak_ptr<CCamera> m_pCamera;
 
-	std::array<shared_ptr<CPlayer>, MAX_CLIENT>	m_apPlayer;		// Å¬¶óÀÌ¾ğÆ®ID¿Í ÀÎµ¦½º´Â µ¿ÀÏÇÏ´Ù.
-	weak_ptr<CCamera>							m_pCamera;
-
-	POINT								m_ptOldCursorPos;
-	_TCHAR								m_pszFrameRate[200];
-	
-	static UCHAR						m_pKeysBuffer[256];
-
-	//TCPClient
-	unique_ptr<CTcpClient>				m_pTcpClient;
-	static int							m_nMainClientId;	// TcpClient¿¡¼­ ¹Ş°Ô µÈ´Ù. -> ÇÃ·¹ÀÌ¾î 1ÀÎÄªÀ¸·Î ±×¸±¶§ ºñ±³ÇØ¼­ ±×·ÁÁÖ°Ô ÇÏ±âÀ§ÇØ
-public:
-	void PrepareDrawText();
-	void RenderTextUI();
-
-	static std::shared_ptr<CPlayer>					m_pMainPlayer;	// Å¬¶óÀÌ¾ğÆ®ID¿¡ ÇØ´çÇÏ´Â ÀÎµ¦½º°¡ ÇØ´ç Å¬¶óÀÌ¾ğÆ®ÀÇ MainÇÃ·¹ÀÌ¾î·Î ¼³Á¤µÈ´Ù
-
-	static shared_ptr<CPlayer>& GetMainPlayer() {
-		return m_pMainPlayer;
-	}
-private:
-	//DrawText
+	/* DX11 for Text */
 	ComPtr<ID3D11DeviceContext> m_d3d11DeviceContext;
 	ComPtr<ID3D11On12Device> m_d3d11On12Device;
 	ComPtr<IDWriteFactory> m_dWriteFactory;
@@ -168,38 +156,33 @@ private:
 	ComPtr<ID2D1SolidColorBrush> m_textBrush;
 	ComPtr<IDWriteTextFormat> m_textFormat;
 
-	//unique_ptr<TextObject> m_pTextobject;
 	bool m_bPrepareDrawText = false;
-public:
-	static ComPtr<IDWriteTextFormat> m_idwGameCountTextFormat;
-	static ComPtr<IDWriteTextFormat> m_idwSpeakerTextFormat;
 
-	//// Time 
-	//D3D12_GPU_DESCRIPTOR_HANDLE m_d3dTimeCbvGPUDescriptorHandle;
-	//ComPtr<ID3D12Resource>		m_pd3dcbTime;
-	//FrameTimeInfo* m_pcbMappedTime;
-	void UpdateFrameworkShaderVariable();
-//[0507]
-private:
+	/* TCP ê´€ë ¨ */
+	unique_ptr<CTcpClient> m_pTcpClient;
+	static int m_nMainClientId; // TcpClientì—ì„œ ë°›ê²Œ ëœë‹¤. -> í”Œë ˆì´ì–´ 1ì¸ì¹­ìœ¼ë¡œ ê·¸ë¦´ë•Œ ë¹„êµí•´ì„œ ê·¸ë ¤ì£¼ê²Œ í•˜ê¸°ìœ„í•´
+
 	bool m_bConnected = false;
-	HWND m_hConnectButton;
+	HWND m_hConnectButton = nullptr;
 
 	bool m_bTcpClient = false;
-	UINT m_nEventCreateTcpClient;
+	UINT m_nEventCreateTcpClient = 0;
 
-	HWND m_hIPAddressEdit;
+	HWND m_hIPAddressEdit = nullptr;
+	_TCHAR m_pszIPAddress[16] = {};
 
-	_TCHAR m_pszIPAddress[16];
-
-	// ÀÏ´Ü ·Îºñ°¡ ¾øÀ¸´Ï IN_GAMEÀ¸·Î ½ÃÀÛ
+	/* Game State */
+	// ì¼ë‹¨ ë¡œë¹„ê°€ ì—†ìœ¼ë‹ˆ IN_GAMEìœ¼ë¡œ ì‹œì‘
 	int m_nGameState = GAME_STATE::IN_GAME;
 	float m_fEndingElapsedTime = 0.0f;
 	XMFLOAT4 m_xmf4EndFog = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
 
-	D3D12_GPU_DESCRIPTOR_HANDLE m_d3dFramework_info_CbvGPUDescriptorHandle;
+	/* Particle CB */
+	D3D12_GPU_DESCRIPTOR_HANDLE m_d3dFramework_info_CbvGPUDescriptorHandle = {};
 	ComPtr<ID3D12Resource> m_d3dFramework_info_Resource;
-	CB_FRAMEWORK_INFO* m_cbFramework_info;
+	CB_FRAMEWORK_INFO* m_cbFramework_info = nullptr;
 
+	/* Sound */
 	float m_fBGMVolume = 0.5f;
 };
 
