@@ -5,12 +5,12 @@
 
 struct CB_FRAMEWORK_INFO
 {
-	float					m_fCurrentTime;
-	float					m_fElapsedTime;
-	float					m_fSecondsPerFirework = 1.0f;
-	int						m_nFlareParticlesToEmit = -1;
-	XMFLOAT3				m_xmf3Gravity = XMFLOAT3(0.0f, -9.8f, 0.0f);
-	int						m_nMaxFlareType2Particles = -1;
+	float m_fCurrentTime;
+	float m_fElapsedTime;
+	float m_fSecondsPerFirework = 1.0f;
+	int m_nFlareParticlesToEmit = -1;
+	XMFLOAT3 m_xmf3Gravity = XMFLOAT3(0.0f, -9.8f, 0.0f);
+	int m_nMaxFlareType2Particles = -1;
 };
 
 //constexpr size_t SWAPCHAIN_BUFFER_NUM = 2;
@@ -56,6 +56,7 @@ public:
 	void PreRenderTasks(shared_ptr<CMainScene>& pMainScene);
 	void FrameAdvance();
 	void LoadingRender();
+    void ExecuteCommandListAndWaitForGpu();
 	void WaitForGpuComplete();
 	void MoveToNextFrame();
 	void UpdateFrameworkShaderVariable();
@@ -90,12 +91,16 @@ public:
 
 	// Shared public state (legacy)
 	static std::shared_ptr<CPlayer> m_pMainPlayer; // 클라이언트ID에 해당하는 인덱스가 해당 클라이언트의 Main플레이어로 설정된다
-	static shared_ptr<CPlayer>& GetMainPlayer()	{ return m_pMainPlayer; }
+	static shared_ptr<CPlayer>& GetMainPlayer() { return m_pMainPlayer; }
 
 	static ComPtr<IDWriteTextFormat> m_idwGameCountTextFormat;
 	static ComPtr<IDWriteTextFormat> m_idwSpeakerTextFormat;
 
 private:
+    void BuildLobbyObjects();
+    void BuildMainObjects();
+    void BindPlayersToTcpClient();
+
 	/* 윈도우 플랫폼 관련 멤버 */
 	HINSTANCE m_hInstance = nullptr;
 	HWND m_hWnd = nullptr;
