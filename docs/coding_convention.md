@@ -101,7 +101,7 @@ enum class ResourceState
 ### Formatting Rules
 - C/C++ source/header encoding: `UTF-8 with BOM`
 - HLSL/Markdown encoding: `UTF-8 without BOM`
-- Line endings: `LF`
+- Line endings: `CRLF`
 - Indentation: `4 spaces`
 - 파일 끝에는 개행 1개를 유지
 
