@@ -1,0 +1,22 @@
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{h,hpp,c,cpp,inl}]
+charset = utf-8-bom
+indent_style = space
+indent_size = 4
+
+[*.hlsl]
+charset = utf-8
+indent_style = space
+indent_size = 4
+
+[*.md]
+charset = utf-8
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = false
