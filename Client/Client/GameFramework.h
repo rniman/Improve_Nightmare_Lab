@@ -165,6 +165,8 @@ private:
 
 	/* TCP 관련 */
 	unique_ptr<CTcpClient> m_pTcpClient;
+    HWND m_hIPAddressLabel = nullptr;
+    HFONT m_hEntryFont = nullptr;
 	static int m_nMainClientId; // TcpClient에서 받게 된다. -> 플레이어 1인칭으로 그릴때 비교해서 그려주게 하기위해
 
 	bool m_bConnected = false;
