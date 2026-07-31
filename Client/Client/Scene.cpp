@@ -1949,7 +1949,7 @@ void CMainScene::ForwardRender(int nGameState, ID3D12GraphicsCommandList* pd3dCo
 			shader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
 		}
 	}
-	else if (!(nGameState == GAME_STATE::BLUE_SUIT_WIN || nGameState == GAME_STATE::ZOMBIE_WIN))
+	else if ((nGameState == GAME_STATE::BLUE_SUIT_WIN || nGameState == GAME_STATE::ZOMBIE_WIN))
 	{
 		m_vForwardRenderShader[USER_INTERFACE_SHADER]->Render(pd3dCommandList, pCamera, m_pMainPlayer);
 	}

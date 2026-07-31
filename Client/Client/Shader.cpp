@@ -6,6 +6,18 @@
 #include "GameFramework.h"
 #include "Component.h"
 
+namespace
+{
+	constexpr float kGameEndingFadeDurationSeconds = 3.0f;
+
+	float CalculateGameEndingFadeMaterialAlpha(float elapsedTime)
+	{
+		// PSUserInterface calculates final alpha as 1.0f - materialAlpha + textureAlpha.
+		// With an opaque texture, this produces an elapsedTime / duration fade-in.
+		return 2.0f - elapsedTime / kGameEndingFadeDurationSeconds;
+	}
+}
+
 CShader::CShader()
 {
 }
@@ -78,7 +90,7 @@ D3D12_SHADER_BYTECODE CShader::ReadCompiledShaderFromFile(const WCHAR* pszFileNa
 
 	if (!ifsFile)
 	{
-		assert("ÆÄÀÏ ¿­±â ½ÇÆĞ!");
+		assert("File not found");
 	}
 
 	std::streamoff llFileSize = ifsFile.tellg();
@@ -228,7 +240,7 @@ void CShader::PrevRender(ID3D12GraphicsCommandList* pd3dCommandList, const share
 
 	for (auto& object : m_vGameObjects)
 	{
-		if (!object->IsStatic())	// »çÀü ±×¸²ÀÚ¸Ê¿¡¼­ ½ºÅÂÆ½¸¸ ±×¸°´Ù.
+		if (!object->IsStatic())	// ì‚¬ì „ ê·¸ë¦¼ìë§µì—ì„œ ìŠ¤íƒœí‹±ë§Œ ê·¸ë¦°ë‹¤.
 		{
 			continue;
 		}
@@ -338,11 +350,11 @@ D3D12_SHADER_BYTECODE StandardShader::CreateVertexShader()
 
 D3D12_SHADER_BYTECODE StandardShader::CreatePixelShader()
 {
-	if (m_PipeLineIndex == 0) { // ±âº» ÆÄÀÌÇÁ¶óÀÎ
+	if (m_PipeLineIndex == 0) { // ê¸°ë³¸ íŒŒì´í”„ë¼ì¸
 		return CShader::ReadCompiledShaderFromFile(L"cso/PSStandard.cso", m_pd3dPixelShaderBlob.GetAddressOf());
 		//return(CShader::CompileShaderFromFile(L"Shaders.hlsl", "PSStandard", "ps_5_1", m_pd3dPixelShaderBlob.GetAddressOf()));
 	}
-	else if (m_PipeLineIndex == 1) { // ±×¸²ÀÚ¸Ê »ı¼º ÆÄÀÌÇÁ ¶óÀÎ
+	else if (m_PipeLineIndex == 1) { // ê·¸ë¦¼ìë§µ ìƒì„± íŒŒì´í”„ ë¼ì¸
 		return CShader::ReadCompiledShaderFromFile(L"cso/PSShadow.cso", m_pd3dPixelShaderBlob.GetAddressOf());
 		//return(CShader::CompileShaderFromFile(L"Shadow.hlsl", "PS_Shadow", "ps_5_1", m_pd3dPixelShaderBlob.GetAddressOf()));
 	}
@@ -357,7 +369,7 @@ void StandardShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 		m_vpd3dPipelineState.emplace_back();
 	//m_ppd3dPipelineState = new ID3D12PipelineState * [m_nPipelineState];
 
-	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat); //m_ppd3dPipelineStates[0] »ı¼º
+	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat); //m_ppd3dPipelineStates[0] ìƒì„±
 
 	DXGI_FORMAT shadowFormat = DXGI_FORMAT_R32_FLOAT;
 	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, 1, &shadowFormat, dxgiDsvFormat);
@@ -651,8 +663,8 @@ void CPostProcessingShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12Graphic
 		CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat);
 	}
 
-	//±âº» ÆÄÀÌÇÁ¶óÀÎ
-	////±×¸²ÀÚ ÆÄÀÌÇÁ¶óÀÎ
+	//ê¸°ë³¸ íŒŒì´í”„ë¼ì¸
+	////ê·¸ë¦¼ì íŒŒì´í”„ë¼ì¸
 	//DXGI_FORMAT shadowformat = DXGI_FORMAT_R32_FLOAT;
 	//CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, &shadowformat, dxgiDsvFormat);
 }
@@ -766,7 +778,7 @@ void CPostProcessingShader::OnPrepareRenderTarget(ID3D12GraphicsCommandList* pd3
 		::SynchronizeResourceTransition(pd3dCommandList, GetTextureResource(i), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = GetRtvCPUDescriptorHandle(i);
-		if (i == 2) { // ±íÀÌ°ªÀ» ÀúÀåÇÏ´Â ·»´õÅ¸°Ù
+		if (i == 2) { // ê¹Šì´ê°’ì„ ì €ì¥í•˜ëŠ” ë Œë”íƒ€ê²Ÿ
 			FLOAT value[4] = { 1.0f,1.0f,1.0f,1.0f };
 			pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, value, 0, NULL);
 		}
@@ -813,7 +825,7 @@ void CPostProcessingShader::OnPrepareRenderTarget2(ID3D12GraphicsCommandList* pd
 		::SynchronizeResourceTransition(pd3dCommandList, GetTextureResource(i), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = GetRtvCPUDescriptorHandle(i);
-		if (i == 2) { // ±íÀÌ°ªÀ» ÀúÀåÇÏ´Â ·»´õÅ¸°Ù
+		if (i == 2) { // ê¹Šì´ê°’ì„ ì €ì¥í•˜ëŠ” ë Œë”íƒ€ê²Ÿ
 			FLOAT value[4] = { 1.0f,1.0f,1.0f,1.0f };
 			pd3dCommandList->ClearRenderTargetView(*pd3dshadowRTVDescriptorHandle, value, 0, NULL);
 			d3dRtvCPUDescriptorHandle = *pd3dshadowRTVDescriptorHandle;
@@ -832,7 +844,7 @@ void CPostProcessingShader::OnPrepareRenderTarget2(ID3D12GraphicsCommandList* pd
 void CPostProcessingShader::TransitionRenderTargetToCommon(ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	int nResources = m_pTexture->GetTextures();
-	for (int i = 0; i < nResources - 1; i++) // µÚ¿¡ 1°³ Á¦¿Ü
+	for (int i = 0; i < nResources - 1; i++) // ë’¤ì— 1ê°œ ì œì™¸
 	{
 		::SynchronizeResourceTransition(pd3dCommandList, GetTextureResource(i), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
 	}
@@ -841,7 +853,7 @@ void CPostProcessingShader::TransitionRenderTargetToCommon(ID3D12GraphicsCommand
 void CPostProcessingShader::TransitionRenderTargetToCommonForLight(ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	int nResources = m_pTexture->GetTextures();
-	for (int i = nResources - 1; i < nResources; i++) // µÚ¿¡ 1°³ Á¦¿Ü
+	for (int i = nResources - 1; i < nResources; i++) // ë’¤ì— 1ê°œ ì œì™¸
 	{
 		::SynchronizeResourceTransition(pd3dCommandList, GetTextureResource(i), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
 	}
@@ -911,7 +923,7 @@ void CPostProcessingShader::CreateShadowMapResource(ID3D12Device* pd3dDevice, ID
 	}
 	D3D12_DESCRIPTOR_HEAP_DESC d3dDescriptorHeapDesc;
 	::ZeroMemory(&d3dDescriptorHeapDesc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
-	d3dDescriptorHeapDesc.NumDescriptors = nLight; // ºûÀÇ °³¼ö¸¸Å­ ·»´õÅ¸°ÙÀ» »ı¼º?
+	d3dDescriptorHeapDesc.NumDescriptors = nLight; // ë¹›ì˜ ê°œìˆ˜ë§Œí¼ ë Œë”íƒ€ê²Ÿì„ ìƒì„±?
 	d3dDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 	d3dDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	d3dDescriptorHeapDesc.NodeMask = 0;
@@ -975,7 +987,7 @@ void CPostProcessingShader::CreateLightCamera(ID3D12Device* pd3dDevice, ID3D12Gr
 	//	m_pLightCamera[i]->GenerateViewMatrix(positions[i], lookAtPosition, xmf3Up);
 	//	if(i >= MAX_SURVIVOR)
 	//	{
-	//		m_pLightCamera[i]->GenerateProjectionMatrix(1.01f, 5.0f, ASPECT_RATIO, 90.0f);	//[0513] ±ÙÆò¸éÀÌ ÀÖ¾î¾ß  ±×¸²ÀÚ¸¦ ±×¸²
+	//		m_pLightCamera[i]->GenerateProjectionMatrix(1.01f, 5.0f, ASPECT_RATIO, 90.0f);	//[0513] ê·¼í‰ë©´ì´ ìˆì–´ì•¼  ê·¸ë¦¼ìë¥¼ ê·¸ë¦¼
 	//	}
 	//	m_pLightCamera[i]->GenerateFrustum();
 	//	m_pLightCamera[i]->MultiplyViewProjection();
@@ -987,7 +999,7 @@ void CPostProcessingShader::CreateLightCamera(ID3D12Device* pd3dDevice, ID3D12Gr
 	//	m_pLightCamera[i]->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	//}
 
-	//// ºûÀÇ Ä«¸Ş¶ó ÆÄÆ¼¼Ç ¼³Á¤
+	//// ë¹›ì˜ ì¹´ë©”ë¼ íŒŒí‹°ì…˜ ì„¤ì •
 	//unique_ptr<PartitionInsStandardShader> PtShader(static_cast<PartitionInsStandardShader*>(scene->m_vPreRenderShader[PARTITION_SHADER].release()));
 	//auto vBB = PtShader->GetPartitionBB();
 
@@ -1105,7 +1117,7 @@ void CBlueSuitUserInterfaceShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12
 		m_vpd3dPipelineState.emplace_back();
 	}
 
-	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat); //m_ppd3dPipelineStates[0] »ı¼º
+	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat); //m_ppd3dPipelineStates[0] ìƒì„±
 }
 
 void CBlueSuitUserInterfaceShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
@@ -1269,7 +1281,7 @@ void CBlueSuitUserInterfaceShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12
 	m_vpStamina[1] = make_shared<CGameObject>(pd3dDevice, pd3dCommandList, 1);
 	m_vpStamina[1]->SetMaterial(0, m_vpmatStamina[1]);
 	m_vpStamina[1]->SetMesh(m_pmeshStaminaRect);
-	m_vpStamina[1]->SetScale(fxScale* (844.0f / 860.0f), 0.1f, 1.0f);	//  (844.0f / 860.0f) -> ÀÌ¹ÌÁö Å©±â
+	m_vpStamina[1]->SetScale(fxScale* (844.0f / 860.0f), 0.1f, 1.0f);	//  (844.0f / 860.0f) -> ì´ë¯¸ì§€ í¬ê¸°
 	m_vpStamina[1]->SetPosition(0.0f, -0.75f, 0.0f);
 	m_vpStamina[1]->SetAlive(false);
 
@@ -1338,38 +1350,38 @@ void CBlueSuitUserInterfaceShader::AnimateObjectBlueSuit(float fElapsedTime)
 		break;
 	case GAME_STATE::ZOMBIE_WIN:
 		m_fEndingElapsedTime += fElapsedTime;
-		if (m_fEndingElapsedTime > 3.0) m_fEndingElapsedTime = 3.0f;
+		if (m_fEndingElapsedTime > kGameEndingFadeDurationSeconds) m_fEndingElapsedTime = kGameEndingFadeDurationSeconds;
 		m_pGameEnding->SetAlive(true);
 		m_pGameEnding->SetMaterial(0, m_vpmatGameEnding[PLAYER_RESULT::OVER]);
 		for (auto& pGameObject : m_vGameObjects)
 		{
-			pGameObject->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, m_fEndingElapsedTime / 3.0f + 1.0f);
+			pGameObject->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, m_fEndingElapsedTime / kGameEndingFadeDurationSeconds + 1.0f);
 		}
-		m_pGameEnding->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 2.0f - m_fEndingElapsedTime / 3.0f);
+		m_pGameEnding->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, CalculateGameEndingFadeMaterialAlpha(m_fEndingElapsedTime));
 		break;
 	case GAME_STATE::BLUE_SUIT_WIN:
 		m_pGameEnding->SetAlive(true);
 		if (m_pBlueSuitPlayer->IsAlive())
 		{
 			m_fEndingElapsedTime += fElapsedTime;
-			if (m_fEndingElapsedTime > 3.0) m_fEndingElapsedTime = 3.0f;
+			if (m_fEndingElapsedTime > kGameEndingFadeDurationSeconds) m_fEndingElapsedTime = kGameEndingFadeDurationSeconds;
 			m_pGameEnding->SetMaterial(0, m_vpmatGameEnding[PLAYER_RESULT::WIN]);
 			for (auto& pGameObject : m_vGameObjects)
 			{
-				pGameObject->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, m_fEndingElapsedTime / 3.0f + 1.0f);
+				pGameObject->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, m_fEndingElapsedTime / kGameEndingFadeDurationSeconds + 1.0f);
 			}
-			m_pGameEnding->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 2.0f - m_fEndingElapsedTime / 3.0f);
+			m_pGameEnding->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, CalculateGameEndingFadeMaterialAlpha(m_fEndingElapsedTime));
 		}
 		else
 		{
 			m_fEndingElapsedTime += fElapsedTime;
-			if (m_fEndingElapsedTime > 3.0) m_fEndingElapsedTime = 3.0f;
+			if (m_fEndingElapsedTime > kGameEndingFadeDurationSeconds) m_fEndingElapsedTime = kGameEndingFadeDurationSeconds;
 			m_pGameEnding->SetMaterial(0, m_vpmatGameEnding[PLAYER_RESULT::OVER]);
 			for (auto& pGameObject : m_vGameObjects)
 			{
-				pGameObject->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, m_fEndingElapsedTime / 3.0f + 1.0f);
+				pGameObject->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, m_fEndingElapsedTime / kGameEndingFadeDurationSeconds + 1.0f);
 			}
-			m_pGameEnding->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 2.0f - m_fEndingElapsedTime / 3.0f);
+			m_pGameEnding->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, CalculateGameEndingFadeMaterialAlpha(m_fEndingElapsedTime));
 		}
 		break;
 	default:
@@ -1517,7 +1529,7 @@ void CZombieUserInterfaceShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12Gr
 		m_vpd3dPipelineState.emplace_back();
 	}
 
-	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat); //m_ppd3dPipelineStates[0] »ı¼º
+	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat); //m_ppd3dPipelineStates[0] ìƒì„±
 }
 
 void CZombieUserInterfaceShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
@@ -1691,17 +1703,24 @@ void CZombieUserInterfaceShader::AnimateObjectZombie(float fElapsedTime)
 
 		static bool switchRun = false;
 
-		if (m_pZombiePlayer->IsAbleRunning()) m_pRunning->SetMaterial(0, m_vpmatRunning[0]);
-		else if (m_pZombiePlayer->IsRunning()) {
+		if (m_pZombiePlayer->IsAbleRunning())
+		{
+			m_pRunning->SetMaterial(0, m_vpmatRunning[0]);
+		}
+		else if (m_pZombiePlayer->IsRunning())
+		{
 			m_pRunning->SetMaterial(0, m_vpmatRunning[1]);
-			if (!switchRun) {
+			if (!switchRun)
+			{
 				m_pZombiePlayer->GetCamera()->GenerateProjectionMatrix(0.01f, 100.0f, ASPECT_RATIO, 80.0f);
 				switchRun = true;
 			}
 		}
-		else if (!m_pZombiePlayer->IsAbleRunning()) {
+		else if (!m_pZombiePlayer->IsAbleRunning())
+		{
 			m_pRunning->SetMaterial(0, m_vpmatRunning[2]);
-			if (switchRun) {
+			if (switchRun)
+			{
 				m_pZombiePlayer->GetCamera()->GenerateProjectionMatrix(0.01f, 100.0f, ASPECT_RATIO, 70.0f);
 				switchRun = false;
 			}
@@ -1710,25 +1729,25 @@ void CZombieUserInterfaceShader::AnimateObjectZombie(float fElapsedTime)
 	}
 	case GAME_STATE::BLUE_SUIT_WIN:
 		m_fEndingElapsedTime += fElapsedTime;
-		if (m_fEndingElapsedTime > 3.0) m_fEndingElapsedTime = 3.0f;
+		if (m_fEndingElapsedTime > kGameEndingFadeDurationSeconds) m_fEndingElapsedTime = kGameEndingFadeDurationSeconds;
 		m_pGameEnding->SetAlive(true);
 		m_pGameEnding->SetMaterial(0, m_vpmatGameEnding[PLAYER_RESULT::OVER]);
 		for (auto& pGameObject : m_vGameObjects)
 		{
-			pGameObject->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, m_fEndingElapsedTime / 3.0f + 1.0f);
+			pGameObject->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, m_fEndingElapsedTime / kGameEndingFadeDurationSeconds + 1.0f);
 		}
-		m_pGameEnding->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 2.0f - m_fEndingElapsedTime / 3.0f);
+		m_pGameEnding->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, CalculateGameEndingFadeMaterialAlpha(m_fEndingElapsedTime));
 		break;
 	case GAME_STATE::ZOMBIE_WIN:
 		m_fEndingElapsedTime += fElapsedTime;
-		if (m_fEndingElapsedTime > 3.0) m_fEndingElapsedTime = 3.0f;
+		if (m_fEndingElapsedTime > kGameEndingFadeDurationSeconds) m_fEndingElapsedTime = kGameEndingFadeDurationSeconds;
 		m_pGameEnding->SetAlive(true);
 		m_pGameEnding->SetMaterial(0, m_vpmatGameEnding[PLAYER_RESULT::WIN]);
 		for (auto& pGameObject : m_vGameObjects)
 		{
-			pGameObject->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, m_fEndingElapsedTime / 3.0f + 1.0f);
+			pGameObject->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, m_fEndingElapsedTime / kGameEndingFadeDurationSeconds + 1.0f);
 		}
-		m_pGameEnding->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 2.0f - m_fEndingElapsedTime / 3.0f);
+		m_pGameEnding->m_vpMaterials[0]->m_xmf4AlbedoColor = XMFLOAT4(0.0f, 0.0f, 0.0f, CalculateGameEndingFadeMaterialAlpha(m_fEndingElapsedTime));
 		break;
 	default:
 		break;
@@ -1928,7 +1947,7 @@ void COutLineShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, const sh
 
 		if (i == INSTANCE_OUT_LINE || i == INSTANCE_OUT_LINE_MASK)
 		{	
-			// ÇÈÅ· ¿ÀºêÁ§Æ® ·»´õ¸µ
+			// í”½í‚¹ ì˜¤ë¸Œì íŠ¸ ë Œë”ë§
 			shared_ptr<CGameObject> pPickedObject = m_pMainPlayer->GetPickedObject();
 			if (pPickedObject && pPickedObject->GetCollisionType() == 2 && pPickedObject->IsInstance())
 			{
@@ -1951,7 +1970,7 @@ void COutLineShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, const sh
 			{
 				continue;
 			}
-			// Á»ºñ ¿Ü°û¼± ½ºÅ³
+			// ì¢€ë¹„ ì™¸ê³½ì„  ìŠ¤í‚¬
 			if (!m_pZombiePlayer->IsTracking())
 			{
 				continue;
@@ -1977,7 +1996,7 @@ void COutLineShader::AddGameObject(const shared_ptr<CGameObject>& pGameObject)
 	else if (dynamic_pointer_cast<CBlueSuitPlayer>(pGameObject))
 	{
 		m_vpBlueSuitPlayer.push_back(dynamic_pointer_cast<CBlueSuitPlayer>(pGameObject));
-		if(m_nMainPlayer != ZOMBIEPLAYER)	// ¼ÎÀÌ´õÀÇ ¸ŞÀÎ ÇÃ·¹ÀÌ¾î ¼³Á¤ÇÊ¿ä
+		if(m_nMainPlayer != ZOMBIEPLAYER)	// ì…°ì´ë”ì˜ ë©”ì¸ í”Œë ˆì´ì–´ ì„¤ì •í•„ìš”
 		{
 			m_pMainPlayer = m_vpBlueSuitPlayer[0]; // 0~3
 		}
@@ -2025,7 +2044,7 @@ void PartitionInsStandardShader::AddPartitionGameObject(const shared_ptr<CGameOb
 void PartitionInsStandardShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, const shared_ptr<CPlayer>& pPlayer, int nPipelineState)
 {
 	if (pCamera->GetPartitionPos() == -1) {
-		//assert(0); // ÆÄÆ¼¼ÇÀÌ ¾øÀ¸¸é Á¾·á. Å×½ºÆ® ÈÄ Àß µÇ¸é ÁÖ¼® Ã³¸® ÇØµµ ok
+		//assert(0); // íŒŒí‹°ì…˜ì´ ì—†ìœ¼ë©´ ì¢…ë£Œ. í…ŒìŠ¤íŠ¸ í›„ ì˜ ë˜ë©´ ì£¼ì„ ì²˜ë¦¬ í•´ë„ ok
 		return;
 	}
 	UpdatePipeLineState(pd3dCommandList, nPipelineState);
@@ -2046,7 +2065,7 @@ void PartitionInsStandardShader::Render(ID3D12GraphicsCommandList* pd3dCommandLi
 void PartitionInsStandardShader::PartitionRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState)
 {
 	if (pCamera->GetPartitionPos() == -1) {
-		//assert(0); // ÆÄÆ¼¼ÇÀÌ ¾øÀ¸¸é Á¾·á. Å×½ºÆ® ÈÄ Àß µÇ¸é ÁÖ¼® Ã³¸® ÇØµµ ok
+		//assert(0); // íŒŒí‹°ì…˜ì´ ì—†ìœ¼ë©´ ì¢…ë£Œ. í…ŒìŠ¤íŠ¸ í›„ ì˜ ë˜ë©´ ì£¼ì„ ì²˜ë¦¬ í•´ë„ ok
 		return;
 	}
 	UpdatePipeLineState(pd3dCommandList, nPipelineState);
@@ -2362,7 +2381,7 @@ int CLobbyUserInterfaceShader::ProcessInput(int nProcessInput)
 		m_pStartButton->SetMaterial(0, m_apmatStartButton[2]);
 		break;
 	case LOBBY_PROCESS_INPUT::START_BUTTON_UP:
-		if (m_bStartButtonPressed) // °ÔÀÓ ½ÃÀÛÇØ¾ß ÇÔ
+		if (m_bStartButtonPressed) // ê²Œì„ ì‹œì‘í•´ì•¼ í•¨
 		{
 			m_bStartButtonPressed = false;
 			return 1;
@@ -2383,7 +2402,7 @@ int CLobbyUserInterfaceShader::ProcessInput(int nProcessInput)
 		m_pChangeButton->SetMaterial(0, m_apmatChangeButton[2]);
 		break;
 	case LOBBY_PROCESS_INPUT::CHANGE_BUTTON_UP:
-		if(m_bChangeButtonPressed) // À§Ä¡ ¹Ù²ã¾ß ÇÔ
+		if(m_bChangeButtonPressed) // ìœ„ì¹˜ ë°”ê¿”ì•¼ í•¨
 		{
 			m_apLobbyBorderObjects[m_nSelectedBorder]->SetMaterial(0, m_apmatLobbyBorder[0]);
 			m_nSelectedBorder = -1;
@@ -2582,7 +2601,7 @@ void CFullScreenProcessingShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12G
 		timeonoffComponent->RegisterVariable(&pObject->GetBoolRender());
 		timeonoffComponent->SetLimitTime(2.0f);
 		pObject->SetComponent(timeonoffComponent);
-		//MainÅ¬¶óÀÌ¾ğÆ® ÇÃ·¹ÀÌ¾î¿¡°Ô ½ºÅ©¸° °´Ã¼ °øÀ¯
+		//Mainí´ë¼ì´ì–¸íŠ¸ í”Œë ˆì´ì–´ì—ê²Œ ìŠ¤í¬ë¦° ê°ì²´ ê³µìœ 
 		mainPlayer->SetHitDamageScreenObject(pObject);
 		m_pMainPlayer = mainPlayer;
 
