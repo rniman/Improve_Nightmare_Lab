@@ -102,7 +102,8 @@ enum class ResourceState
 - C/C++ source/header encoding: `UTF-8 with BOM`
 - HLSL/Markdown encoding: `UTF-8 without BOM`
 - Line endings: `CRLF`
-- Indentation: `4 spaces`
+- Indentation: tabs (visual width: 4 spaces)
+- Use tabs only for indentation. Use spaces only when aligning wrapped lines or columns.
 - 파일 끝에는 개행 1개를 유지
 
 > Note: Visual Studio와 VS Code를 함께 사용할 때 한글 주석 깨짐을 줄이기 위해

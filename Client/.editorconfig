@@ -7,8 +7,9 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 
 [*.{c,cc,cpp,cxx,h,hpp,hxx,inl,rc,hlsl,hlsli}]
-indent_style = space
-indent_size = 4
+indent_style = tab
+indent_size = tab
+tab_width = 4
 
 [*.md]
 trim_trailing_whitespace = false
