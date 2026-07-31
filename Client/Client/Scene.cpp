@@ -1,4 +1,4 @@
-﻿#include "stdafx.h"
+#include "stdafx.h"
 #include "Scene.h"
 #include "Shader.h"
 #include "ParticleShader.h"
@@ -324,11 +324,11 @@ void CScene::CreateCbvSrvUavDescriptorHeaps(ID3D12Device* pd3dDevice, int nConst
 	}
 
 	D3D12_DESCRIPTOR_HEAP_DESC d3dDescriptorHeapDesc;
-	d3dDescriptorHeapDesc.NumDescriptors = nConstantBufferViews + nShaderResourceViews  + nUnorderedAccessViews; //CBVs + SRVs 
+	d3dDescriptorHeapDesc.NumDescriptors = nConstantBufferViews + nShaderResourceViews + nUnorderedAccessViews; //CBVs + SRVs 
 	d3dDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	d3dDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	d3dDescriptorHeapDesc.NodeMask = 0;
-	HRESULT h  = pd3dDevice->CreateDescriptorHeap(&d3dDescriptorHeapDesc, __uuidof(ID3D12DescriptorHeap), (void**)&m_pd3dCbvSrvUavDescriptorHeap);
+	HRESULT h = pd3dDevice->CreateDescriptorHeap(&d3dDescriptorHeapDesc, __uuidof(ID3D12DescriptorHeap), (void**)&m_pd3dCbvSrvUavDescriptorHeap);
 
 	//m_d3dCbvCPUDescriptorNextHandle = m_d3dCbvCPUDescriptorStartHandle = m_pd3dCbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	//m_d3dCbvGPUDescriptorNextHandle = m_d3dCbvGPUDescriptorStartHandle = m_pd3dCbvSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
@@ -387,7 +387,7 @@ void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, const shared_pt
 	}
 
 	int nRootParameters = pTexture->GetRootParameters();
-	for (int j = 0; j < nRootParameters; j++) 
+	for (int j = 0; j < nRootParameters; j++)
 	{
 		pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
 	}
@@ -454,8 +454,8 @@ CLobbyScene::CLobbyScene(HWND hWnd, weak_ptr<CCamera>& pCamera)
 	pCamera = m_pCamera;
 }
 
-bool CLobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam) 
-{ 
+bool CLobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+{
 	shared_ptr<CLobbyUserInterfaceShader> pLobbyUIShader = dynamic_pointer_cast<CLobbyUserInterfaceShader>(m_vpShader[LOBBY_UI_SHADER]);
 	POINT ptCursorPos = m_ptCursor;
 	ptCursorPos.y = FRAME_BUFFER_HEIGHT - ptCursorPos.y;
@@ -473,7 +473,7 @@ bool CLobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wP
 		// 선택된 슬롯 번호
 		m_nSelectedSlot = pLobbyUIShader->GetSelectedBorder();
 	}
-		break;
+	break;
 	case WM_LBUTTONUP:
 	{
 		int nRetVal = pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::START_BUTTON_UP);
@@ -602,7 +602,7 @@ void CLobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 	// 쉐이더 vector에 삽입한 순서대로 인덱스 define한 값으로 접근
 	m_vpShader.push_back(make_shared<CLobbyStandardShader>());
 	m_vpShader[LOBBY_SATANDARD_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
-	
+
 	m_vpShader.push_back(make_shared<CLobbyUserInterfaceShader>(mainPlayerId));
 	m_vpShader[LOBBY_UI_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
 
@@ -656,7 +656,7 @@ void CLobbyScene::AnimateObjects(float fElapsedTime, float fCurTime)
 	}
 }
 
-bool CLobbyScene::ProcessInput(UCHAR* pKeysBuffer) 
+bool CLobbyScene::ProcessInput(UCHAR* pKeysBuffer)
 {
 	shared_ptr<CLobbyUserInterfaceShader> pLobbyUIShader = dynamic_pointer_cast<CLobbyUserInterfaceShader>(m_vpShader[LOBBY_UI_SHADER]);
 
@@ -673,7 +673,7 @@ bool CLobbyScene::ProcessInput(UCHAR* pKeysBuffer)
 	float fButtonScale = 160.0f / 680.0f;
 	fHeight = FRAME_BUFFER_HEIGHT / 2.0f * fButtonScale;
 
-	
+
 	if (CheckCursor(ptCursorPos, fCenterX, fCenterY, fWidth, fHeight))
 	{
 		pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::START_BUTTON_SEL);
@@ -693,7 +693,7 @@ bool CLobbyScene::ProcessInput(UCHAR* pKeysBuffer)
 		pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::CHANGE_BUTTON_NON);
 	}
 
-	return false; 
+	return false;
 }
 
 void CLobbyScene::PrepareRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera)
@@ -740,7 +740,7 @@ bool CLobbyScene::CheckCursor(POINT ptCursor, float fCenterX, float fCenterY, fl
 	}
 }
 
-void CLobbyScene::UpdateShaderMainPlayer(int nMainClientId) 
+void CLobbyScene::UpdateShaderMainPlayer(int nMainClientId)
 {
 	shared_ptr<CLobbyUserInterfaceShader> pLobbyUIShader = dynamic_pointer_cast<CLobbyUserInterfaceShader>(m_vpShader[LOBBY_UI_SHADER]);
 	pLobbyUIShader->UpdateShaderMainPlayer(nMainClientId);
@@ -769,26 +769,26 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	//DXGI_FORMAT pdxgiRtvFormats[4] = { DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R32_FLOAT, DXGI_FORMAT_R32G32B32A32_FLOAT };
 	// Color, zDepth, Position, Emissive, Normal, HDR LOW, HDR High
 	DXGI_FORMAT pdxgiRtvFormats[ADD_RENDERTARGET_COUNT] = { DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R32_FLOAT, DXGI_FORMAT_R32G32B32A32_FLOAT, DXGI_FORMAT_R8G8B8A8_UNORM,  DXGI_FORMAT_R8G8B8A8_UNORM };
-	
+
 	DXGI_FORMAT pdxgiRtvShadowFormat = DXGI_FORMAT_R32_FLOAT;
 	m_vShader[STANDARD_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), ADD_RENDERTARGET_COUNT, pdxgiRtvFormats, DXGI_FORMAT_D24_UNORM_S8_UINT);
-	
+
 	m_vShader.push_back(make_unique<InstanceStandardShader>());
 	m_vShader[INSTANCE_STANDARD_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), ADD_RENDERTARGET_COUNT, pdxgiRtvFormats, DXGI_FORMAT_D24_UNORM_S8_UINT);
-	
+
 	m_vShader.push_back(make_unique< CSkinnedAnimationStandardShader>());
 	m_vShader[SKINNEDANIMATION_STANDARD_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), ADD_RENDERTARGET_COUNT, pdxgiRtvFormats, DXGI_FORMAT_D24_UNORM_S8_UINT);
-	
+
 	m_vForwardRenderShader.push_back(make_unique<TransparentShader>());
 	m_vForwardRenderShader[TRANSPARENT_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), 1, nullptr, DXGI_FORMAT_D24_UNORM_S8_UINT);
-	
+
 	m_vForwardRenderShader.push_back(make_unique<ParticleShader>());
 	m_vForwardRenderShader[PARTICLE_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), 1, nullptr, DXGI_FORMAT_D24_UNORM_S8_UINT);
 	m_vForwardRenderShader[PARTICLE_SHADER]->BuildObjects(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
 
 	m_vForwardRenderShader.push_back(make_unique<TextureBlendAnimationShader>());
 	m_vForwardRenderShader[TEXTUREBLEND_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), 1, nullptr, DXGI_FORMAT_D24_UNORM_S8_UINT);
-	
+
 	m_vForwardRenderShader.push_back(make_unique<CTrailShader>());
 	m_vForwardRenderShader[TRAIL_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), 1, nullptr, DXGI_FORMAT_D24_UNORM_S8_UINT);
 	m_vForwardRenderShader[TRAIL_SHADER]->BuildObjects(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
@@ -823,7 +823,7 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 			shared_ptr<CLoadedModelInfo> pZombiePlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), "Asset/Model/Zom_1.bin", MeshType::Standard);
 			m_apPlayer[i]->LoadModelAndAnimation(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), pZombiePlayerModel);
 			m_vShader[SKINNEDANIMATION_STANDARD_SHADER]->AddGameObject(m_apPlayer[i]);
-			
+
 			auto zombiePlayer = dynamic_pointer_cast<CZombiePlayer>(m_apPlayer[i]);
 			zombiePlayer->SetAttackTrail(dynamic_cast<CTrailShader*>(m_vForwardRenderShader[TRAIL_SHADER].get())->GetZombieSwordTrail1());
 			zombiePlayer->SetAttackTrail(dynamic_cast<CTrailShader*>(m_vForwardRenderShader[TRAIL_SHADER].get())->GetZombieSwordTrail2());
@@ -839,13 +839,13 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 		else
 		{
 			m_apPlayer[i] = std::make_shared<CBlueSuitPlayer>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), nullptr);
-			shared_ptr<CLoadedModelInfo> pBlueSuitPlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), "Asset/Model/BlueSuitFree01.bin",MeshType::Standard);
+			shared_ptr<CLoadedModelInfo> pBlueSuitPlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), "Asset/Model/BlueSuitFree01.bin", MeshType::Standard);
 			m_apPlayer[i]->LoadModelAndAnimation(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), pBlueSuitPlayerModel);
 			m_vShader[SKINNEDANIMATION_STANDARD_SHADER]->AddGameObject(m_apPlayer[i]);
 
 			//[0505] BLUE SUIT 플레이어의 외곽선을 그리기 위해
 			// Zombie 플레이어여야만 필요하다
-			if(mainPlayerId == ZOMBIEPLAYER)
+			if (mainPlayerId == ZOMBIEPLAYER)
 			{
 				// ZOMBIE PLAYER일 경우 나머지 플레이어 추가
 				m_vForwardRenderShader[OUT_LINE_SHADER]->AddGameObject(m_apPlayer[i]);
@@ -890,7 +890,7 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 
 		auto player = dynamic_pointer_cast<CBlueSuitPlayer>(m_apPlayer[i]);
 		if (player)
-        {
+		{
 			player->SetFlashLight(flashLight);
 			player->SetRader(pRaderObject);
 			player->SetTeleportItem(pTeleportObject);
@@ -898,21 +898,21 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 			player->SetFuseItem(pFuseObject);
 		}
 	}
-	
+
 	/*auto surviveMainPlayer = dynamic_pointer_cast<CBlueSuitPlayer>(m_apPlayer[mainPlayerId]);
 	auto zombieMainPlayer = dynamic_pointer_cast<CZombiePlayer>(m_apPlayer[mainPlayerId]);*/
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	///////////////////////////// 아이템
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	
+
 	// 아이템 개수를 고정할지는 상의해봐야할듯? 일단 고정으로 간다치고 만듬
 	for (int i = 0; i < 9; ++i) // 아이템도 인스턴스 처리를 해야함.또한 공간분할
 	{
 		shared_ptr<CFuseObject> pFuseObject = make_shared<CFuseObject>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
 		static shared_ptr<CLoadedModelInfo> pFuseModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), (char*)"Asset/Model/fuse_hi-obj.bin", MeshType::Standard);
 		pFuseObject->ObjectCopy(pd3dDevice, pd3dCommandList, pFuseModel->m_pModelRootObject);
-		
+
 		g_collisionManager.AddCollisionObject(pFuseObject);
 		m_vShader[STANDARD_SHADER]->AddGameObject(pFuseObject);
 	}
@@ -922,7 +922,7 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 		shared_ptr<CTeleportObject> pTeleportObject = make_shared<CTeleportObject>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
 		static shared_ptr<CLoadedModelInfo> pTeleportModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), (char*)"Asset/Model/TeleportItem.bin", MeshType::Standard);
 		pTeleportObject->ObjectCopy(pd3dDevice, pd3dCommandList, pTeleportModel->m_pModelRootObject);
-		
+
 		g_collisionManager.AddCollisionObject(pTeleportObject);
 		m_vShader[STANDARD_SHADER]->AddGameObject(pTeleportObject);
 	}
@@ -953,15 +953,15 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 		g_collisionManager.AddCollisionObject(pMineObject);
 		m_vShader[STANDARD_SHADER]->AddGameObject(pMineObject);
 		for (int j = 0; j < MAX_CLIENT; ++j)
-        {
+		{
 			auto player = dynamic_pointer_cast<CBlueSuitPlayer>(m_apPlayer[j]);
 			if (player)
-            {
+			{
 				player->AddEnvironmentMineItems(pMineObject);
 			}
 		}
 	}
-	
+
 	// [0504] UserInterface
 	m_vForwardRenderShader[USER_INTERFACE_SHADER]->AddGameObject(m_apPlayer[mainPlayerId]);
 	m_vForwardRenderShader[USER_INTERFACE_SHADER]->BuildObjects(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
@@ -1011,7 +1011,7 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	m_pTextureToScreenShaderShader = make_shared<CTextureToScreenShader>(m_pBlurComputeShader->GetTextureComposite());
 	m_pTextureToScreenShaderShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), 1, nullptr, DXGI_FORMAT_D24_UNORM_S8_UINT);
 
-    m_apPlayer[mainPlayerId]->SetPlayerVolume(1.0f);
+	m_apPlayer[mainPlayerId]->SetPlayerVolume(1.0f);
 }
 
 
@@ -1046,7 +1046,7 @@ void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	m_xmf4GlobalAmbient = XMFLOAT4(0.15f, 0.15f, 0.15f, 1.0f);
 
-	for (int i = 0; i < MAX_SURVIVOR;++i) {
+	for (int i = 0; i < MAX_SURVIVOR; ++i) {
 		m_pLightCamera.push_back(make_shared<CLightCamera>());
 		m_pLightCamera[i]->m_pLight = make_shared<LIGHT>();
 
@@ -1068,7 +1068,7 @@ void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	}
 	m_pLights[0].m_bEnable = true;
 
-	for (int i = MAX_SURVIVOR; i < m_nLights;++i) {
+	for (int i = MAX_SURVIVOR; i < m_nLights; ++i) {
 		m_pLightCamera.push_back(make_shared<CLightCamera>());
 		m_pLightCamera[i]->m_pLight = make_shared<LIGHT>();
 
@@ -1087,7 +1087,7 @@ void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		m_pLightCamera[i]->m_pLight->m_fTheta = (float)cos(XMConvertToRadians(35.0f));
 	}
 
-	
+
 
 	vector<XMFLOAT3> positions = GetLightPositions();
 	vector<XMFLOAT3> looks = GetLightLooks();
@@ -1103,7 +1103,7 @@ void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	XMMATRIX xmProjectionToTexture = XMLoadFloat4x4(&xmf4x4ToTexture);
 	XMMATRIX xmmtxViewProjection;
 
-	for (int i = 0;i < m_nLights;++i) {
+	for (int i = 0; i < m_nLights; ++i) {
 
 		XMFLOAT3 xmf3Up = Vector3::CrossProduct(looks[i], xmf3Right);
 		XMFLOAT3 lookAtPosition = Vector3::Add(positions[i], looks[i]);
@@ -1130,14 +1130,14 @@ void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	unique_ptr<PartitionInsStandardShader> PtShader(static_cast<PartitionInsStandardShader*>(m_vPreRenderShader[PARTITION_SHADER].release()));
 	auto vBB = PtShader->GetPartitionBB();
 
-	for (int i = 0; i < m_nLights;++i) {
+	for (int i = 0; i < m_nLights; ++i) {
 		BoundingBox camerabb;
 		camerabb.Center = m_pLightCamera[i]->GetPosition();
 		camerabb.Extents = XMFLOAT3(0.1f, 0.1f, 0.1f);
 		int curFloor = static_cast<int>(std::floor(camerabb.Center.y / 4.5f));
 
 		m_pLightCamera[i]->SetFloor(curFloor);
-		for (int bbIdx = 0; bbIdx < vBB.size();++bbIdx) {
+		for (int bbIdx = 0; bbIdx < vBB.size(); ++bbIdx) {
 			if (vBB[bbIdx]->Intersects(camerabb)) {
 				m_pLightCamera[i]->SetPartition(bbIdx);
 				break;
@@ -1150,7 +1150,7 @@ void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	ifstream tpobFile("Asset/Data/투명객체.txt");
+	ifstream tpobFile("Asset/Data/Transparent_Objects.txt");
 	// 이름 , 재질개수 , 재질인덱스
 	if (!tpobFile) {
 		assert(0);
@@ -1173,7 +1173,7 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 	::fopen_s(&pSceneFile, (char*)"Asset/Model/Scene.bin", "rb");
 	::rewind(pSceneFile);
 	int fileEnd{};
-	
+
 	unique_ptr<InstanceStandardShader> InsStShader(static_cast<InstanceStandardShader*>(m_vShader[INSTANCE_STANDARD_SHADER].release()));
 	int n_curfloor = -1;
 	static int count{};
@@ -1235,7 +1235,7 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 		}
 	}
 
-	for (int i = 0; i < g_collisionManager.GetNumOfCollisionObject();++i) { // 월드변환 행렬을 가지고 있는 객체들.
+	for (int i = 0; i < g_collisionManager.GetNumOfCollisionObject(); ++i) { // 월드변환 행렬을 가지고 있는 객체들.
 		auto pObject = g_collisionManager.GetCollisionObjectWithNumber(i).lock();
 		if (!transparentObjects[pObject->m_pstrFrameName].empty()) {
 			pObject->SetTransparentObjectInfo(transparentObjects[pObject->m_pstrFrameName]);
@@ -1345,13 +1345,13 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 	//0528 CJI - 객체를 다시 만들지 말고 원래 있던 객체를 사용하자.
 	//1. 파티션에 해당하는 오브젝트를 파티션별로 넣는다.
 	//2. 똑같은 메쉬를 가지는 오브젝트들은 인스턴스화 시킨다.
-	for (int i = 0; i < g_collisionManager.GetNumOfCollisionObject();++i) { // 월드변환 행렬을 가지고 있는 객체들.
+	for (int i = 0; i < g_collisionManager.GetNumOfCollisionObject(); ++i) { // 월드변환 행렬을 가지고 있는 객체들.
 		auto pObject = g_collisionManager.GetCollisionObjectWithNumber(i).lock();
 		PartisionShaderCollision(PtShader, pObject);
 	}
 	auto nonCollisionObjects = g_collisionManager.GetNonCollisionObjects();
-	for (int i = 0; i < nonCollisionObjects.size();++i) { // 월드변환 행렬을 가지고 있는 객체들.
-		auto pObject = nonCollisionObjects[i].lock();	
+	for (int i = 0; i < nonCollisionObjects.size(); ++i) { // 월드변환 행렬을 가지고 있는 객체들.
+		auto pObject = nonCollisionObjects[i].lock();
 		PartisionShaderCollision(PtShader, pObject);
 	}
 
@@ -1363,7 +1363,7 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 			if (!mStr_GameObejcts[ob->m_pstrFrameName]) {
 				mStr_GameObejcts[ob->m_pstrFrameName] = make_shared<CInstanceObject>(pd3dDevice, pd3dCommandList);
 			}
-			mStr_GameObejcts[ob->m_pstrFrameName]->m_vInstanceObjectInfo.push_back(ob); 
+			mStr_GameObejcts[ob->m_pstrFrameName]->m_vInstanceObjectInfo.push_back(ob);
 			//인스턴싱된 오브젝트의 메쉬의 이름을 복사했기때문에 str 정보는 mesh의 이름을 의미함. 
 		}
 		if (mStr_GameObejcts.size() == 0) continue;
@@ -1377,7 +1377,7 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 
 			pMesh->m_nCntInstance = strVector->second->m_vInstanceObjectInfo.size();
 			XMFLOAT4X4* InsTrans = new XMFLOAT4X4[pMesh->m_nCntInstance];
-			for (int i = 0; i < strVector->second->m_vInstanceObjectInfo.size();++i) {
+			for (int i = 0; i < strVector->second->m_vInstanceObjectInfo.size(); ++i) {
 				InsTrans[i] = Matrix4x4::Transpose(strVector->second->m_vInstanceObjectInfo[i]->m_xmf4x4World); // 버퍼로 복사할 행렬은 전치행렬로 보내야함.
 			}
 			pMesh->SetInstanceTransformMatrix(InsTrans);
@@ -1418,11 +1418,11 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 			++strVector;
 		}
 		objects.clear();
-		for (auto& [meshName,insObject] : mStr_GameObejcts) {
+		for (auto& [meshName, insObject] : mStr_GameObejcts) {
 			objects.push_back(insObject);
 		}
 	}
-	 
+
 	// 메모리 누수를 방지하기 위해 다시 변환
 	m_vShader[INSTANCE_STANDARD_SHADER].reset(InsStShader.release());
 	m_vPreRenderShader[PARTITION_SHADER].reset(PtShader.release());
@@ -1450,7 +1450,7 @@ void PartisionShaderCollision(unique_ptr<PartitionInsStandardShader>& PtShader, 
 			if (nPt >= PtShader->GetPartitionBB().size()) break;
 		}
 
-		if (inPart ) {
+		if (inPart) {
 			break;
 		}
 	}
@@ -1482,7 +1482,7 @@ void StreamReadVariable(ifstream& in, T& data)
 	in.read(reinterpret_cast<char*>(&data), sizeof(T));
 }
 
-int ReadLightObjectInfo(vector<XMFLOAT3>& positions,vector<XMFLOAT3>& looks)
+int ReadLightObjectInfo(vector<XMFLOAT3>& positions, vector<XMFLOAT3>& looks)
 {
 	ifstream in("Asset/Data/LightObject.bin", ios::binary);
 	if (!in.is_open()) {
@@ -1563,7 +1563,7 @@ void CMainScene::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandLis
 		memcpy(&m_pLights[i], m_pLightCamera[i]->m_pLight.get(), sizeof(LIGHT));
 	}
 
-	::memcpy(m_pcbMappedLights->m_pLights, m_pLights, sizeof(LIGHT)* m_nLights);
+	::memcpy(m_pcbMappedLights->m_pLights, m_pLights, sizeof(LIGHT) * m_nLights);
 	::memcpy(&m_pcbMappedLights->m_xmf4GlobalAmbient, &m_xmf4GlobalAmbient, sizeof(XMFLOAT4));
 	::memcpy(&m_pcbMappedLights->m_nLights, &m_nLights, sizeof(int));
 
@@ -1580,12 +1580,12 @@ void CMainScene::ReleaseShaderVariables()
 
 void CMainScene::ReleaseUploadBuffers()
 {
-	for (auto& m : m_vMesh) 
+	for (auto& m : m_vMesh)
 	{
 		m->ReleaseUploadBuffers();
 	}
 
-	for (auto& s : m_vShader) 
+	for (auto& s : m_vShader)
 	{
 		s->ReleaseUploadBuffers();
 	}
@@ -1696,11 +1696,11 @@ void CMainScene::AnimateObjects(float fElapsedTime, float fCurTime)
 	{
 		shader->AnimateObjects(fElapsedTime);
 	}
-	
+
 	m_vForwardRenderShader[PARTICLE_SHADER]->ParticleUpdate(fCurTime);
 
 	int light_Id{};
-	for (int i = 0;i < MAX_CLIENT;++i) {
+	for (int i = 0; i < MAX_CLIENT; ++i) {
 		if (m_apPlayer[i]->GetClientId() == -1) {
 			continue;
 		}
@@ -1759,7 +1759,7 @@ void CMainScene::AnimateObjects(float fElapsedTime, float fCurTime)
 		}
 		else
 		{
-			float fVolume = ((WALK_SOUND_DISTANCE - fDistance) / WALK_SOUND_DISTANCE) * fWeight ;
+			float fVolume = ((WALK_SOUND_DISTANCE - fDistance) / WALK_SOUND_DISTANCE) * fWeight;
 			pPlayer->SetPlayerVolume(fVolume);
 		}
 	}
@@ -1813,12 +1813,12 @@ void CMainScene::ShadowRender(ID3D12GraphicsCommandList* pd3dCommandList, const 
 	}
 	else {
 		for (int i = 0; i < MAX_CLIENT; ++i) {
-			if (m_apPlayer[i]->GetClientId() == -1) 
+			if (m_apPlayer[i]->GetClientId() == -1)
 			{
 				continue;
 			}
 			auto survivor = dynamic_pointer_cast<CBlueSuitPlayer>(m_apPlayer[i]);
-			if (!survivor) 
+			if (!survivor)
 			{
 				continue;
 			}
@@ -1961,7 +1961,7 @@ void CMainScene::BlurDispatch(ID3D12GraphicsCommandList* pd3dCommandList, const 
 	pd3dCommandList->SetComputeRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
 	pCamera->UpdateComputeShaderVariables(pd3dCommandList);
 
-	if(!m_pBlurComputeShader->IsBlur())
+	if (!m_pBlurComputeShader->IsBlur())
 	{
 		m_pBlurComputeShader->Dispatch(pd3dCommandList, 0);
 	}
