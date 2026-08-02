@@ -58,8 +58,7 @@ void CPlayer::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsComm
 }
 
 void CPlayer::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
-{
-}
+{}
 
 void CPlayer::ReleaseShaderVariables()
 {
@@ -86,9 +85,9 @@ void CPlayer::Move(const XMFLOAT3& xmf3Shift, bool bUpdateVelocity)
 	{
 		m_xmf3Velocity = Vector3::Add(m_xmf3Velocity, xmf3Shift);
 	}
-	else //¼Ó·ÂÀÌ È®Á¤µÇ¸é ÀÌ°ÍÀÌ ÀÛµ¿ÇÔ or °­Á¦·Î À§Ä¡¸¦ ¿Å±æ¶§
+	else //ì†ë ¥ì´ í™•ì •ë˜ë©´ ì´ê²ƒì´ ì‘ë™í•¨ or ê°•ì œë¡œ ìœ„ì¹˜ë¥¼ ì˜®ê¸¸ë•Œ
 	{
-		if(!Vector3::IsZero(xmf3Shift))
+		if (!Vector3::IsZero(xmf3Shift))
 		{
 			m_xmf3OldPosition = m_xmf3Position;
 		}
@@ -103,7 +102,7 @@ void CPlayer::Rotate(float x, float y, float z)
 	DWORD nCurrentCameraMode = m_pCamera->GetMode();
 	if ((nCurrentCameraMode == FIRST_PERSON_CAMERA) || (nCurrentCameraMode == THIRD_PERSON_CAMERA))
 	{
-		if(m_bAlive)
+		if (m_bAlive)
 		{
 			if (x != 0.0f)
 			{
@@ -146,7 +145,7 @@ void CPlayer::Rotate(float x, float y, float z)
 				}
 			}
 		}
-		else 
+		else
 		{
 			if (x != 0.0f)
 			{
@@ -250,7 +249,7 @@ shared_ptr<CCamera> CPlayer::ChangeCamera(DWORD nNewCameraMode, float fElapsedTi
 		m_pCamera = OnChangeCamera(FIRST_PERSON_CAMERA, nCurrentCameraMode);
 		m_pCamera->SetTimeLag(0.01f);
 		m_pCamera->SetOffset(XMFLOAT3(0.0f, 1.54f, 0.0f));
-		m_pCamera->GenerateProjectionMatrix(0.01f, 100.0f, ASPECT_RATIO,70.0f);
+		m_pCamera->GenerateProjectionMatrix(0.01f, 100.0f, ASPECT_RATIO, 70.0f);
 		m_pCamera->SetViewport(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, 0.0f, 1.0f);
 		m_pCamera->SetScissorRect(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT);
 		break;
@@ -286,7 +285,7 @@ void CPlayer::OnUpdateToParent()
 	m_xmf4x4ToParent._21 = m_xmf3Up.x; m_xmf4x4ToParent._22 = m_xmf3Up.y; m_xmf4x4ToParent._23 = m_xmf3Up.z;
 	m_xmf4x4ToParent._31 = m_xmf3Look.x; m_xmf4x4ToParent._32 = m_xmf3Look.y; m_xmf4x4ToParent._33 = m_xmf3Look.z;
 	m_xmf4x4ToParent._41 = m_xmf3Position.x; m_xmf4x4ToParent._42 = m_xmf3Position.y; m_xmf4x4ToParent._43 = m_xmf3Position.z;
-	
+
 	XMMATRIX xmtxScale = XMMatrixScaling(m_xmf3Scale.x, m_xmf3Scale.y, m_xmf3Scale.z);
 	m_xmf4x4ToParent = Matrix4x4::Multiply(xmtxScale, m_xmf4x4ToParent);
 }
@@ -375,7 +374,7 @@ void CPlayer::Collide(float fElapsedTime, const shared_ptr<CGameObject>& pCollid
 	//			for (const auto& object : g_collisonManager.GetSpaceGameObjects(m_nFloor, i, j))
 	//			{
 	//				shared_ptr<CGameObject> pGameObject = object.lock();
-	//				if (!pGameObject || pGameObject->GetCollisionType() == 2)	//ÀÓ½Ã·Î 2¸é ³Ñ±è
+	//				if (!pGameObject || pGameObject->GetCollisionType() == 2)	//ì„ì‹œë¡œ 2ë©´ ë„˜ê¹€
 	//				{
 	//					continue;
 	//				}
@@ -436,7 +435,7 @@ void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 	{
 		CGameObject::Render(pd3dCommandList);
 	}
-	else  {
+	else {
 		CGameObject::Render(pd3dCommandList, (char*)"HeadF");
 	}
 }
@@ -487,11 +486,11 @@ CBlueSuitPlayer::CBlueSuitPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 
 	shared_ptr<CTexture> pTexture = make_shared<CTexture>(1, RESOURCE_TEXTURE2D, 0, 1);
 	pTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, (wchar_t*)L"Asset/Textures/redColor.dds", RESOURCE_TEXTURE2D, 0);
-	m_pHitEffectMaterial = make_shared<CMaterial>(1); // ÅØ½ºÃ³°¡ 1°³
+	m_pHitEffectMaterial = make_shared<CMaterial>(1); // í…ìŠ¤ì²˜ê°€ 1ê°œ
 	m_pHitEffectMaterial->SetTexture(pTexture, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, pTexture, 0, 13);
 
-	UINT ncbElementBytes = ((sizeof(FrameTimeInfo) + 255) & ~255); //256ÀÇ ¹è¼ö
+	UINT ncbElementBytes = ((sizeof(FrameTimeInfo) + 255) & ~255); //256ì˜ ë°°ìˆ˜
 	m_pd3dcbTime = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 	m_pd3dcbTime->Map(0, NULL, (void**)&m_pcbMappedTime);
 	m_d3dTimeCbvGPUDescriptorHandle = CScene::CreateConstantBufferViews(pd3dDevice, 1, m_pd3dcbTime.Get(), ncbElementBytes);
@@ -507,8 +506,7 @@ CBlueSuitPlayer::CBlueSuitPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 }
 
 CBlueSuitPlayer::~CBlueSuitPlayer()
-{
-}
+{}
 
 void CBlueSuitPlayer::LoadModelAndAnimation(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const shared_ptr<CLoadedModelInfo>& pLoadModelInfo)
 {
@@ -541,7 +539,7 @@ shared_ptr<CCamera> CBlueSuitPlayer::ChangeCamera(DWORD nNewCameraMode, float fE
 		int index = dynamic_pointer_cast<CBlueSuitAnimationController>(m_pSkinnedAnimationController)->GetBoneFrameIndex((char*)"Head_M");
 		XMFLOAT3 offset = m_pSkinnedAnimationController->GetBoneFramePositionVector(index);
 		offset.x = 0.1f; offset.z = 0.2f;
-		offset.y = offset.y - m_xmf3Position.y+  0.1f;	// [0507]¼öÁ¤
+		offset.y = offset.y - m_xmf3Position.y + 0.1f;	// [0507]ìˆ˜ì •
 		camera->SetOffset(offset);
 		camera->SetPosition(Vector3::Add(m_xmf3Position, m_pCamera->GetOffset()));
 	}
@@ -611,7 +609,7 @@ void CBlueSuitPlayer::Update(float fElapsedTime)
 	if (m_bTeleportUse) {
 		XMFLOAT3 position = GetPosition();
 		position.y += 1.5f;
-		sharedobject.m_vParticleObjects[int(CParticleMesh::TP)]->SetParticlePosition(m_iTeleportParticleId,position);
+		sharedobject.m_vParticleObjects[int(CParticleMesh::TP)]->SetParticlePosition(m_iTeleportParticleId, position);
 
 		if (gGameTimer.GetTotalTime() - 2.8f > m_fCreateParticleTime) {
 			m_bTeleportUse = false;
@@ -621,7 +619,7 @@ void CBlueSuitPlayer::Update(float fElapsedTime)
 
 	if (m_pZombiePlayer) {
 		XMFLOAT3 xmf3Zompos = m_pZombiePlayer->GetPosition();
-		if (abs(xmf3Zompos.y - m_xmf3Position.y) < 5.0f) { // ÃşÂ÷ÀÌ 1Ãş±îÁö¸¸
+		if (abs(xmf3Zompos.y - m_xmf3Position.y) < 5.0f) { // ì¸µì°¨ì´ 1ì¸µê¹Œì§€ë§Œ
 			XMFLOAT3 xmf3betweenPos = Vector3::Subtract(xmf3Zompos, m_xmf3Position);
 
 			if (Vector3::Length(xmf3betweenPos) > 15.0f) {
@@ -638,7 +636,7 @@ void CBlueSuitPlayer::Update(float fElapsedTime)
 
 	m_pCamera->GenerateProjectionMatrix(0.01f, 100.0f, ASPECT_RATIO, 60.0f);
 
-	// Ä«¸Ş¶ó À§Ä¡ ¾÷µ¥ÀÌÆ®
+	// ì¹´ë©”ë¼ ìœ„ì¹˜ ì—…ë°ì´íŠ¸
 	CPlayer::Update(fElapsedTime);
 }
 
@@ -657,14 +655,14 @@ void CBlueSuitPlayer::UpdateAnimation()
 					m_pSkinnedAnimationController->m_bTransition = true;
 					m_pSkinnedAnimationController->m_nNextState = PlayerState::DEATH;
 
-					//Á×´Â »ç¿îµå
+					//ì£½ëŠ” ì‚¬ìš´ë“œ
 					SoundManager& soundManager = soundManager.GetInstance();
 					//soundManager.SetVolume(sound::DEAD_BLUESUIT, m_fPlayerVolume * 0.1f);
 					if (m_fPlayerVolume - EPSILON >= 0.0f) soundManager.PlaySoundWithName(sound::DEAD_BLUESUIT, m_fPlayerVolume * 0.1f);
 				}
 			}
 		}
-		else if (::IsZero(fLength))	//¼Ó·ÂÀÌ 0ÀÌ¸é Æ®·¢ 0À» ´Ù½Ã true
+		else if (::IsZero(fLength))	//ì†ë ¥ì´ 0ì´ë©´ íŠ¸ë™ 0ì„ ë‹¤ì‹œ true
 		{
 			if (m_pSkinnedAnimationController->m_nNowState != PlayerState::IDLE)
 			{
@@ -709,11 +707,11 @@ void CBlueSuitPlayer::UpdateAnimation()
 			float fAngle = Vector3::Angle(m_xmf3Look, xmf3Direction);
 			float fRightWeight;
 
-			if (Vector3::CrossProduct(m_xmf3Look, m_xmf3Velocity, false).y < 0.0f)	// ¿ŞÂÊÀÌµ¿
+			if (Vector3::CrossProduct(m_xmf3Look, m_xmf3Velocity, false).y < 0.0f)	// ì™¼ìª½ì´ë™
 			{
 				m_pSkinnedAnimationController->SetTrackSpeed(2, -1.0f);
 			}
-			else // ¿À¸¥ÂÊ ÀÌµ¿
+			else // ì˜¤ë¥¸ìª½ ì´ë™
 			{
 				m_pSkinnedAnimationController->SetTrackSpeed(2, 1.0f);
 			}
@@ -729,7 +727,7 @@ void CBlueSuitPlayer::UpdateAnimation()
 				fRightWeight = 1 - ((fAngle - 90.0f) / 90.0f);
 			}
 
-			// RightWeight 1 ÀÌ¸é ¿À¸¥ÂÊ ¾Ö´Ï¸ŞÀÌ¼Ç(Track2)¸¸ Àç»ı
+			// RightWeight 1 ì´ë©´ ì˜¤ë¥¸ìª½ ì• ë‹ˆë©”ì´ì…˜(Track2)ë§Œ ì¬ìƒ
 			m_pSkinnedAnimationController->SetBlendWeight(0, fRightWeight);
 		}
 	}
@@ -742,8 +740,8 @@ void CBlueSuitPlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 	case GAME_STATE::BLUE_SUIT_WIN:
 		if (!m_bAlive)
 		{
-			// ÃÖ´ë ½Ã°£ÀÌ Áö³ª¸é ´õ ÀÌ»ó Áõ°¡ÇÏÁö ¾Êµµ·Ï Á¦ÇÑ
-			float fMaxFogTime = 3.0f; // ¾È°³°¡ ÃÖ´ëÄ¡¿¡ µµ´ŞÇÏ´Â ½Ã°£ (ÃÊ ´ÜÀ§)
+			// ìµœëŒ€ ì‹œê°„ì´ ì§€ë‚˜ë©´ ë” ì´ìƒ ì¦ê°€í•˜ì§€ ì•Šë„ë¡ ì œí•œ
+			float fMaxFogTime = 3.0f; // ì•ˆê°œê°€ ìµœëŒ€ì¹˜ì— ë„ë‹¬í•˜ëŠ” ì‹œê°„ (ì´ˆ ë‹¨ìœ„)
 			if (fEndingElapsedTime > fMaxFogTime)
 			{
 				fEndingElapsedTime = fMaxFogTime;
@@ -758,8 +756,8 @@ void CBlueSuitPlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 		}
 		else
 		{
-			// ÃÖ´ë ½Ã°£ÀÌ Áö³ª¸é ´õ ÀÌ»ó Áõ°¡ÇÏÁö ¾Êµµ·Ï Á¦ÇÑ
-			float fMaxFogTime = 3.0f; // ¾È°³°¡ ÃÖ´ëÄ¡¿¡ µµ´ŞÇÏ´Â ½Ã°£ (ÃÊ ´ÜÀ§)
+			// ìµœëŒ€ ì‹œê°„ì´ ì§€ë‚˜ë©´ ë” ì´ìƒ ì¦ê°€í•˜ì§€ ì•Šë„ë¡ ì œí•œ
+			float fMaxFogTime = 3.0f; // ì•ˆê°œê°€ ìµœëŒ€ì¹˜ì— ë„ë‹¬í•˜ëŠ” ì‹œê°„ (ì´ˆ ë‹¨ìœ„)
 			if (fEndingElapsedTime > fMaxFogTime)
 			{
 				fEndingElapsedTime = fMaxFogTime;
@@ -775,14 +773,14 @@ void CBlueSuitPlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 		break;
 	case GAME_STATE::ZOMBIE_WIN:
 	{
-		// ÃÖ´ë ½Ã°£ÀÌ Áö³ª¸é ´õ ÀÌ»ó Áõ°¡ÇÏÁö ¾Êµµ·Ï Á¦ÇÑ
-		float fMaxFogTime = 3.0f; // ¾È°³°¡ ÃÖ´ëÄ¡¿¡ µµ´ŞÇÏ´Â ½Ã°£ (ÃÊ ´ÜÀ§)
+		// ìµœëŒ€ ì‹œê°„ì´ ì§€ë‚˜ë©´ ë” ì´ìƒ ì¦ê°€í•˜ì§€ ì•Šë„ë¡ ì œí•œ
+		float fMaxFogTime = 3.0f; // ì•ˆê°œê°€ ìµœëŒ€ì¹˜ì— ë„ë‹¬í•˜ëŠ” ì‹œê°„ (ì´ˆ ë‹¨ìœ„)
 		if (fEndingElapsedTime > fMaxFogTime)
 		{
 			fEndingElapsedTime = fMaxFogTime;
 		}
 
-		// ½Ã°£¿¡ µû¸¥ ¾È°³ ¹Ğµµ °è»ê (0.0¿¡¼­ 1.0±îÁö Áõ°¡)
+		// ì‹œê°„ì— ë”°ë¥¸ ì•ˆê°œ ë°€ë„ ê³„ì‚° (0.0ì—ì„œ 1.0ê¹Œì§€ ì¦ê°€)
 		float fFogDensity = fEndingElapsedTime / 2 * fMaxFogTime + 0.5f;
 
 		XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(1.0f, 0.0f, fFogDensity, 1.0f);
@@ -790,7 +788,7 @@ void CBlueSuitPlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 		m_pCamera->SetFogColor(xmf4EndingFogColor);
 		m_pCamera->SetFogInfo(xmf4EndingFogInfo);
 	}
-		break;
+	break;
 	default:
 		break;
 	}
@@ -798,7 +796,7 @@ void CBlueSuitPlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 
 void CBlueSuitPlayer::Animate(float fElapsedTime)
 {
-	if (!m_pSkinnedAnimationController->IsAnimation())	// [0507] Á×Àº ÇÃ·¹ÀÌ¾î´Â Animate¾ø¾î¾ßÇÔ
+	if (!m_pSkinnedAnimationController->IsAnimation())	// [0507] ì£½ì€ í”Œë ˆì´ì–´ëŠ” Animateì—†ì–´ì•¼í•¨
 	{
 		return;
 	}
@@ -817,10 +815,10 @@ void CBlueSuitPlayer::Animate(float fElapsedTime)
 
 	CPlayer::Animate(fElapsedTime);
 
-	//ÇÃ·¡½Ã¶óÀÌÆ®
-	if(m_pFlashlight) m_pFlashlight->UpdateTransform(GetLeftHandItemFlashLightModelTransform());
-	//ÇÃ·¹ÀÌ¾îÀÇ ¿Ş¼Õ: ·¹ÀÌ´õ // ³» ´«¿¡¼­¸¸ ·¹ÀÌ´õ°¡ È®´ëµÇ´Â°ÍÃ³·³ º¸ÀÓ. Áï, ÀÚ½ÅÀÇ ¿À¸¥¼Õ¿¡ ·¹ÀÌ´õ´Â »ç¶óÁö°í È®´ëÃ¢À¸·Î.
-	// ´Ù¸¥ ÇÃ·¹ÀÌ¾î¸¦ ·»´õ¸µ ÇÒ¶§´Â ¼Õ¿¡ ÀÖ´Â ÇüÅÂ·Î º¸¿©¾ßÇÔ.
+	//í”Œë˜ì‹œë¼ì´íŠ¸
+	if (m_pFlashlight) m_pFlashlight->UpdateTransform(GetLeftHandItemFlashLightModelTransform());
+	//í”Œë ˆì´ì–´ì˜ ì™¼ì†: ë ˆì´ë” // ë‚´ ëˆˆì—ì„œë§Œ ë ˆì´ë”ê°€ í™•ëŒ€ë˜ëŠ”ê²ƒì²˜ëŸ¼ ë³´ì„. ì¦‰, ìì‹ ì˜ ì˜¤ë¥¸ì†ì— ë ˆì´ë”ëŠ” ì‚¬ë¼ì§€ê³  í™•ëŒ€ì°½ìœ¼ë¡œ.
+	// ë‹¤ë¥¸ í”Œë ˆì´ì–´ë¥¼ ë Œë”ë§ í• ë•ŒëŠ” ì†ì— ìˆëŠ” í˜•íƒœë¡œ ë³´ì—¬ì•¼í•¨.
 
 	if (m_pRader) m_pRader->SetObtain(true);
 	if (m_pTeleport) m_pTeleport->SetObtain(true);
@@ -854,7 +852,7 @@ void CBlueSuitPlayer::Animate(float fElapsedTime)
 
 	m_pcbMappedTime->time = fElapsedTime;
 	m_pcbMappedTime->localTime += fElapsedTime;
-	if (int(m_pcbMappedTime->localTime * 10.0f) % 3 == 0) { // È÷Æ®½Ã ±ôºıÀÓ
+	if (int(m_pcbMappedTime->localTime * 10.0f) % 3 == 0) { // íˆíŠ¸ì‹œ ê¹œë¹¡ì„
 		m_pcbMappedTime->usePattern = -1.0f;
 	}
 	else {
@@ -864,7 +862,7 @@ void CBlueSuitPlayer::Animate(float fElapsedTime)
 		m_pcbMappedTime->usePattern = -1.0f;
 		m_bHitEffectBlend = false;
 	}
-	
+
 	if (m_bTracking)
 	{
 		m_pcbMappedTime->fTrackingTime += fElapsedTime;
@@ -907,7 +905,7 @@ void CBlueSuitPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 		return;
 	}
 
-	if(m_bTracking)
+	if (m_bTracking)
 	{
 		pd3dCommandList->SetGraphicsRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
 	}
@@ -921,7 +919,7 @@ void CBlueSuitPlayer::MainPlayerRender(ID3D12GraphicsCommandList* pd3dCommandLis
 
 }
 
-void CBlueSuitPlayer::UpdatePicking() 
+void CBlueSuitPlayer::UpdatePicking()
 {
 	//shared_ptr<CGameObject> pPickedObject = m_pPickedObject.lock();
 
@@ -1001,7 +999,7 @@ int CBlueSuitPlayer::AddItem(const shared_ptr<CGameObject>& pGameObject)
 	{
 		m_apSlotItems[nSlot].reset();
 
-		// ÀÓ½Ã·Î
+		// ì„ì‹œë¡œ
 		switch (nSlot)
 		{
 		case 0:
@@ -1034,11 +1032,11 @@ void CBlueSuitPlayer::UseItem(int nSlot)
 	}
 }
 
-void CBlueSuitPlayer::UseFuse() 
+void CBlueSuitPlayer::UseFuse()
 {
 	for (auto& fuseItem : m_apFuseItems)
 	{
-		if(fuseItem)
+		if (fuseItem)
 		{
 			fuseItem->UpdateUsing(shared_from_this());
 			fuseItem.reset();
@@ -1096,7 +1094,7 @@ void CBlueSuitPlayer::SetFuseItem(int nIndex, int nReferenceObjectNum)
 	m_apFuseItems[nIndex]->SetReferenceNumber(nReferenceObjectNum);
 }
 
- void CBlueSuitPlayer::SetFuseItemEmpty(int nIndex)
+void CBlueSuitPlayer::SetFuseItemEmpty(int nIndex)
 {
 	m_apFuseItems[nIndex]->SetObtain(false);
 	m_apFuseItems[nIndex]->SetReferenceNumber(-1);
@@ -1123,11 +1121,11 @@ void CBlueSuitPlayer::SetHitEvent()
 
 void CBlueSuitPlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush)
 {
-	wchar_t text[128]; // º¯È¯µÈ À¯´ÏÄÚµå ¹®ÀÚ¿­À» ÀúÀåÇÒ ¹öÆÛ
+	wchar_t text[128]; // ë³€í™˜ëœ ìœ ë‹ˆì½”ë“œ ë¬¸ìì—´ì„ ì €ì¥í•  ë²„í¼
 
-	//// È­¸é Áß¾Ó¿¡ ¼ıÀÚ ·»´õ¸µ
+	//// í™”ë©´ ì¤‘ì•™ì— ìˆ«ì ë Œë”ë§
 	//POINT windowSize = CGameFramework::GetClientWindowSize();
-	////À©µµ¿ì ÁÂÇ¥ ÁÖÀÇ.
+	////ìœˆë„ìš° ì¢Œí‘œ ì£¼ì˜.
 	//D2D1_RECT_F TimetextRect = D2D1::RectF(0.f, 0.f, (float)windowSize.x, (float)windowSize.y);
 	//int length = swprintf(text, 43, L"%d:%d", ((int)gGameTimer.GetTotalTime()) / 60, ((int)gGameTimer.GetTotalTime()) % 60);
 	//text[length + 1] = '\0';
@@ -1144,7 +1142,7 @@ void CBlueSuitPlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext
 		if (m_fGameStartCount <= 0.0f) {
 			m_bGameStartWait = false;
 		}
-		int len = swprintf(text, 43, L"Àá½ÃÈÄ Àû´ëÀÚ°¡ Çàµ¿À» ½ÃÀÛÇÕ´Ï´Ù.\nÇ»Áî¸¦ ¸ğ¾Æ Å»Ãâ±¸¸¦ Ã£À¸¼¼¿ä.");
+		int len = swprintf(text, 43, L"ì ì‹œí›„ ì ëŒ€ìê°€ í–‰ë™ì„ ì‹œì‘í•©ë‹ˆë‹¤.\ní“¨ì¦ˆë¥¼ ëª¨ì•„ íƒˆì¶œêµ¬ë¥¼ ì°¾ìœ¼ì„¸ìš”.");
 		text[len + 1] = '\0';
 
 		POINT pos = CGameFramework::GetClientWindowSize();
@@ -1173,7 +1171,7 @@ void CBlueSuitPlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext
 
 	if (PlayRadarUI()) {
 		float escapelength = GetEscapeLength();
-		// ºÎµ¿ ¼Ò¼öÁ¡ °ªÀ» ¹®ÀÚ¿­·Î º¯È¯ ÈÄ À¯´ÏÄÚµå ¹®ÀÚ¿­·Î ÀúÀå
+		// ë¶€ë™ ì†Œìˆ˜ì  ê°’ì„ ë¬¸ìì—´ë¡œ ë³€í™˜ í›„ ìœ ë‹ˆì½”ë“œ ë¬¸ìì—´ë¡œ ì €ì¥
 		int len = swprintf(text, 20, L"%d", (int)escapelength);
 		text[len] = 'm';
 		len += 1;
@@ -1183,7 +1181,7 @@ void CBlueSuitPlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext
 		//m_d2dDeviceContext->SetTransform(mat);
 		static XMFLOAT2 RadarOffset = { 80.0f,30.0f };
 		XMFLOAT2 point = GetRadarWindowScreenPos();
-		//À©µµ¿ì ÁÂÇ¥ ÁÖÀÇ.
+		//ìœˆë„ìš° ì¢Œí‘œ ì£¼ì˜.
 		D2D1_RECT_F textRect = D2D1::RectF(30.0f + point.x - RadarOffset.x, point.y - RadarOffset.y, point.x + RadarOffset.x, point.y + RadarOffset.y);
 		d2dDeviceContext->DrawText(
 			text,
@@ -1223,39 +1221,39 @@ XMFLOAT4X4* CBlueSuitPlayer::RadarUpdate(float fElapsedTime)
 			}
 		}
 		m_xmf4x4Rader = Matrix4x4::Identity();
-		// ÇÃ·¹ÀÌ¾îÀÇ Ä«¸Ş¶ó À§Ä¡ °¡Á®¿À±â
+		// í”Œë ˆì´ì–´ì˜ ì¹´ë©”ë¼ ìœ„ì¹˜ ê°€ì ¸ì˜¤ê¸°
 		XMFLOAT3 cPos = GetCamera()->GetPosition();
 		XMVECTOR pos = { cPos.x, cPos.y, cPos.z, 1.0f };
 
-		// ÇÃ·¹ÀÌ¾îÀÇ Ä«¸Ş¶ó°¡ ¹Ù¶óº¸´Â ¹æÇâ º¤ÅÍ °¡Á®¿À±â
+		// í”Œë ˆì´ì–´ì˜ ì¹´ë©”ë¼ê°€ ë°”ë¼ë³´ëŠ” ë°©í–¥ ë²¡í„° ê°€ì ¸ì˜¤ê¸°
 		XMFLOAT3 cLook = GetCamera()->GetLookVector();
 		XMVECTOR look = { cLook.x, cLook.y, cLook.z, 1.0f };
 
-		// Ä«¸Ş¶óÀÇ Right, Up º¤ÅÍ
+		// ì¹´ë©”ë¼ì˜ Right, Up ë²¡í„°
 		XMFLOAT3 cRight = GetCamera()->GetRightVector();
 		XMVECTOR right = { cRight.x, cRight.y, cRight.z, 1.0f };
 
 		XMFLOAT3 cUp = GetCamera()->GetUpVector();
 		XMVECTOR up = { cUp.x, cUp.y, cUp.z, 1.0f };
 
-		// Ä«¸Ş¶ó°¡ ¹Ù¶óº¸´Â ¹æÇâÀ¸·Î ÀÌµ¿ÇÒ º¤ÅÍ °è»ê
+		// ì¹´ë©”ë¼ê°€ ë°”ë¼ë³´ëŠ” ë°©í–¥ìœ¼ë¡œ ì´ë™í•  ë²¡í„° ê³„ì‚°
 		XMVECTOR translation = XMVectorScale(look, 0.5f);
 		right = XMVectorScale(right, 0.25f);
 		up = XMVectorScale(up, m_fOpenRadarTime + 0.1f);
 		translation += right - up;
 
-		// Right, Up, Look º¤ÅÍ·Î m_xmf4x4Rader Çà·Ä ¾÷µ¥ÀÌÆ®
+		// Right, Up, Look ë²¡í„°ë¡œ m_xmf4x4Rader í–‰ë ¬ ì—…ë°ì´íŠ¸
 		m_xmf4x4Rader._11 = cRight.x; m_xmf4x4Rader._12 = cRight.y; m_xmf4x4Rader._13 = cRight.z;
 		m_xmf4x4Rader._21 = cUp.x; m_xmf4x4Rader._22 = cUp.y; m_xmf4x4Rader._23 = cUp.z;
 		m_xmf4x4Rader._31 = cLook.x; m_xmf4x4Rader._32 = cLook.y; m_xmf4x4Rader._33 = cLook.z;
-		
-		// m_xmf4x4Rader Çà·ÄÀ» º¯È¯ÇÏ¿© ¾÷µ¥ÀÌÆ®
+
+		// m_xmf4x4Rader í–‰ë ¬ì„ ë³€í™˜í•˜ì—¬ ì—…ë°ì´íŠ¸
 		XMStoreFloat4x4(&m_xmf4x4Rader,
 			(XMMatrixRotationZ(XMConvertToRadians(175.0f)) * XMMatrixRotationX(XMConvertToRadians(90.0f)))
 			* XMLoadFloat4x4(&m_xmf4x4Rader)
 			* XMMatrixTranslationFromVector(translation + pos));
 
-		// ·¹ÀÌ´õÀÇ ½ºÅ©¸° ÁÂÇ¥ °è»ê
+		// ë ˆì´ë”ì˜ ìŠ¤í¬ë¦° ì¢Œí‘œ ê³„ì‚°
 		XMVECTOR radarWorld = XMVECTOR{ m_xmf4x4Rader._41, m_xmf4x4Rader._42, m_xmf4x4Rader._43, 1.0f };
 		m_pCamera->MultiplyViewProjection();
 		XMFLOAT4X4 xmf4x4viewprojection = m_pCamera->GetViewProjection();
@@ -1294,13 +1292,13 @@ void CBlueSuitPlayer::AddEnvironmentMineItems(shared_ptr<CMineObject> object)
 
 void CBlueSuitPlayer::UseMine(int item_id)
 {
-	// Áö·Ú ¾ÆÀÌÅÛÀ» ¸ÔÀ¸¸é ´Ù½Ã »ı¼ºµÇÁö ¾Ê¾Æ¾ß ÇÔ.
-	// Áö·Ú¸¦ ¼³Ä¡ÇÏ°í ±× Áö·Ú¸¦ ¹âÀ» ¶§±îÁö ¾ÆÀÌÅÛÀº Àç»ı¼º µÇÁö ¸øÇÔ.
-	// Áö·Ú ¾ÆÀÌÅÛÀ» ¸Ô¾ú´Ù¸é Å¬¶óÀÌ¾ğÆ®¿¡¼­ »ı¼ºÇÑ Áö·Ú ¹øÈ£¸¦ ¾Ë¾Æ³»¾ßÇÔ.
+	// ì§€ë¢° ì•„ì´í…œì„ ë¨¹ìœ¼ë©´ ë‹¤ì‹œ ìƒì„±ë˜ì§€ ì•Šì•„ì•¼ í•¨.
+	// ì§€ë¢°ë¥¼ ì„¤ì¹˜í•˜ê³  ê·¸ ì§€ë¢°ë¥¼ ë°Ÿì„ ë•Œê¹Œì§€ ì•„ì´í…œì€ ì¬ìƒì„± ë˜ì§€ ëª»í•¨.
+	// ì§€ë¢° ì•„ì´í…œì„ ë¨¹ì—ˆë‹¤ë©´ í´ë¼ì´ì–¸íŠ¸ì—ì„œ ìƒì„±í•œ ì§€ë¢° ë²ˆí˜¸ë¥¼ ì•Œì•„ë‚´ì•¼í•¨.
 	auto mine = m_vpEnvironmentMineItems[item_id];
 
-	mine->SetObtain(false); // ·»´õ¸µ O
-	mine->SetPosition(GetPosition());// ÇöÀç ÇÃ·¹ÀÌ¾î À§Ä¡¿¡ ¼³Ä¡
+	mine->SetObtain(false); // ë Œë”ë§ O
+	mine->SetPosition(GetPosition());// í˜„ì¬ í”Œë ˆì´ì–´ ìœ„ì¹˜ì— ì„¤ì¹˜
 	mine->SetInstall(true);
 }
 
@@ -1327,8 +1325,8 @@ CZombiePlayer::CZombiePlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	m_pCamera->SetUpdateUseRotate(false);
 
 	m_xmf3Scale = XMFLOAT3(1.5f, 1.5f, 1.0f);
-	
-	UINT ncbElementBytes = ((sizeof(FrameTimeInfo) + 255) & ~255); //256ÀÇ ¹è¼ö
+
+	UINT ncbElementBytes = ((sizeof(FrameTimeInfo) + 255) & ~255); //256ì˜ ë°°ìˆ˜
 	m_pd3dcbTime = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 	m_pd3dcbTime->Map(0, NULL, (void**)&m_pcbMappedTime);
 	m_d3dTimeCbvGPUDescriptorHandle = CScene::CreateConstantBufferViews(pd3dDevice, 1, m_pd3dcbTime.Get(), ncbElementBytes);
@@ -1336,12 +1334,12 @@ CZombiePlayer::CZombiePlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	m_pd3dcbTimeEnd = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 	m_pd3dcbTimeEnd->Map(0, NULL, (void**)&m_pcbMappedTimeEnd);
 	m_d3dTimeCbvGPUDescriptorHandleEnd = CScene::CreateConstantBufferViews(pd3dDevice, 1, m_pd3dcbTimeEnd.Get(), ncbElementBytes);
-	
 
-	// °¨Àü ÅØ½ºÃÄ Ãß°¡
+
+	// ê°ì „ í…ìŠ¤ì³ ì¶”ê°€
 	shared_ptr<CTexture> pTexture = make_shared<CTexture>(1, RESOURCE_TEXTURE2D, 0, 1);
 	pTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, (wchar_t*)L"Asset/Textures/elecpatern.dds", RESOURCE_TEXTURE2D, 0);
-	m_pElectircaterial = make_shared<CMaterial>(1); // ÅØ½ºÃ³°¡ 1°³
+	m_pElectircaterial = make_shared<CMaterial>(1); // í…ìŠ¤ì²˜ê°€ 1ê°œ
 	m_pElectircaterial->SetTexture(pTexture, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, pTexture, 0, 13);
 
@@ -1351,8 +1349,7 @@ CZombiePlayer::CZombiePlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 }
 
 CZombiePlayer::~CZombiePlayer()
-{
-}
+{}
 
 void CZombiePlayer::LoadModelAndAnimation(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const shared_ptr<CLoadedModelInfo>& pLoadModelInfo)
 {
@@ -1360,28 +1357,28 @@ void CZombiePlayer::LoadModelAndAnimation(ID3D12Device* pd3dDevice, ID3D12Graphi
 	LoadBoundingBox(m_voobbOrigin);
 	m_pSkinnedAnimationController = make_shared<CZombieAnimationController>(pd3dDevice, pd3dCommandList, 3, pLoadModelInfo);
 
-	m_pBodyObject= FindFrame("Body");
+	m_pBodyObject = FindFrame("Body");
 	m_pEyesObject = FindFrame("Eyes");
 
-//	m_pSkinnedAnimationController->SetCallbackKeys(1, 2);
-//#ifdef _WITH_SOUND_RESOURCE
-//	m_pSkinnedAnimationController->SetCallbackKey(0, 0.1f, _T("Footstep01"));
-//	m_pSkinnedAnimationController->SetCallbackKey(1, 0.5f, _T("Footstep02"));
-//	m_pSkinnedAnimationController->SetCallbackKey(2, 0.9f, _T("Footstep03"));
-//#else
-//
-//	m_pSkinnedAnimationController->SetCallbackKey(1, 0, 0.1f, (void*)_T("Sound/Footstep01.wav"));
-//	m_pSkinnedAnimationController->SetCallbackKey(1, 1, 0.9f, (void*)_T("Sound/Footstep02.wav"));
-//#endif
-//	shared_ptr<CAnimationCallbackHandler> pAnimationCallbackHandler = make_shared<CSoundCallbackHandler>();
-//	m_pSkinnedAnimationController->SetAnimationCallbackHandler(1, pAnimationCallbackHandler);
+	//	m_pSkinnedAnimationController->SetCallbackKeys(1, 2);
+	//#ifdef _WITH_SOUND_RESOURCE
+	//	m_pSkinnedAnimationController->SetCallbackKey(0, 0.1f, _T("Footstep01"));
+	//	m_pSkinnedAnimationController->SetCallbackKey(1, 0.5f, _T("Footstep02"));
+	//	m_pSkinnedAnimationController->SetCallbackKey(2, 0.9f, _T("Footstep03"));
+	//#else
+	//
+	//	m_pSkinnedAnimationController->SetCallbackKey(1, 0, 0.1f, (void*)_T("Sound/Footstep01.wav"));
+	//	m_pSkinnedAnimationController->SetCallbackKey(1, 1, 0.9f, (void*)_T("Sound/Footstep02.wav"));
+	//#endif
+	//	shared_ptr<CAnimationCallbackHandler> pAnimationCallbackHandler = make_shared<CSoundCallbackHandler>();
+	//	m_pSkinnedAnimationController->SetAnimationCallbackHandler(1, pAnimationCallbackHandler);
 
 	if (m_pSkinnedAnimationController) m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
 }
 
 void CZombiePlayer::Update(float fElapsedTime)
-{	
-	//[0519] ½ºÅ³ UI¸¦ À§ÇØ¼­ ÇÊ¿ä
+{
+	//[0519] ìŠ¤í‚¬ UIë¥¼ ìœ„í•´ì„œ í•„ìš”
 	UpdateSkill(fElapsedTime);
 
 	if (m_bElectricBlend) {
@@ -1404,7 +1401,7 @@ void CZombiePlayer::UpdateAnimation()
 	{
 		float fLength = sqrtf(m_xmf3Velocity.x * m_xmf3Velocity.x + m_xmf3Velocity.z * m_xmf3Velocity.z);
 
-		if (::IsZero(fLength))	//¼Ó·ÂÀÌ 0ÀÌ¸é Æ®·¢ 0À» ´Ù½Ã true
+		if (::IsZero(fLength))	//ì†ë ¥ì´ 0ì´ë©´ íŠ¸ë™ 0ì„ ë‹¤ì‹œ true
 		{
 			if (m_pSkinnedAnimationController->m_nNowState != PlayerState::IDLE)
 			{
@@ -1435,14 +1432,14 @@ void CZombiePlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 	{
 	case GAME_STATE::BLUE_SUIT_WIN:
 	{
-		// ÃÖ´ë ½Ã°£ÀÌ Áö³ª¸é ´õ ÀÌ»ó Áõ°¡ÇÏÁö ¾Êµµ·Ï Á¦ÇÑ
-		float fMaxFogTime = 3.0f; // ¾È°³°¡ ÃÖ´ëÄ¡¿¡ µµ´ŞÇÏ´Â ½Ã°£ (ÃÊ ´ÜÀ§)
+		// ìµœëŒ€ ì‹œê°„ì´ ì§€ë‚˜ë©´ ë” ì´ìƒ ì¦ê°€í•˜ì§€ ì•Šë„ë¡ ì œí•œ
+		float fMaxFogTime = 3.0f; // ì•ˆê°œê°€ ìµœëŒ€ì¹˜ì— ë„ë‹¬í•˜ëŠ” ì‹œê°„ (ì´ˆ ë‹¨ìœ„)
 		if (fEndingElapsedTime > fMaxFogTime)
 		{
 			fEndingElapsedTime = fMaxFogTime;
 		}
 
-		// ½Ã°£¿¡ µû¸¥ ¾È°³ ¹Ğµµ °è»ê (0.0¿¡¼­ 1.0±îÁö Áõ°¡)
+		// ì‹œê°„ì— ë”°ë¥¸ ì•ˆê°œ ë°€ë„ ê³„ì‚° (0.0ì—ì„œ 1.0ê¹Œì§€ ì¦ê°€)
 		float fFogDensity = fEndingElapsedTime / 2 * fMaxFogTime + 0.5f;
 
 		XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(1.0f, 0.0f, fFogDensity, 1.0f);
@@ -1450,17 +1447,17 @@ void CZombiePlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 		m_pCamera->SetFogColor(xmf4EndingFogColor);
 		m_pCamera->SetFogInfo(xmf4EndingFogInfo);
 	}
-		break;
+	break;
 	case GAME_STATE::ZOMBIE_WIN:
 	{
-		// ÃÖ´ë ½Ã°£ÀÌ Áö³ª¸é ´õ ÀÌ»ó Áõ°¡ÇÏÁö ¾Êµµ·Ï Á¦ÇÑ
-		float fMaxFogTime = 3.0f; // ¾È°³°¡ ÃÖ´ëÄ¡¿¡ µµ´ŞÇÏ´Â ½Ã°£ (ÃÊ ´ÜÀ§)
+		// ìµœëŒ€ ì‹œê°„ì´ ì§€ë‚˜ë©´ ë” ì´ìƒ ì¦ê°€í•˜ì§€ ì•Šë„ë¡ ì œí•œ
+		float fMaxFogTime = 3.0f; // ì•ˆê°œê°€ ìµœëŒ€ì¹˜ì— ë„ë‹¬í•˜ëŠ” ì‹œê°„ (ì´ˆ ë‹¨ìœ„)
 		if (fEndingElapsedTime > fMaxFogTime)
 		{
 			fEndingElapsedTime = fMaxFogTime;
 		}
 
-		// ½Ã°£¿¡ µû¸¥ ¾È°³ ¹Ğµµ °è»ê (0.0¿¡¼­ 1.0±îÁö Áõ°¡)
+		// ì‹œê°„ì— ë”°ë¥¸ ì•ˆê°œ ë°€ë„ ê³„ì‚° (0.0ì—ì„œ 1.0ê¹Œì§€ ì¦ê°€)
 		float fFogDensity = fEndingElapsedTime / 2 * fMaxFogTime + 0.5f;
 
 		XMFLOAT4 xmf4EndingFogInfo = XMFLOAT4(1.0f, 0.0f, fFogDensity, 1.0f);
@@ -1468,7 +1465,7 @@ void CZombiePlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 		m_pCamera->SetFogColor(xmf4EndingFogColor);
 		m_pCamera->SetFogInfo(xmf4EndingFogInfo);
 	}
-		break;
+	break;
 	default:
 		break;
 	}
@@ -1477,7 +1474,7 @@ void CZombiePlayer::UpdateEnding(float fEndingElapsedTime, int nGameState)
 }
 
 void CZombiePlayer::SetEectricShock()
-{ // Áö·Ú¿Í Ãæµ¹½Ã¿¡ ¼öÇàÇÒ ÇÔ¼ö
+{ // ì§€ë¢°ì™€ ì¶©ëŒì‹œì— ìˆ˜í–‰í•  í•¨ìˆ˜
 	m_pcbMappedTime->time = 0.0f;
 	m_bElectricBlend = true;
 	m_pcbMappedTime->usePattern = 1.0f;
@@ -1590,13 +1587,13 @@ void CZombiePlayer::SetRunning(bool bRunning)
 shared_ptr<CCamera> CZombiePlayer::ChangeCamera(DWORD nNewCameraMode, float fElapsedTime)
 {
 	shared_ptr<CCamera> camera = CPlayer::ChangeCamera(nNewCameraMode, fElapsedTime);
-	if (camera->GetMode() != THIRD_PERSON_CAMERA) {		
+	if (camera->GetMode() != THIRD_PERSON_CAMERA) {
 
 		//m_pCamera->GenerateProjectionMatrix(0.01f, 100.0f, ASPECT_RATIO, 60.0f);
 		int index = dynamic_pointer_cast<CZombieAnimationController>(m_pSkinnedAnimationController)->GetBoneFrameIndex((char*)"EyesSock");
 		XMFLOAT3 offset = m_pSkinnedAnimationController->GetBoneFramePositionVector(index);
 		//offset.x = 0.0f; offset.z = 0.0f;
-		offset.y = offset.y - m_xmf3Position.y;	// [0507]¼öÁ¤
+		offset.y = offset.y - m_xmf3Position.y;	// [0507]ìˆ˜ì •
 		//offset = XMFLOAT3(0.f, 0.f, 0.f);
 		camera->SetOffset(offset);
 		camera->SetPosition(Vector3::Add(m_xmf3Position, m_pCamera->GetOffset()));
@@ -1604,7 +1601,7 @@ shared_ptr<CCamera> CZombiePlayer::ChangeCamera(DWORD nNewCameraMode, float fEla
 
 	auto thisPlayer = shared_from_this();
 	dynamic_pointer_cast<CZombieAnimationController>(m_pSkinnedAnimationController)->SetPlayer(dynamic_pointer_cast<CPlayer>(thisPlayer));
-	
+
 
 	return camera;
 }
@@ -1617,7 +1614,7 @@ void CZombiePlayer::SetAttackTrail(shared_ptr<Trail> trail)
 		auto zombieAnimationController = dynamic_pointer_cast<CZombieAnimationController>(m_pSkinnedAnimationController);
 		int RightHandThumb4index = zombieAnimationController->GetBoneFrameIndex((char*)"mixamorig:RightHandThumb4");
 
-		// Á»ºñ ¸ğµ¨ÀÇ ¼Õ¿¡ Æ®·¹ÀÏ »ı¼ºµÇµµ·ÏÇÑ´Ù.
+		// ì¢€ë¹„ ëª¨ë¸ì˜ ì†ì— íŠ¸ë ˆì¼ ìƒì„±ë˜ë„ë¡í•œë‹¤.
 		m_pRightHandTrail->SetObject(zombieAnimationController->GetBoneFrameObject(RightHandThumb4index));
 		//m_pRightHandTrail->TrailStart();
 	}
@@ -1627,7 +1624,7 @@ void CZombiePlayer::SetAttackTrail(shared_ptr<Trail> trail)
 		auto zombieAnimationController = dynamic_pointer_cast<CZombieAnimationController>(m_pSkinnedAnimationController);
 		int LeftHandThumb4index = zombieAnimationController->GetBoneFrameIndex((char*)"mixamorig:LeftHandThumb4");
 
-		// Á»ºñ ¸ğµ¨ÀÇ ¼Õ¿¡ Æ®·¹ÀÏ »ı¼ºµÇµµ·ÏÇÑ´Ù.
+		// ì¢€ë¹„ ëª¨ë¸ì˜ ì†ì— íŠ¸ë ˆì¼ ìƒì„±ë˜ë„ë¡í•œë‹¤.
 		m_pLeftHandTrail->SetObject(zombieAnimationController->GetBoneFrameObject(LeftHandThumb4index));
 		//m_pLeftHandTrail->TrailStart();
 	}
@@ -1640,23 +1637,23 @@ void CZombiePlayer::SetGameStart()
 
 void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush)
 {
-	wchar_t text[128]; // º¯È¯µÈ À¯´ÏÄÚµå ¹®ÀÚ¿­À» ÀúÀåÇÒ ¹öÆÛ
-	
-	// ºÎµ¿ ¼Ò¼öÁ¡ °ªÀ» ¹®ÀÚ¿­·Î º¯È¯ ÈÄ À¯´ÏÄÚµå ¹®ÀÚ¿­·Î ÀúÀå
-	if (m_bGameStartWait) 
+	wchar_t text[128]; // ë³€í™˜ëœ ìœ ë‹ˆì½”ë“œ ë¬¸ìì—´ì„ ì €ì¥í•  ë²„í¼
+
+	// ë¶€ë™ ì†Œìˆ˜ì  ê°’ì„ ë¬¸ìì—´ë¡œ ë³€í™˜ í›„ ìœ ë‹ˆì½”ë“œ ë¬¸ìì—´ë¡œ ì €ì¥
+	if (m_bGameStartWait)
 	{
 		static int iPrevCount = 10;
-		// Ä«¿îÆ® Åõ¸íµµ Á¶Àı
+		// ì¹´ìš´íŠ¸ íˆ¬ëª…ë„ ì¡°ì ˆ
 		static float opacity = 1.0f;
 
 		m_fGameStartCount -= gGameTimer.GetTimeElapsed();
 		opacity -= gGameTimer.GetTimeElapsed();
 
-		if (m_fGameStartCount <= 0.1f) 
+		if (m_fGameStartCount <= 0.1f)
 		{
 			m_bGameStartWait = false;
 
-			// ±âº»À¸·Î µÇµ¹¸².
+			// ê¸°ë³¸ìœ¼ë¡œ ë˜ëŒë¦¼.
 			m_bInterruption = false;
 			m_pCamera->SetFogColor(XMFLOAT4(0.5f, 0.5f, 0.5f, 0.5f));
 			m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f, 1.0f));
@@ -1670,9 +1667,9 @@ void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, 
 		int len = swprintf(text, 20, L"%d", iCeilGameStartCount);
 		text[len + 1] = '\0';
 
-		// È­¸é Áß¾Ó¿¡ ¼ıÀÚ ·»´õ¸µ
+		// í™”ë©´ ì¤‘ì•™ì— ìˆ«ì ë Œë”ë§
 		POINT windowSize = CGameFramework::GetClientWindowSize();
-		//À©µµ¿ì ÁÂÇ¥ ÁÖÀÇ.
+		//ìœˆë„ìš° ì¢Œí‘œ ì£¼ì˜.
 		D2D1_RECT_F textRect = D2D1::RectF(0.f, 0.f, (float)windowSize.x, (float)windowSize.y);
 		auto color = brush->GetColor();
 		brush->SetColor(D2D1::ColorF(D2D1::ColorF::Tomato));
@@ -1688,7 +1685,7 @@ void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, 
 		brush->SetOpacity(1.0f);
 
 		textRect = D2D1::RectF(0.f, 0.f, (float)windowSize.x, (float)windowSize.y / 2);
-		len = swprintf(text, 20, L"¸ğµç »ıÁ¸ÀÚ¸¦ Á¦°ÅÇÏ¶ó");
+		len = swprintf(text, 20, L"ëª¨ë“  ìƒì¡´ìë¥¼ ì œê±°í•˜ë¼");
 		text[len + 1] = '\0';
 		brush->SetColor(D2D1::ColorF(D2D1::ColorF::DarkGray));
 		d2dDeviceContext->DrawText(
@@ -1700,7 +1697,7 @@ void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, 
 		);
 		brush->SetColor(color);
 
-		// ½Ã¾ß Â÷´Ü ÀÛ¾÷
+		// ì‹œì•¼ ì°¨ë‹¨ ì‘ì—…
 		if (m_fGameStartCount > 2.5f) {
 			m_bInterruption = true;
 		}

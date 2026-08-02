@@ -1038,7 +1038,8 @@ void CMainScene::AddDefaultObject(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	m_nLights = ReadLightObjectInfo(m_xmf3lightPositions, m_xmf3lightLooks) + MAX_SURVIVOR/*플레이어 조명*/;
-	if (m_nLights > MAX_LIGHTS) {
+	if (m_nLights > MAX_LIGHTS)
+	{
 		//m_nLights = MAX_LIGHTS;
 	}
 	m_pLights = new LIGHT[MAX_LIGHTS];
@@ -1046,7 +1047,8 @@ void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	m_xmf4GlobalAmbient = XMFLOAT4(0.15f, 0.15f, 0.15f, 1.0f);
 
-	for (int i = 0; i < MAX_SURVIVOR; ++i) {
+	for (int i = 0; i < MAX_SURVIVOR; ++i)
+	{
 		m_pLightCamera.push_back(make_shared<CLightCamera>());
 		m_pLightCamera[i]->m_pLight = make_shared<LIGHT>();
 
@@ -1066,9 +1068,9 @@ void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		m_pLightCamera[i]->m_pLight->m_fPhi = (float)cos(XMConvertToRadians(35.0f));
 		m_pLightCamera[i]->m_pLight->m_fTheta = (float)cos(XMConvertToRadians(25.0f));
 	}
-	m_pLights[0].m_bEnable = true;
 
-	for (int i = MAX_SURVIVOR; i < m_nLights; ++i) {
+	for (int i = MAX_SURVIVOR; i < m_nLights; ++i)
+	{
 		m_pLightCamera.push_back(make_shared<CLightCamera>());
 		m_pLightCamera[i]->m_pLight = make_shared<LIGHT>();
 
@@ -1807,12 +1809,13 @@ void CMainScene::ShadowRender(ID3D12GraphicsCommandList* pd3dCommandList, const 
 	{
 		for (; lightId < MAX_CLIENT - 1; ++lightId)
 		{
-			//m_pScene->m_pLights[lightId].m_bEnable = false;
 			m_pLightCamera[lightId]->m_pLight->m_bEnable = false; // 항상 모든 빛을 꺼버림. 그림자맵을 생성하는 빛만 켤것.
 		}
 	}
-	else {
-		for (int i = 0; i < MAX_CLIENT; ++i) {
+	else
+	{
+		for (int i = 0; i < MAX_CLIENT; ++i)
+		{
 			if (m_apPlayer[i]->GetClientId() == -1)
 			{
 				continue;
@@ -1835,16 +1838,15 @@ void CMainScene::ShadowRender(ID3D12GraphicsCommandList* pd3dCommandList, const 
 			m_pLightCamera[i - 1]->MultiplyViewProjection();
 
 			static XMFLOAT4X4 xmf4x4ToTexture = {
-			0.5f, 0.0f, 0.0f, 0.0f,
-			0.0f, -0.5f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
-			0.5f, 0.5f, 0.0f, 1.0f
+				0.5f, 0.0f, 0.0f, 0.0f,
+				0.0f, -0.5f, 0.0f, 0.0f,
+				0.0f, 0.0f, 1.0f, 0.0f,
+				0.5f, 0.5f, 0.0f, 1.0f
 			};
 			static XMMATRIX xmProjectionToTexture = XMLoadFloat4x4(&xmf4x4ToTexture);
 
 			XMFLOAT4X4 viewProjection = m_pLightCamera[i - 1]->GetViewProjection();
 			XMMATRIX xmmtxViewProjection = XMLoadFloat4x4(&viewProjection);
-			//XMStoreFloat4x4(&m_pScene->m_pLights[lightId].m_xmf4x4ViewProjection, XMMatrixTranspose(xmmtxViewProjection * xmProjectionToTexture));
 			XMStoreFloat4x4(&m_pLightCamera[i - 1]->m_pLight->m_xmf4x4ViewProjection, XMMatrixTranspose(xmmtxViewProjection * xmProjectionToTexture));
 			m_pLightCamera[i - 1]->SetFloor(static_cast<int>(floor(survivor->GetPosition().y / 4.5f)));
 
@@ -1855,12 +1857,16 @@ void CMainScene::ShadowRender(ID3D12GraphicsCommandList* pd3dCommandList, const 
 	for (int i = 0; i < m_nLights; ++i)
 	{
 		m_pLightCamera[i]->m_pLight->m_bEnable = false; // 항상 모든 빛을 꺼버림. 그림자맵을 생성하는 빛만 켤것.
-		if (pCamera->GetFloor() != m_pLightCamera[i]->GetFloor()) {
+		if (pCamera->GetFloor() != m_pLightCamera[i]->GetFloor())
+		{
 			continue;
 		}
 
 		XMFLOAT3 playerToLight = Vector3::Subtract(pCamera->GetPosition(), m_pLightCamera[i]->GetPosition());
-		if (Vector3::Length(playerToLight) > 25.0f) { // 안개가 가린 위치의 빛에 대해서는 렌더링 하지 않는다.
+
+		// 안개가 가린 위치의 빛에 대해서는 렌더링 하지 않는다.
+		if (Vector3::Length(playerToLight) > 25.0f)
+		{
 			continue;
 		}
 
@@ -1872,8 +1878,7 @@ void CMainScene::ShadowRender(ID3D12GraphicsCommandList* pd3dCommandList, const 
 			}
 		}
 
-		m_pLightCamera[i]->m_pLight->m_bEnable = true; // 항상 모든 빛을 꺼버림. 그림자맵을 생성하는 빛만 켤것.
-
+		m_pLightCamera[i]->m_pLight->m_bEnable = true;
 		D3D12_CPU_DESCRIPTOR_HANDLE shadowRTVDescriptorHandle = m_pPostProcessingShader->GetShadowRtvCPUDescriptorHandle(i);
 		pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
@@ -1979,14 +1984,16 @@ void CMainScene::BlurDispatch(ID3D12GraphicsCommandList* pd3dCommandList, const 
 	m_pTextureToScreenShaderShader->Render(pd3dCommandList, pCamera, nullptr);
 }
 
-void CMainScene::SetParticleTest(float fCurTime) {
+void CMainScene::SetParticleTest(float fCurTime)
+{
 	auto particleshader = dynamic_cast<ParticleShader*>(m_vForwardRenderShader[PARTICLE_SHADER].get());
 	particleshader->SetParticleTest(fCurTime);
 }
 
 void CMainScene::ParticleReadByteTask()
 {
-	for (auto& ob : sharedobject.m_vParticleObjects) {
+	for (auto& ob : sharedobject.m_vParticleObjects)
+	{
 		ob->ReadByteTask();
 	}
 }

@@ -59,8 +59,7 @@ CCamera::CCamera(const shared_ptr<CCamera>& pCamera)
 }
 
 CCamera::~CCamera()
-{
-}
+{}
 
 void CCamera::SetViewport(int xTopLeft, int yTopLeft, int nWidth, int nHeight, float fMinZ, float fMaxZ)
 {
@@ -124,7 +123,7 @@ void CCamera::RegenerateViewMatrix()
 
 void CCamera::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	UINT ncbElementBytes = ((sizeof(VS_CB_CAMERA_INFO) + 255) & ~255); //256ÀÇ ¹è¼ö
+	UINT ncbElementBytes = ((sizeof(VS_CB_CAMERA_INFO) + 255) & ~255); //256ì˜ ë°°ìˆ˜
 	m_pd3dcbCamera = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 
 	m_pd3dcbCamera->Map(0, NULL, (void**)&m_pcbMappedCamera);
@@ -154,10 +153,10 @@ void CCamera::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
 
 	XMFLOAT4 xmf4Position = XMFLOAT4(m_xmf3Position.x, m_xmf3Position.y, m_xmf3Position.z, 0.0f);
 	::memcpy(&m_pcbMappedCamera->m_xmf4Position, &xmf4Position, sizeof(XMFLOAT4));
-	
+
 	::memcpy(&m_pcbMappedCamera->m_xmf4FogColor, &m_xmf4FogColor, sizeof(XMFLOAT4));
 	::memcpy(&m_pcbMappedCamera->m_xmf4FogInfo, &m_xmf4FogInfo, sizeof(XMFLOAT4));
-	
+
 	pd3dCommandList->SetGraphicsRootDescriptorTable(0, GetDescriptorHandle());
 }
 
@@ -193,7 +192,7 @@ void CCamera::UpdateComputeShaderVariables(ID3D12GraphicsCommandList* pd3dComman
 
 void CCamera::ReleaseShaderVariables()
 {
-	if (m_pd3dcbCamera.Get()) { // ComPtrÀ» »ç¿ëÇÏ´õ¶óµµ UnmapÀ» ÇØÁÖ¾î¾ß ¸Þ¸ð¸® ´©¼ö x
+	if (m_pd3dcbCamera.Get()) { // ComPtrì„ ì‚¬ìš©í•˜ë”ë¼ë„ Unmapì„ í•´ì£¼ì–´ì•¼ ë©”ëª¨ë¦¬ ëˆ„ìˆ˜ x
 		m_pd3dcbCamera.Get()->Unmap(0, NULL);
 	}
 }

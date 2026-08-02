@@ -9,7 +9,7 @@ void SharedObject::EnableItemGetParticle(const shared_ptr<CGameObject>& object)
 	m_vParticleObjects[CParticleMesh::SPARK]->SetParticleInsEnable(-1, true, gGameTimer.GetTotalTime(), pos);
 }
 
-void SharedObject::AddParticle(CParticleMesh::TYPE particleType,XMFLOAT3 pos)
+void SharedObject::AddParticle(CParticleMesh::TYPE particleType, XMFLOAT3 pos)
 {
 	m_vParticleObjects[CParticleMesh::FOOTPRINT]->AddParticle(pos);
 }

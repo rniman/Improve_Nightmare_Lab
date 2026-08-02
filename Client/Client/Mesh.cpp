@@ -7,8 +7,7 @@
 
 
 CMesh::CMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
-{
-}
+{}
 
 CMesh::~CMesh()
 {
@@ -74,7 +73,7 @@ void CMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// [0504] UI¿ß«— ªÁ∞¢«¸ ∏ﬁΩ¨
+// [0504] UIÏúÑÌïú ÏÇ¨Í∞ÅÌòï Î©îÏâ¨
 
 CUserInterfaceRectMesh::CUserInterfaceRectMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fWidth, float fHeight, float fDepth, float fMaxU, float fMaxV, float fMinU, float fMinV)
 	: CMesh(pd3dDevice, pd3dCommandList)
@@ -108,8 +107,7 @@ CUserInterfaceRectMesh::CUserInterfaceRectMesh(ID3D12Device* pd3dDevice, ID3D12G
 }
 
 CUserInterfaceRectMesh::~CUserInterfaceRectMesh()
-{
-}
+{}
 
 void CUserInterfaceRectMesh::ReleaseUploadBuffers()
 {
@@ -155,7 +153,7 @@ void CUserInterfaceRectMesh::SetVertexData(float fWidth, float fHeight, float fM
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 //// HexahedronMesh
-HexahedronMesh::HexahedronMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float xSize, float ySize, float zSize) : CMesh(pd3dDevice,pd3dCommandList)
+HexahedronMesh::HexahedronMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float xSize, float ySize, float zSize) : CMesh(pd3dDevice, pd3dCommandList)
 {
 	m_nVertices = 36;
 	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -291,8 +289,7 @@ void HexahedronMesh::OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList)
 /////////////////////////////////////////////////////////////////////////////////////////////////
 //
 CStandardMesh::CStandardMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) : CMesh(pd3dDevice, pd3dCommandList)
-{
-}
+{}
 
 CStandardMesh::~CStandardMesh()
 {
@@ -317,16 +314,16 @@ void CStandardMesh::ReleaseUploadBuffers()
 	if (m_pd3dUV0UploadBuffer.Get()) m_pd3dUV0UploadBuffer.Reset();
 
 	if (m_pd3dNormalUploadBuffer.Get()) m_pd3dNormalUploadBuffer.Reset();
-	
+
 	if (m_pd3dTangentUploadBuffer.Get()) m_pd3dTangentUploadBuffer.Reset();
-	
+
 	if (m_pd3dBiTangentUploadBuffer.Get()) m_pd3dBiTangentUploadBuffer.Reset();
-	
+
 }
 void CStandardMesh::SaveStandardMesh(shared_ptr<CStandardMesh> pMesh)
 {
 	for (auto& mesh : CStandardMesh::g_vAllstandardMesh) {
-		if (!strcmp(mesh->m_pstrMeshName, pMesh->m_pstrMeshName/*@¡¶ø‹ ∫Ò±≥*/)) {
+		if (!strcmp(mesh->m_pstrMeshName, pMesh->m_pstrMeshName/*@Ï†úÏô∏ ÎπÑÍµê*/)) {
 			pMesh->m_d3dVertexBufferView = mesh->m_d3dVertexBufferView;
 			pMesh->m_vd3dSubSetIndexBufferViews = mesh->m_vd3dSubSetIndexBufferViews;
 			pMesh->m_nSubMeshes = mesh->m_nSubMeshes;
@@ -341,11 +338,11 @@ void CStandardMesh::SaveStandardMesh(shared_ptr<CStandardMesh> pMesh)
 			pMesh->m_nType = mesh->m_nType;
 			pMesh->m_vOOBBs = mesh->m_vOOBBs;
 
-			return; // √£æ“¥Ÿ∏È ∑Œ¡˜¿ª ºˆ«‡«œ∞Ì ∏Æ≈œ
+			return; // Ï∞æÏïòÎã§Î©¥ Î°úÏßÅÏùÑ ÏàòÌñâÌïòÍ≥† Î¶¨ÌÑ¥
 		}
 	}
 
-	// ƒ¡≈◊¿Ã≥ ø° ∏ﬁΩ¨∞° æ¯¥Ÿ∏È √≥¿Ω ∏∏µÈæÓ¡¯ ∏ﬁΩ¨
+	// Ïª®ÌÖåÏù¥ÎÑàÏóê Î©îÏâ¨Í∞Ä ÏóÜÎã§Î©¥ Ï≤òÏùå ÎßåÎì§Ïñ¥ÏßÑ Î©îÏâ¨
 	CStandardMesh::g_vAllstandardMesh.push_back(pMesh);
 }
 
@@ -357,7 +354,7 @@ bool CStandardMesh::LoadMeshFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCom
 	UINT nReads = (UINT)::fread(&m_nVertices, sizeof(int), 1, pInFile);
 
 	::ReadStringFromFile(pInFile, m_pstrMeshName);
-	if (m_pstrMeshName[0] == '@') 
+	if (m_pstrMeshName[0] == '@')
 	{
 		return false;
 	}
@@ -552,8 +549,8 @@ void CStandardMesh::OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-CInstanceStandardMesh::CInstanceStandardMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) 
-	: CStandardMesh(pd3dDevice,pd3dCommandList)
+CInstanceStandardMesh::CInstanceStandardMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+	: CStandardMesh(pd3dDevice, pd3dCommandList)
 {
 
 }
@@ -764,15 +761,15 @@ bool g_InstanceMeshNotAddCollision = false;
 void CInstanceStandardMesh::LoadInstanceData(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, FILE* pInFile/*, CInstanceObject* pGameObject*/)
 {
 	int nReads = (UINT)::fread(&m_nCntInstance, sizeof(int), 1, pInFile);
-	
+
 	if (m_nCntInstance > 0)
 	{
 		m_pxmf4x4InstanceTransformMatrix = new XMFLOAT4X4[m_nCntInstance];
 		nReads = (UINT)::fread(m_pxmf4x4InstanceTransformMatrix, sizeof(XMFLOAT4X4), m_nCntInstance, pInFile);
 
-		m_pd3dInstanceTransformMatrixBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_pxmf4x4InstanceTransformMatrix, 
+		m_pd3dInstanceTransformMatrixBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_pxmf4x4InstanceTransformMatrix,
 			sizeof(XMFLOAT4X4) * m_nCntInstance, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
-		
+
 		m_d3dInstanceTransformMatrixBufferView.BufferLocation = m_pd3dInstanceTransformMatrixBuffer->GetGPUVirtualAddress();
 		m_d3dInstanceTransformMatrixBufferView.StrideInBytes = sizeof(XMFLOAT4X4);
 		m_d3dInstanceTransformMatrixBufferView.SizeInBytes = sizeof(XMFLOAT4X4) * m_nCntInstance;
@@ -780,12 +777,12 @@ void CInstanceStandardMesh::LoadInstanceData(ID3D12Device* pd3dDevice, ID3D12Gra
 		if (g_InstanceMeshNotAddCollision) {
 			return;
 		}
-		//ø¿∫Í¡ß∆Æ∏¶ ∏∏µÈæÓº≠ ≥—∞‹¡ÿ¥Ÿ? -> ¿ŒΩ∫≈ÕΩÃ ø¿∫Í¡ß∆ÆµÈ
+		//Ïò§Î∏åÏ†ùÌä∏Î•º ÎßåÎì§Ïñ¥ÏÑú ÎÑòÍ≤®Ï§ÄÎã§? -> Ïù∏Ïä§ÌÑ∞Ïã± Ïò§Î∏åÏ†ùÌä∏Îì§
 		for (int i = 0; i < m_nCntInstance; ++i)
 		{
 			XMFLOAT4X4 xmf4x4WorldMatrix = Matrix4x4::Transpose(m_pxmf4x4InstanceTransformMatrix[i]);
-			
-			//¿Ã∞≈ ∏∏µÈ∂ß m_pxmf4x4InstanceTransformMatrixø° ¥Î«— ¿Œµ¶Ω∫∏¶ æÀæ∆æﬂ «“µÌ ±◊∑°æﬂ «ÿ¥Á ø¿∫Í¡ß∆Æø° ¥Î«ÿº≠∏∏ πÆ¿Ã »∏¿¸«—¥Ÿ¥¯¡ˆ ºˆ«‡Ω√≈≥ºˆ¿÷¥Ÿ.
+
+			//Ïù¥Í±∞ ÎßåÎì§Îïå m_pxmf4x4InstanceTransformMatrixÏóê ÎåÄÌïú Ïù∏Îç±Ïä§Î•º ÏïåÏïÑÏïº Ìï†ÎìØ Í∑∏ÎûòÏïº Ìï¥Îãπ Ïò§Î∏åÏ†ùÌä∏Ïóê ÎåÄÌï¥ÏÑúÎßå Î¨∏Ïù¥ ÌöåÏ†ÑÌïúÎã§ÎçòÏßÄ ÏàòÌñâÏãúÌÇ¨ÏàòÏûàÎã§.
 			CreateInstanceObjectInfo(m_pstrMeshName, xmf4x4WorldMatrix);
 		}
 	}
@@ -802,10 +799,10 @@ void CInstanceStandardMesh::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3
 	shared_ptr<CInstanceObject> pOriginInstance = m_pOriginInstance.lock();
 	int i = 0;
 	for (auto& object : pOriginInstance->m_vInstanceObjectInfo)
-	{	 // 0312 CJI - ¡§¿˚¿Œ∞¥√ºµÈ±Ó¡ˆ ∞Ëº” ∞ªΩ≈ «ÿ¡Ÿ « ø‰∞° ¿÷¿ª±Ó ΩÕ¿Ω.(√÷¿˚»≠) -> øœ∑·
+	{	 // 0312 CJI - Ï†ïÏ†ÅÏù∏Í∞ùÏ≤¥Îì§ÍπåÏßÄ Í≥ÑÏÜç Í∞±Ïã† Ìï¥Ï§Ñ ÌïÑÏöîÍ∞Ä ÏûàÏùÑÍπå Ïã∂Ïùå.(ÏµúÏ†ÅÌôî) -> ÏôÑÎ£å
 		if (object->IsStatic())
 		{
-			return; // [0528 CJI] √π ø¿∫Í¡ß∆Æ∞° ¡§¿˚¿Ã∏È ¿Ã »ƒ¿« ∞¥√ºµÈµµ ¡§¿˚¿Œ ∞¥√ºµÈ¿œ∞Õ.
+			return; // [0528 CJI] Ï≤´ Ïò§Î∏åÏ†ùÌä∏Í∞Ä Ï†ïÏ†ÅÏù¥Î©¥ Ïù¥ ÌõÑÏùò Í∞ùÏ≤¥Îì§ÎèÑ Ï†ïÏ†ÅÏù∏ Í∞ùÏ≤¥Îì§ÏùºÍ≤É.
 		}
 		m_pxmf4x4InstanceTransformMatrix[i++] = Matrix4x4::Transpose(object->m_xmf4x4World);
 	}
@@ -871,11 +868,11 @@ void CInstanceStandardMesh::CreateInstanceObjectInfo(char* pstrMeshName, XMFLOAT
 	{
 		pInstanceObjectInfo = make_shared<CEnvironmentObject>(m_pstrMeshName, xmf4x4WorldMatrix, this);
 		pOriginInstance->m_vInstanceObjectInfo.push_back(pInstanceObjectInfo);
-		size_t nLastIndex = pOriginInstance->m_vInstanceObjectInfo.size() - 1;	
+		size_t nLastIndex = pOriginInstance->m_vInstanceObjectInfo.size() - 1;
 		g_collisionManager.AddCollisionObject(pOriginInstance->m_vInstanceObjectInfo[nLastIndex]);
 	}
-	else if (!strcmp(pstrMeshName, "Laboratory_Wall_Door_1") || !strcmp(pstrMeshName, "Laboratory_Wall_Door_1_2") 
-			|| !strcmp(pstrMeshName, "Laboratory_Tunnel_1") || !strcmp(pstrMeshName, "Laboratory_Table_1"))
+	else if (!strcmp(pstrMeshName, "Laboratory_Wall_Door_1") || !strcmp(pstrMeshName, "Laboratory_Wall_Door_1_2")
+		|| !strcmp(pstrMeshName, "Laboratory_Tunnel_1") || !strcmp(pstrMeshName, "Laboratory_Table_1"))
 	{
 		pInstanceObjectInfo = make_shared<CEnvironmentObject>(m_pstrMeshName, xmf4x4WorldMatrix, this);
 		pOriginInstance->m_vInstanceObjectInfo.push_back(pInstanceObjectInfo);
@@ -917,7 +914,7 @@ void CInstanceStandardMesh::CreateInstanceObjectInfo(char* pstrMeshName, XMFLOAT
 		pOriginInstance->m_vInstanceObjectInfo.push_back(pInstanceObjectInfo);
 		//pGameObject->m_vInstanceObjectInfo.push_back(CGameObject(m_pstrMeshName, xmf4x4WorldMatrix, this));
 		size_t nLastIndex = pOriginInstance->m_vInstanceObjectInfo.size() - 1;
-		g_collisionManager.AddNonCollisionObject(pOriginInstance->m_vInstanceObjectInfo[nLastIndex]); // º≠πˆøÕ¥¬ ªÛ∞¸æ¯¥¬ ∞¥√ºµÈ
+		g_collisionManager.AddNonCollisionObject(pOriginInstance->m_vInstanceObjectInfo[nLastIndex]); // ÏÑúÎ≤ÑÏôÄÎäî ÏÉÅÍ¥ÄÏóÜÎäî Í∞ùÏ≤¥Îì§
 	}
 	pInstanceObjectInfo->SetInstance(true);
 	//pInstanceObjectInfo->
@@ -927,8 +924,7 @@ void CInstanceStandardMesh::CreateInstanceObjectInfo(char* pstrMeshName, XMFLOAT
 /////////////////////////////////////////////////////////////////////////////////////////////////
 //
 CSkinnedMesh::CSkinnedMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) : CStandardMesh(pd3dDevice, pd3dCommandList)
-{
-}
+{}
 
 CSkinnedMesh::~CSkinnedMesh()
 {
@@ -949,7 +945,7 @@ CSkinnedMesh::~CSkinnedMesh()
 
 void CSkinnedMesh::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	UINT ncbElementBytes = (((sizeof(XMFLOAT4X4) * SKINNED_ANIMATION_BONES) + 255) & ~255); //256¿« πËºˆ
+	UINT ncbElementBytes = (((sizeof(XMFLOAT4X4) * SKINNED_ANIMATION_BONES) + 255) & ~255); //256Ïùò Î∞∞Ïàò
 	m_pd3dcbBindPoseBoneOffsets = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 	m_pd3dcbBindPoseBoneOffsets->Map(0, NULL, (void**)&m_pcbxmf4x4MappedBindPoseBoneOffsets);
 
@@ -985,8 +981,7 @@ void CSkinnedMesh::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandL
 }
 
 void CSkinnedMesh::ReleaseShaderVariables()
-{
-}
+{}
 
 void CSkinnedMesh::ReleaseUploadBuffers()
 {
@@ -1090,7 +1085,7 @@ void CSkinnedMesh::LoadSkinInfoFromFile(ID3D12Device* pd3dDevice, ID3D12Graphics
 				m_d3dBoneIndexBufferView.SizeInBytes = sizeof(XMINT4) * m_nVertices;
 			}
 		}
-		else if (!strcmp(pstrToken, "<BoneWeights>:")) // ≈◊Ω∫∆Æ ∆ƒ¿œ¿Ã ¿Ã∑±Ωƒ¿∏∑Œ ∫“∑Øø¿µµ∑œ ¿˙¿Âµ .
+		else if (!strcmp(pstrToken, "<BoneWeights>:")) // ÌÖåÏä§Ìä∏ ÌååÏùºÏù¥ Ïù¥Îü∞ÏãùÏúºÎ°ú Î∂àÎü¨Ïò§ÎèÑÎ°ù Ï†ÄÏû•Îê®.
 		{
 			//m_nType |= VERTEXT_BONE_INDEX_WEIGHT;
 

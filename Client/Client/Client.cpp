@@ -1,4 +1,4 @@
-﻿#include "stdafx.h"
+#include "stdafx.h"
 #include "Client.h"
 #include "GameFramework.h"
 
@@ -22,7 +22,7 @@ INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 int Test()
 {
 	SoundManager& soundManager = SoundManager::GetInstance();
-	if (!soundManager.Initialize()) 
+	if (!soundManager.Initialize())
 	{
 		return -1;
 	}
@@ -33,10 +33,10 @@ int Test()
 
 	// 사운드 재생
 	soundManager.PlaySoundWithName("sound1", -1);
-	
+
 	Sleep(1000);
 	soundManager.PlaySoundWithName("sound1", -1);
-	
+
 	Sleep(1000);
 	soundManager.PlaySoundWithName("sound1", -1);
 	//soundManager.PlaySoundWithName("sound2", -1);
@@ -101,7 +101,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 				::DispatchMessage(&msg);
 			}
 		}
-		else if(gGameFramework.IsTcpClient())
+		else if (gGameFramework.IsTcpClient())
 		{
 			int nClientId = gGameFramework.GetClientIdFromTcpClient();
 			if (nClientId != -1)
@@ -113,7 +113,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		}
 	}
 
-	if(gGameFramework.IsConnected())
+	if (gGameFramework.IsConnected())
 	{
 		// lobby Craete
 		gGameFramework.OnCreate(hInstance, hWnd);
@@ -133,10 +133,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	//ClientToScreen(hWnd, &center);
 	//SetCursorPos(center.x, center.y);
 	//gGameFramework.SetMousePoint(center);
-	
+
 	// 기본 메시지 루프입니다:
 	while (gGameFramework.IsConnected())
-	{ 
+	{
 		if (::PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
 			if (msg.message == WM_QUIT)
@@ -239,14 +239,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
-	case WM_PAINT: 
+	case WM_PAINT:
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);
 
 		// 이미지 로드
 		CImage imageLobbyBackGround;
-		if(imageLobbyBackGround.Load(L"Asset/lobbyBackground.jpeg") != S_OK)
+		if (imageLobbyBackGround.Load(L"Asset/lobbyBackground.jpeg") != S_OK)
 		{
 			exit(-1);
 		}
@@ -264,7 +264,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		SetBkColor(hdcStatic, RGB(255, 255, 255)); // 흰색 배경 설정
 		return (LRESULT)GetStockObject(WHITE_BRUSH);
 	}
-		break;
+	break;
 	case WM_SOCKET: // 소켓 관련 윈도우 메시지
 	case WM_CREATE_TCP:
 	case WM_END_GAME:

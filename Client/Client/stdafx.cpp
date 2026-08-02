@@ -42,7 +42,7 @@ void SynchronizeResourceTransition(ID3D12GraphicsCommandList* pd3dCommandList, I
 	pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
 }
 
-ID3D12Resource* CreateTextureResource(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, void* pData, 
+ID3D12Resource* CreateTextureResource(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, void* pData,
 	UINT nBytes, D3D12_RESOURCE_DIMENSION d3dResourceDimension, UINT nWidth, UINT nHeight, UINT nDepthOrArraySize,
 	UINT nMipLevels, D3D12_RESOURCE_FLAGS d3dResourceFlags, DXGI_FORMAT dxgiFormat, D3D12_HEAP_TYPE d3dHeapType,
 	D3D12_RESOURCE_STATES d3dResourceStates, ID3D12Resource** ppd3dUploadBuffer)
@@ -124,7 +124,7 @@ ID3D12Resource* CreateTextureResource(ID3D12Device* pd3dDevice, ID3D12GraphicsCo
 	case D3D12_HEAP_TYPE_UPLOAD:
 	{
 		d3dResourceStates |= D3D12_RESOURCE_STATE_GENERIC_READ;
-		HRESULT hResult = pd3dDevice->CreateCommittedResource(&d3dHeapPropertiesDesc, D3D12_HEAP_FLAG_NONE, &d3dResourceDesc, 
+		HRESULT hResult = pd3dDevice->CreateCommittedResource(&d3dHeapPropertiesDesc, D3D12_HEAP_FLAG_NONE, &d3dResourceDesc,
 			d3dResourceStates, NULL, __uuidof(ID3D12Resource), (void**)&pd3dBuffer);
 		if (pData)
 		{
@@ -186,7 +186,7 @@ ID3D12Resource* CreateTextureResourceFromDDSFile(ID3D12Device* pd3dDevice, ID3D1
 
 	D3D12_RESOURCE_DESC d3dUploadResourceDesc;
 	::ZeroMemory(&d3dUploadResourceDesc, sizeof(D3D12_RESOURCE_DESC));
-	d3dUploadResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; //Upload Heap¿¡´Â ÅØ½ºÃÄ¸¦ »ı¼ºÇÒ ¼ö ¾øÀ½
+	d3dUploadResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; //Upload Heapì—ëŠ” í…ìŠ¤ì³ë¥¼ ìƒì„±í•  ìˆ˜ ì—†ìŒ
 	d3dUploadResourceDesc.Alignment = 0;
 	d3dUploadResourceDesc.Width = nBytes;
 	d3dUploadResourceDesc.Height = 1;
@@ -253,7 +253,7 @@ ID3D12Resource* CreateTexture2DResource(ID3D12Device* pd3dDevice, UINT nWidth, U
 	return(pd3dTexture);
 }
 
-// ÅØ½ºÃ³ ¹è¿­À» »ı¼ºÇÏ´Â ÇÔ¼ö
+// í…ìŠ¤ì²˜ ë°°ì—´ì„ ìƒì„±í•˜ëŠ” í•¨ìˆ˜
 std::vector<ID3D12Resource*> CreateTextureArray(ID3D12Device* device, int width, int height, int mipLevels, int arraySize, DXGI_FORMAT format) {
 	std::vector<ID3D12Resource*> textureArray(arraySize);
 
@@ -264,7 +264,7 @@ std::vector<ID3D12Resource*> CreateTextureArray(ID3D12Device* device, int width,
 	texDesc.Alignment = 0;
 	texDesc.Width = width;
 	texDesc.Height = height;
-	texDesc.DepthOrArraySize = arraySize; // ¹è¿­ Å©±â ¼³Á¤
+	texDesc.DepthOrArraySize = arraySize; // ë°°ì—´ í¬ê¸° ì„¤ì •
 	texDesc.MipLevels = mipLevels;
 	texDesc.Format = format;
 	texDesc.SampleDesc.Count = 1;
@@ -286,13 +286,13 @@ std::vector<ID3D12Resource*> CreateTextureArray(ID3D12Device* device, int width,
 	return textureArray;
 }
 
-// ÅØ½ºÃ³ ¹è¿­À» Ã¤¿ì´Â ÇÔ¼ö
+// í…ìŠ¤ì²˜ ë°°ì—´ì„ ì±„ìš°ëŠ” í•¨ìˆ˜
 void FillTextureArray(ID3D12Device* device, ID3D12GraphicsCommandList* commandList, std::vector<ID3D12Resource*>& textures) {
-	// ¿©±â¿¡ °¢ ÅØ½ºÃ³¸¦ Ã¤¿ì´Â ÄÚµå¸¦ ±¸ÇöÇÕ´Ï´Ù.
-	// ¿¹½Ã·Î ´ÜÀÏ »ö»óÀ¸·Î ÅØ½ºÃ³¸¦ Ã¤¿ó´Ï´Ù.
-	// ÀÌ ºÎºĞÀº ½ÇÁ¦·Î´Â ÅØ½ºÃ³ µ¥ÀÌÅÍ¸¦ ·ÎµåÇÏ°í ¾÷·ÎµåÇÏ´Â ÄÚµå·Î ´ëÃ¼µÇ¾î¾ß ÇÕ´Ï´Ù.
-	// ¿©±â¼­´Â ´Ü¼øÈ­¸¦ À§ÇØ Èò»öÀ¸·Î Ã¤¿ó´Ï´Ù.
-	const float clearColor[] = { 1.0f, 1.0f, 1.0f, 1.0f }; // RGBA, Èò»ö
+	// ì—¬ê¸°ì— ê° í…ìŠ¤ì²˜ë¥¼ ì±„ìš°ëŠ” ì½”ë“œë¥¼ êµ¬í˜„í•©ë‹ˆë‹¤.
+	// ì˜ˆì‹œë¡œ ë‹¨ì¼ ìƒ‰ìƒìœ¼ë¡œ í…ìŠ¤ì²˜ë¥¼ ì±„ì›ë‹ˆë‹¤.
+	// ì´ ë¶€ë¶„ì€ ì‹¤ì œë¡œëŠ” í…ìŠ¤ì²˜ ë°ì´í„°ë¥¼ ë¡œë“œí•˜ê³  ì—…ë¡œë“œí•˜ëŠ” ì½”ë“œë¡œ ëŒ€ì²´ë˜ì–´ì•¼ í•©ë‹ˆë‹¤.
+	// ì—¬ê¸°ì„œëŠ” ë‹¨ìˆœí™”ë¥¼ ìœ„í•´ í°ìƒ‰ìœ¼ë¡œ ì±„ì›ë‹ˆë‹¤.
+	const float clearColor[] = { 1.0f, 1.0f, 1.0f, 1.0f }; // RGBA, í°ìƒ‰
 	for (int i = 0; i < textures.size(); ++i) {
 		D3D12_RESOURCE_DESC desc = textures[i]->GetDesc();
 		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(textures[i], D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -323,7 +323,7 @@ ID3D12Resource* CreateTextureResourceFromWICFile(ID3D12Device* pd3dDevice, ID3D1
 
 	D3D12_RESOURCE_DESC d3dResourceDesc;
 	::ZeroMemory(&d3dResourceDesc, sizeof(D3D12_RESOURCE_DESC));
-	d3dResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; //Upload Heap¿¡´Â ÅØ½ºÃÄ¸¦ »ı¼ºÇÒ ¼ö ¾øÀ½
+	d3dResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; //Upload Heapì—ëŠ” í…ìŠ¤ì³ë¥¼ ìƒì„±í•  ìˆ˜ ì—†ìŒ
 	d3dResourceDesc.Alignment = 0;
 	d3dResourceDesc.Width = nBytes;
 	d3dResourceDesc.Height = 1;
@@ -377,7 +377,7 @@ BYTE ReadStringFromFile(FILE* pInFile, char* pstrToken)
 	return(nStrLength);
 }
 
-// ¼ÒÄÏ ÇÔ¼ö ¿À·ù Ãâ·Â ÈÄ Á¾·á
+// ì†Œì¼“ í•¨ìˆ˜ ì˜¤ë¥˜ ì¶œë ¥ í›„ ì¢…ë£Œ
 void err_quit(const char* msg)
 {
 	LPVOID lpMsgBuf;
@@ -391,7 +391,7 @@ void err_quit(const char* msg)
 	exit(1);
 }
 
-// ¼ÒÄÏ ÇÔ¼ö ¿À·ù Ãâ·Â
+// ì†Œì¼“ í•¨ìˆ˜ ì˜¤ë¥˜ ì¶œë ¥
 void err_display(const char* msg)
 {
 	LPVOID lpMsgBuf;
@@ -410,7 +410,7 @@ void err_display(const char* msg, const char* msg2)
 	MessageBoxA(NULL, (const char*)msg2, msg, MB_ICONERROR);
 }
 
-// ¼ÒÄÏ ÇÔ¼ö ¿À·ù Ãâ·Â
+// ì†Œì¼“ í•¨ìˆ˜ ì˜¤ë¥˜ ì¶œë ¥
 void err_display(int errcode)
 {
 	LPVOID lpMsgBuf;
@@ -419,7 +419,7 @@ void err_display(int errcode)
 		NULL, errcode,
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		(char*)&lpMsgBuf, 0, NULL);
-	//printf("[¿À·ù] %s\n", (char*)lpMsgBuf);
+	//printf("[ì˜¤ë¥˜] %s\n", (char*)lpMsgBuf);
 	LocalFree(lpMsgBuf);
 }
 

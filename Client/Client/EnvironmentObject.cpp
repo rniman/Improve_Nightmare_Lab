@@ -8,9 +8,9 @@ CItemObject::CItemObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 	SetStatic(false);
 }
 
-void CItemObject::Render(ID3D12GraphicsCommandList* pd3dCommandList) 
+void CItemObject::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	if (m_bObtained) // ±◊∏Æ¡ˆ æ ¥¬¥Ÿ
+	if (m_bObtained) // Í∑∏Î¶¨ÏßÄ ÏïäÎäîÎã§
 	{
 		return;
 	}
@@ -59,13 +59,12 @@ CDrawerObject::CDrawerObject(char* pstrFrameName, XMFLOAT4X4& xmf4x4World, CMesh
 }
 
 CDrawerObject::~CDrawerObject()
-{
-}
+{}
 
 void CDrawerObject::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	shared_ptr<CGameObject> pGameObject = m_pInstanceObject.lock();
-	
+
 	if (m_pSkinnedAnimationController) m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
 
 	if (pGameObject->GetMesh())
@@ -166,7 +165,7 @@ void CDoorObject::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 
 void CDoorObject::Animate(float fElapsedTime)
 {
-	if( (m_bOpened && m_fRotationAngle < m_fDoorAngle) || (!m_bOpened && m_fRotationAngle > m_fDoorAngle) )
+	if ((m_bOpened && m_fRotationAngle < m_fDoorAngle) || (!m_bOpened && m_fRotationAngle > m_fDoorAngle))
 	{
 		m_fRotationAngle += m_bOpened ? fElapsedTime * 60.0f : -fElapsedTime * 60.0f;
 		float fRotationAngle = m_bOpened ? XMConvertToRadians(fElapsedTime * 60.0f) : -XMConvertToRadians(fElapsedTime * 60.0f);
@@ -176,11 +175,11 @@ void CDoorObject::Animate(float fElapsedTime)
 		}
 		else
 		{
-			//Z-up ∏µ®¿”
+			//Z-up Î™®Îç∏ÏûÑ
 			XMMATRIX mtxRotate = XMMatrixRotationRollPitchYaw(XMConvertToRadians(0.0f), XMConvertToRadians(0.0f), fRotationAngle);
 			m_xmf4x4World = Matrix4x4::Multiply(mtxRotate, m_xmf4x4World);
-	
-			// Instancing ∞¥√º¥¬ world«‡∑ƒ∏∏ ºˆ¡§«ÿ¡÷∏Èµ 
+
+			// Instancing Í∞ùÏ≤¥Îäî worldÌñâÎ†¨Îßå ÏàòÏ†ïÌï¥Ï£ºÎ©¥Îê®
 			//UpdateTransform(NULL);
 		}
 	}
@@ -242,7 +241,7 @@ void CElevatorDoorObject::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 			pInstanceMesh->GetInstanceTransformMatrixBuffer()->Unmap(0, NULL);
 
 			D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[6] = { pInstanceMesh->GetVertexBufferView(),  pInstanceMesh->GetUV0BufferView(),  pInstanceMesh->GetNormalBufferView(),
-				 pInstanceMesh->GetTangentBufferView(), pInstanceMesh->GetBiTangentBufferView(), pInstanceMesh->GetInstanceTransformMatrixBufferView()};
+				 pInstanceMesh->GetTangentBufferView(), pInstanceMesh->GetBiTangentBufferView(), pInstanceMesh->GetInstanceTransformMatrixBufferView() };
 			pd3dCommandList->IASetVertexBuffers(pInstanceMesh->GetSlot(), 6, pVertexBufferViews);
 
 			pd3dCommandList->IASetPrimitiveTopology(pInstanceMesh->GetPrimitiveTopology());
@@ -323,14 +322,13 @@ CTeleportObject::CTeleportObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	m_nCollisionType = 2;
 }
 
-CTeleportObject::~CTeleportObject() 
-{
-}
+CTeleportObject::~CTeleportObject()
+{}
 
 void CTeleportObject::LoadModelAndAnimation(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const shared_ptr<CLoadedModelInfo>& pLoadModelInfo)
 {
 	SetChild(pLoadModelInfo->m_pModelRootObject, true);
-	
+
 	LoadBoundingBox(m_voobbOrigin);
 }
 
@@ -369,13 +367,12 @@ CMineObject::CMineObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 }
 
 CMineObject::~CMineObject()
-{
-}
+{}
 
 void CMineObject::LoadModelAndAnimation(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const shared_ptr<CLoadedModelInfo>& pLoadModelInfo)
 {
 	SetChild(pLoadModelInfo->m_pModelRootObject, true);
-	//∏ﬁΩ¨, ¿Á¡˙(≈ÿΩ∫√ƒ), 
+	//Î©îÏâ¨, Ïû¨Ïßà(ÌÖçÏä§Ï≥ê), 
 
 	LoadBoundingBox(m_voobbOrigin);
 }
@@ -392,12 +389,10 @@ void CMineObject::Animate(float fElapsedTime)
 }
 
 void CMineObject::UpdatePicking()
-{
-}
+{}
 
 void CMineObject::UpdateUsing(const shared_ptr<CGameObject>& pGameObject)
-{
-}
+{}
 
 void CMineObject::CollideZombie()
 {
@@ -408,7 +403,7 @@ void CMineObject::CollideZombie()
 		XMFLOAT3 pos = GetPosition();
 		pos.y += 1.0f;
 		m_pExplosionObject->SetPosition(pos);
-		m_pExplosionObject->m_fLocalTime = 0.0f; // æ÷¥œ∏ﬁ¿Ãº« Ω√¿€
+		m_pExplosionObject->m_fLocalTime = 0.0f; // Ïï†ÎãàÎ©îÏù¥ÏÖò ÏãúÏûë
 	}
 }
 
@@ -423,8 +418,7 @@ CFuseObject::CFuseObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 }
 
 CFuseObject::~CFuseObject()
-{
-}
+{}
 
 void CFuseObject::LoadModelAndAnimation(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const shared_ptr<CLoadedModelInfo>& pLoadModelInfo)
 {
@@ -468,8 +462,7 @@ CRadarObject::CRadarObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 }
 
 CRadarObject::~CRadarObject()
-{
-}
+{}
 
 void CRadarObject::LoadModelAndAnimation(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const shared_ptr<CLoadedModelInfo>& pLoadModelInfo)
 {
@@ -486,11 +479,10 @@ void CRadarObject::Animate(float fElapsedTime)
 }
 
 void CRadarObject::UpdatePicking()
-{
-}
+{}
 
 void CRadarObject::UpdateUsing(const shared_ptr<CGameObject>& pGameObject)
 {
-	
+
 }
 

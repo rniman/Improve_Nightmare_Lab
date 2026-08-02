@@ -32,38 +32,38 @@ public:
 	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, UINT nRenderTargets = 1,
 		DXGI_FORMAT* pdxgiRtvFormats = nullptr, DXGI_FORMAT dxgiDsvFormat = DXGI_FORMAT_D24_UNORM_S8_UINT);
 
-	virtual void CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) { }
-	virtual void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList) { }
-	virtual void ReleaseShaderVariables() { }
+	virtual void CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) {}
+	virtual void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList) {}
+	virtual void ReleaseShaderVariables() {}
 
-	virtual void UpdateShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, XMFLOAT4X4* pxmf4x4World) { }
+	virtual void UpdateShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, XMFLOAT4X4* pxmf4x4World) {}
 
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, const shared_ptr<CPlayer>& pPlayer, int nPipelineState = 0);
-	virtual void PartitionRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState = 0) {}//±◊∏≤¿⁄∑ª¥ı∏µøÎ
-	//virtual void FloorRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, const shared_ptr<CPlayer>& pPlayer, int nPipelineState = 0) {}//¿ŒΩ∫≈œΩÃ¿¸øÎ
+	virtual void PartitionRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState = 0) {}//Í∑∏Î¶ºÏûêÎ†åÎçîÎßÅÏö©
+	//virtual void FloorRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, const shared_ptr<CPlayer>& pPlayer, int nPipelineState = 0) {}//Ïù∏Ïä§ÌÑ¥Ïã±Ï†ÑÏö©
 	virtual void PrevRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState = 0);
 
 	virtual void UpdatePipeLineState(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState);
 
 	virtual void ReleaseUploadBuffers();
 
-	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignatureconst) { }
+	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignatureconst) {}
 
 	virtual void AnimateObjects(float fElapsedTime);
-	virtual void ParticleUpdate(float fCurTime){}
-	virtual void ReleaseObjects() { }
+	virtual void ParticleUpdate(float fCurTime) {}
+	virtual void ReleaseObjects() {}
 
 	virtual void AddGameObject(const shared_ptr<CGameObject>& pGameObject);
 
 	// Interface
 	vector<shared_ptr<CGameObject>> GetGameObjects() const { return m_vGameObjects; };
-	
+
 protected:
-	// ∞‘¿”≥ª ø¿∫Í¡ß∆Æ¥¬ Ω¶¿Ã¥ı∞° ∞¸∏Æ«—¥Ÿ.
+	// Í≤åÏûÑÎÇ¥ Ïò§Î∏åÏ†ùÌä∏Îäî ÏâêÏù¥ÎçîÍ∞Ä Í¥ÄÎ¶¨ÌïúÎã§.
 	vector<shared_ptr<CGameObject>> m_vGameObjects;
 	int object_count{};
 
-	// m_ppd3dPipelineState ∏¶ ∏∏µÈ∂ß Blob¿ª ªÁøÎ«œπ«∑Œ ComPtr ªÁøÎx (ø¿∑˘πﬂª˝∞°¥…)
+	// m_ppd3dPipelineState Î•º ÎßåÎì§Îïå BlobÏùÑ ÏÇ¨Ïö©ÌïòÎØÄÎ°ú ComPtr ÏÇ¨Ïö©x (Ïò§Î•òÎ∞úÏÉùÍ∞ÄÎä•)
 	ComPtr<ID3DBlob> m_pd3dVertexShaderBlob;
 	ComPtr<ID3DBlob> m_pd3dPixelShaderBlob;
 	ComPtr<ID3DBlob> m_pd3dGeometryShaderBlob;
@@ -93,9 +93,9 @@ public:
 	virtual D3D12_SHADER_BYTECODE CreateVertexShader();
 	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
 
-	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature,  UINT nRenderTargets = 1,
+	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, UINT nRenderTargets = 1,
 		DXGI_FORMAT* pdxgiRtvFormats = nullptr, DXGI_FORMAT dxgiDsvFormat = DXGI_FORMAT_D24_UNORM_S8_UINT);
-	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature) override { }
+	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature) override {}
 
 };
 
@@ -123,9 +123,9 @@ public:
 	PartitionInsStandardShader();
 	virtual ~PartitionInsStandardShader();
 
-	virtual void AddPartitionGameObject(const shared_ptr<CGameObject>& pGameObject,int nPartition);
+	virtual void AddPartitionGameObject(const shared_ptr<CGameObject>& pGameObject, int nPartition);
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, const shared_ptr<CPlayer>& pPlayer, int nPipelineState = 0);
-	// ∑ª¥ı∏µ«œ¥¬ ø¿∫Í¡ß∆Æ∏¶ ¥„¿∫ ƒ¡≈◊¿Ã≥ ∞° ¥Ÿ∏£π«∑Œ «‘ºˆ ∫–∏Æ
+	// Î†åÎçîÎßÅÌïòÎäî Ïò§Î∏åÏ†ùÌä∏Î•º Îã¥ÏùÄ Ïª®ÌÖåÏù¥ÎÑàÍ∞Ä Îã§Î•¥ÎØÄÎ°ú Ìï®Ïàò Î∂ÑÎ¶¨
 	virtual void PartitionRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState = 0);
 	//virtual void AnimateObjects(float fElapsedTime);
 
@@ -197,7 +197,7 @@ public:
 
 	virtual void OnPrepareRenderTarget(ID3D12GraphicsCommandList* pd3dCommandList, int nRenderTargets, D3D12_CPU_DESCRIPTOR_HANDLE* pd3dRtvCPUHandles, D3D12_CPU_DESCRIPTOR_HANDLE* pd3dDsvCPUHandle);
 	void OnPrepareRenderTargetForLight(ID3D12GraphicsCommandList* pd3dCommandList, int nRenderTargets, D3D12_CPU_DESCRIPTOR_HANDLE* pd3dRtvCPUHandles, D3D12_CPU_DESCRIPTOR_HANDLE* pd3dDsvCPUHandle);
-	virtual void OnPrepareRenderTarget2(ID3D12GraphicsCommandList* pd3dCommandList, int nRenderTargets, 
+	virtual void OnPrepareRenderTarget2(ID3D12GraphicsCommandList* pd3dCommandList, int nRenderTargets,
 		D3D12_CPU_DESCRIPTOR_HANDLE* pd3dRtvCPUHandles, D3D12_CPU_DESCRIPTOR_HANDLE* pd3dDsvCPUHandle, D3D12_CPU_DESCRIPTOR_HANDLE* pd3dshadowRTVDescriptorHandle);
 	virtual void TransitionRenderTargetToCommon(ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual void TransitionRenderTargetToCommonForLight(ID3D12GraphicsCommandList* pd3dCommandList);
@@ -222,11 +222,10 @@ public:
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRtvCPUDescriptorHandle(UINT nIndex) { return(*m_vpRtvCPUDescriptorHandles[nIndex]); }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDsvCPUDesctriptorHandle(UINT nIndex) { return (*m_vpDsvDescriptorCPUHandles[nIndex]); }
-	
-//ShadowMap Processing
+
+	//ShadowMap Processing
 protected:
 	shared_ptr<CTexture> m_pShadowTextures;
-	//vector<shared_ptr<CLightCamera>> m_pLightCamera;
 
 	vector<unique_ptr<D3D12_CPU_DESCRIPTOR_HANDLE>> m_vpShadowRtvCPUDescriptorHandles;
 	vector<unique_ptr<D3D12_CPU_DESCRIPTOR_HANDLE>> m_vpShadowDsvDescriptorCPUHandles;
@@ -247,10 +246,7 @@ public:
 	void OnShadowPrepareRenderTarget(ID3D12GraphicsCommandList* pd3dCommandList, int nclearcount = 0);
 	void ShadowTextureWriteRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, const shared_ptr<CPlayer>& pPlayer);
 
-	void TransitionShadowMapRenderTargetToCommon(ID3D12GraphicsCommandList* pd3dCommandList, int nTransition=0);
-
-	void CreateLightCamera(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,CMainScene* scene);
-	//vector<shared_ptr<CCamera>>& GetLightCamera() { return  m_pLightCamera; }
+	void TransitionShadowMapRenderTargetToCommon(ID3D12GraphicsCommandList* pd3dCommandList, int nTransition = 0);
 
 public:
 	void SetPipelineIndex(UINT nIndex) { m_nPipelineIndex = nIndex; }
@@ -282,7 +278,7 @@ public:
 	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
 	virtual D3D12_RASTERIZER_DESC CreateRasterizerState();
 	virtual D3D12_BLEND_DESC CreateBlendState();
-	
+
 	void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, UINT nRenderTargets, DXGI_FORMAT* pdxgiRtvFormats, DXGI_FORMAT dxgiDsvFormat);
 
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
@@ -391,7 +387,7 @@ public:
 
 	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, UINT nRenderTargets, DXGI_FORMAT* pdxgiRtvFormats, DXGI_FORMAT dxgiDsvFormat);
 
-	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera,const shared_ptr<CPlayer>& pPlayer, int nPipelineState = 0);
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, const shared_ptr<CPlayer>& pPlayer, int nPipelineState = 0);
 
 	virtual void AddGameObject(const shared_ptr<CGameObject>& pGameObject);
 

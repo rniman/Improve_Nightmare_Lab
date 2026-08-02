@@ -18,12 +18,11 @@ CGameTimer::CGameTimer()
 }
 
 CGameTimer::~CGameTimer()
-{
-}
+{}
 
 void CGameTimer::Tick(float fLockFPS)
 {
-	
+
 	if (m_bStopped)
 	{
 		m_fElapsedTime = 0.0f;

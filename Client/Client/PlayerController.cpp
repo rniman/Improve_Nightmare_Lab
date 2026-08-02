@@ -8,7 +8,7 @@
 CBlueSuitAnimationController::CBlueSuitAnimationController(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, int nAnimationTracks, const shared_ptr<CLoadedModelInfo>& pModel)
 	:CAnimationController(pd3dDevice, pd3dCommandList, nAnimationTracks, pModel)
 {
-	// IDLE, WALK, RUN 3°¡Áö »óÅÂ
+	// IDLE, WALK, RUN 3ê°€ì§€ ìƒíƒœ
 	m_nState = 4;
 	m_nTransition = 4 + 3;
 
@@ -31,7 +31,7 @@ CBlueSuitAnimationController::CBlueSuitAnimationController(ID3D12Device* pd3dDev
 	m_vAnimationTransitions[1].SetAnimationTransition(0.5f, 0.0f, 0.25f);
 	m_vAnimationTransitions[2].SetAnimationTransition(0.1f, 0.0f, 0.25f);
 	m_vAnimationTransitions[3].SetAnimationTransition(0.1f, 0.0f, 0.25f);
-	
+
 	m_vAnimationTransitions[4].SetAnimationTransition(0.05f, 0.0f, 0.15f);
 	m_vAnimationTransitions[5].SetAnimationTransition(0.05f, 0.0f, 0.15f);
 	m_vAnimationTransitions[6].SetAnimationTransition(0.05f, 0.0f, 0.15f);
@@ -69,8 +69,8 @@ CBlueSuitAnimationController::CBlueSuitAnimationController(ID3D12Device* pd3dDev
 		if (strncmp(frameName, "Wrist_L", strlen(frameName)) == 0) m_nWrist_L = i;
 		if (strncmp(frameName, "Shoulder_L", strlen(frameName)) == 0) m_nShoulder_L = i;
 		if (strncmp(frameName, "Chest_M", strlen(frameName)) == 0) m_nChest_M = i;
-		
-		
+
+
 	}
 
 	m_xmf4x4RightHandRotate = Matrix4x4::Identity();
@@ -85,11 +85,11 @@ void CBlueSuitAnimationController::AdvanceTime(float fElapsedTime, CGameObject* 
 	{
 		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++) m_pAnimationSets->m_vpBoneFrameCaches[j]->m_xmf4x4ToParent = Matrix4x4::Zero();
 
-		if (m_bTransition) // Æ®·»Áö¼Ç
+		if (m_bTransition) // íŠ¸ë Œì§€ì…˜
 		{
 			TransitionBlueSuitPlayer(fElapsedTime);
 		}
-		else if (m_vAnimationTracks[1].m_bEnable || m_vAnimationTracks[2].m_bEnable) //¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù
+		else if (m_vAnimationTracks[1].m_bEnable || m_vAnimationTracks[2].m_bEnable) //ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”©
 		{
 			BlendAnimation(1, 2, fElapsedTime * 1.5f, m_vfBlendWeight[0]);
 
@@ -101,8 +101,8 @@ void CBlueSuitAnimationController::AdvanceTime(float fElapsedTime, CGameObject* 
 			{
 				if (m_vAnimationTracks[k].m_bEnable)
 				{
-					shared_ptr<CAnimationSet> pAnimationSet = m_pAnimationSets->m_vpAnimationSets[m_vAnimationTracks[k].m_nAnimationSet];	//¾Ö´Ï¸ŞÀÌ¼Ç Æ®·¢¿¡ ÇØ´çÇÏ´Â ¾Ö´Ï¸ŞÀÌ¼Ç setsÀ» °¡Á®¿Â´Ù
-					float fPosition = m_vAnimationTracks[k].UpdatePosition(m_vAnimationTracks[k].m_fPosition, fElapsedTime*1.5f, pAnimationSet->m_fLength);	// ÇöÀç ¾Ö´Ï¸ŞÀÌ¼Ç Æ®·¢À» Àç»ı(ÇöÀç Àç»ıÁßÀÎ À§Ä¡¿Í Èå¸¥ ½Ã°£, ¾Ö´Ï¸ŞÀÌ¼Ç ÃÑ ±æÀÌ)
+					shared_ptr<CAnimationSet> pAnimationSet = m_pAnimationSets->m_vpAnimationSets[m_vAnimationTracks[k].m_nAnimationSet];	//ì• ë‹ˆë©”ì´ì…˜ íŠ¸ë™ì— í•´ë‹¹í•˜ëŠ” ì• ë‹ˆë©”ì´ì…˜ setsì„ ê°€ì ¸ì˜¨ë‹¤
+					float fPosition = m_vAnimationTracks[k].UpdatePosition(m_vAnimationTracks[k].m_fPosition, fElapsedTime * 1.5f, pAnimationSet->m_fLength);	// í˜„ì¬ ì• ë‹ˆë©”ì´ì…˜ íŠ¸ë™ì„ ì¬ìƒ(í˜„ì¬ ì¬ìƒì¤‘ì¸ ìœ„ì¹˜ì™€ íë¥¸ ì‹œê°„, ì• ë‹ˆë©”ì´ì…˜ ì´ ê¸¸ì´)
 					for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
 					{
 						XMFLOAT4X4 xmf4x4Transform = m_pAnimationSets->m_vpBoneFrameCaches[j]->m_xmf4x4ToParent;
@@ -122,7 +122,7 @@ void CBlueSuitAnimationController::AdvanceTime(float fElapsedTime, CGameObject* 
 			}
 		}
 
-		if (m_nNowState == PlayerState::DEATH)	// DeathÀÌ¹Ç·Î ¾Æ·¡ÀÇ ÀÏÀ» ¼öÇàÇÒ ÇÊ¿ä°¡ ¾øÀ½
+		if (m_nNowState == PlayerState::DEATH)	// Deathì´ë¯€ë¡œ ì•„ë˜ì˜ ì¼ì„ ìˆ˜í–‰í•  í•„ìš”ê°€ ì—†ìŒ
 		{
 			if (m_vAnimationTracks[5].m_fPosition >= m_pAnimationSets->m_vpAnimationSets[m_vAnimationTracks[5].m_nAnimationSet]->m_fLength)
 			{
@@ -151,7 +151,7 @@ void CBlueSuitAnimationController::AdvanceTime(float fElapsedTime, CGameObject* 
 		XMStoreFloat4x4(&m_pAnimationSets->m_vpBoneFrameCaches[m_nChest_M]->m_xmf4x4ToParent,
 			XMMatrixMultiply(L_ShoulderRotate, XMLoadFloat4x4(&m_pAnimationSets->m_vpBoneFrameCaches[m_nChest_M]->m_xmf4x4ToParent)));
 
-		if (m_bSelectItem) {//[CJI 0428] ¼±ÅÃÇÑ ¾ÆÀÌÅÛÀÌ ÀÖÀ¸¸é ¾ÆÀÌÅÛÀ» µé°í ÀÖµµ·Ï È¸Àü
+		if (m_bSelectItem) {//[CJI 0428] ì„ íƒí•œ ì•„ì´í…œì´ ìˆìœ¼ë©´ ì•„ì´í…œì„ ë“¤ê³  ìˆë„ë¡ íšŒì „
 			XMStoreFloat4x4(&m_pAnimationSets->m_vpBoneFrameCaches[m_nElbow_R]->m_xmf4x4ToParent,
 				XMMatrixMultiply(XMLoadFloat4x4(&m_xmf4x4RightHandRotate), XMLoadFloat4x4(&m_pAnimationSets->m_vpBoneFrameCaches[m_nElbow_R]->m_xmf4x4ToParent)));
 		}
@@ -329,7 +329,7 @@ void CBlueSuitAnimationController::CalculateRightHandMatrix()
 	xmmtxRotate = XMMatrixMultiply(xmmtxRotate, xmmtxRotate2);
 	xmmtxRotate = XMMatrixMultiply(xmmtxRotate, xmmtxRotate3);
 	xmmtxRotate = XMMatrixMultiply(xmmtxRotate, rElbowRotate);
-	
+
 	XMStoreFloat4x4(&m_xmf4x4RightHandRotate, xmmtxRotate);
 
 
@@ -341,12 +341,12 @@ void CBlueSuitAnimationController::BlendAnimation(int nTrack1, int nTrack2, floa
 	shared_ptr<CAnimationSet> pAnimationSet_0 = m_pAnimationSets->m_vpAnimationSets[m_vAnimationTracks[nTrack1].m_nAnimationSet];
 	shared_ptr<CAnimationSet> pAnimationSet_1 = m_pAnimationSets->m_vpAnimationSets[m_vAnimationTracks[nTrack2].m_nAnimationSet];
 
-	float fPosition_0; 
+	float fPosition_0;
 	float fPosition_1;
-	if (fBlendWeight < 0.51f)	// TRACK[1]ÀÌ ´õ Å­ // »ç¿îµå ¶§¹®¿¡ .51·Î ¼öÁ¤
+	if (fBlendWeight < 0.51f)	// TRACK[1]ì´ ë” í¼ // ì‚¬ìš´ë“œ ë•Œë¬¸ì— .51ë¡œ ìˆ˜ì •
 	{
 		fPosition_0 = m_vAnimationTracks[nTrack1].UpdatePosition(m_vAnimationTracks[nTrack1].m_fPosition, fElapsedTime, pAnimationSet_0->m_fLength);
-		if(m_vAnimationTracks[nTrack1].m_fSpeed > 0.0f)
+		if (m_vAnimationTracks[nTrack1].m_fSpeed > 0.0f)
 		{
 			if (m_vAnimationTracks[nTrack2].m_fSpeed > 0.0f)
 				fPosition_1 = m_vAnimationTracks[nTrack2].m_fPosition = fPosition_0;
@@ -410,7 +410,7 @@ void CBlueSuitAnimationController::TransitionBlueSuitPlayer(float fElapsedTime)
 	}
 	if (nTransitionIndex == -1)
 	{
-		//¿¡·¯
+		//ì—ëŸ¬
 		//exit(-1);
 	}
 	else if (nTransitionIndex == 0)	// IDLE -> WALK
@@ -689,23 +689,23 @@ void CBlueSuitAnimationController::SetElbowPitch(float value)
 		}
 	}
 
-	
+
 }
 
 int CBlueSuitAnimationController::GetBoneFrameIndex(char* frameName)
 {
 	int i = -1;
-	if (strncmp(frameName, "Scapula_L", strlen(frameName)) == 0) i = m_nStartLArm ;
-	if (strncmp(frameName, "ThumbFinger4_L", strlen(frameName)) == 0) i = m_nEndLArm ;
-	if (strncmp(frameName, "Scapula_R", strlen(frameName)) == 0) i = m_nStartRArm ;
-	if (strncmp(frameName, "ThumbFinger4_R", strlen(frameName)) == 0) i = m_nEndRArm ;
-	if (strncmp(frameName, "Spine1_M", strlen(frameName)) == 0) i = m_nStartSpine ;
-	if (strncmp(frameName, "Neck_M", strlen(frameName)) == 0) i = m_nStartNeck ;
-	if (strncmp(frameName, "JawEnd_M", strlen(frameName)) == 0) i = m_nEndNeck ;
-	if (strncmp(frameName, "Player_Flashlight", strlen(frameName)) == 0) i = m_nPlayerFlashLight ;
-	if (strncmp(frameName, "Elbow_L", strlen(frameName)) == 0) i = m_nElbow_L ;
+	if (strncmp(frameName, "Scapula_L", strlen(frameName)) == 0) i = m_nStartLArm;
+	if (strncmp(frameName, "ThumbFinger4_L", strlen(frameName)) == 0) i = m_nEndLArm;
+	if (strncmp(frameName, "Scapula_R", strlen(frameName)) == 0) i = m_nStartRArm;
+	if (strncmp(frameName, "ThumbFinger4_R", strlen(frameName)) == 0) i = m_nEndRArm;
+	if (strncmp(frameName, "Spine1_M", strlen(frameName)) == 0) i = m_nStartSpine;
+	if (strncmp(frameName, "Neck_M", strlen(frameName)) == 0) i = m_nStartNeck;
+	if (strncmp(frameName, "JawEnd_M", strlen(frameName)) == 0) i = m_nEndNeck;
+	if (strncmp(frameName, "Player_Flashlight", strlen(frameName)) == 0) i = m_nPlayerFlashLight;
+	if (strncmp(frameName, "Elbow_L", strlen(frameName)) == 0) i = m_nElbow_L;
 	if (strncmp(frameName, "Elbow_R", strlen(frameName)) == 0) i = m_nElbow_R;
-	if (strncmp(frameName, "Head_M", strlen(frameName)) == 0) i = m_nHead_M ;
+	if (strncmp(frameName, "Head_M", strlen(frameName)) == 0) i = m_nHead_M;
 	if (strncmp(frameName, "Item_Raider", strlen(frameName)) == 0) i = m_nRaderItem;
 	if (strncmp(frameName, "Item_Teleport", strlen(frameName)) == 0) i = m_nTeleportItem;
 	if (strncmp(frameName, "Wrist_L", strlen(frameName)) == 0) i = m_nWrist_L;
@@ -722,7 +722,7 @@ int CBlueSuitAnimationController::GetBoneFrameIndex(char* frameName)
 CZombieAnimationController::CZombieAnimationController(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, int nAnimationTracks, const shared_ptr<CLoadedModelInfo>& pModel)
 	: CAnimationController(pd3dDevice, pd3dCommandList, nAnimationTracks, pModel)
 {
-	// IDLE, WALK, RUN 2°¡Áö »óÅÂ
+	// IDLE, WALK, RUN 2ê°€ì§€ ìƒíƒœ
 	m_nState = 2;
 	m_nTransition = 4;
 	m_vAnimationTransitions.reserve(m_nTransition);
@@ -785,8 +785,8 @@ void CZombieAnimationController::AdvanceTime(float fElapsedTime, CGameObject* pR
 			{
 				if (m_vAnimationTracks[k].m_bEnable)
 				{
-					shared_ptr<CAnimationSet> pAnimationSet = m_pAnimationSets->m_vpAnimationSets[m_vAnimationTracks[k].m_nAnimationSet];	//¾Ö´Ï¸ŞÀÌ¼Ç Æ®·¢¿¡ ÇØ´çÇÏ´Â ¾Ö´Ï¸ŞÀÌ¼Ç setsÀ» °¡Á®¿Â´Ù
-					float fPosition = m_vAnimationTracks[k].UpdatePosition(m_vAnimationTracks[k].m_fPosition, fElapsedTime, pAnimationSet->m_fLength);	// ÇöÀç ¾Ö´Ï¸ŞÀÌ¼Ç Æ®·¢À» Àç»ı(ÇöÀç Àç»ıÁßÀÎ À§Ä¡¿Í Èå¸¥ ½Ã°£, ¾Ö´Ï¸ŞÀÌ¼Ç ÃÑ ±æÀÌ)
+					shared_ptr<CAnimationSet> pAnimationSet = m_pAnimationSets->m_vpAnimationSets[m_vAnimationTracks[k].m_nAnimationSet];	//ì• ë‹ˆë©”ì´ì…˜ íŠ¸ë™ì— í•´ë‹¹í•˜ëŠ” ì• ë‹ˆë©”ì´ì…˜ setsì„ ê°€ì ¸ì˜¨ë‹¤
+					float fPosition = m_vAnimationTracks[k].UpdatePosition(m_vAnimationTracks[k].m_fPosition, fElapsedTime, pAnimationSet->m_fLength);	// í˜„ì¬ ì• ë‹ˆë©”ì´ì…˜ íŠ¸ë™ì„ ì¬ìƒ(í˜„ì¬ ì¬ìƒì¤‘ì¸ ìœ„ì¹˜ì™€ íë¥¸ ì‹œê°„, ì• ë‹ˆë©”ì´ì…˜ ì´ ê¸¸ì´)
 					for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
 					{
 						XMFLOAT4X4 xmf4x4Transform = m_pAnimationSets->m_vpBoneFrameCaches[j]->m_xmf4x4ToParent;
@@ -827,7 +827,7 @@ void CZombieAnimationController::AdvanceTime(float fElapsedTime, CGameObject* pR
 			}
 
 		}
- 
+
 		if (m_vAnimationTracks[2].m_bEnable)
 		{
 			int nAttackAnimationTrack = 2;
@@ -854,7 +854,7 @@ void CZombieAnimationController::AdvanceTime(float fElapsedTime, CGameObject* pR
 				SetTrackPosition(2, 0.0f);
 			}
 
-			
+
 			{
 				SoundManager& soundManager = soundManager.GetInstance();
 				//soundManager.SetVolume(sound::ATTACK_ZOMBIE, m_fPlayerVolume);
@@ -971,7 +971,7 @@ void CZombieAnimationController::TransitionZombiePlayer(float fElapsedTime)
 	}
 	if (nTransitionIndex == -1)
 	{
-		//¿¡·¯
+		//ì—ëŸ¬
 	}
 	else if (nTransitionIndex == 0)	// IDLE -> WALK
 	{

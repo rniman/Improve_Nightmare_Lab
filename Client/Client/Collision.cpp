@@ -11,7 +11,7 @@ void CCollisionManager::CreateCollision(int nHeight, int nWidth, int nDepth)
 {
 	m_nHeight = nHeight;
 	m_nWidth = nWidth;
-	m_nDepth = nDepth;	
+	m_nDepth = nDepth;
 
 	m_collisionGridGameObjects.resize(m_nHeight);
 	for (int i = 0; i < m_nHeight; ++i)
