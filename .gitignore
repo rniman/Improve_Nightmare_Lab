@@ -396,6 +396,9 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Custom Ignore Rules for Nightmare Lab
 Asset/
 /Client/Client/Sound/resource
 /Sound/resource
+/Client/Client/cso/*.cso
