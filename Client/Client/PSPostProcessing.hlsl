@@ -2,30 +2,30 @@
 #include "Light.hlsl"
 
 float4 PSPostProcessing(PS_POSTPROCESSING_OUT input) : SV_Target
-{    
-    float4 cColor = DFTextureTexture.Sample(gssWrap, input.uv);
-    float4 cEmissiveColor = DFTextureEmissive.Sample(gssWrap, input.uv);
-        
-    float4 positionW = DFPositionTexture.Sample(gssWrap, input.uv);
-    
-    float3 normal = DFNormalTexture.Sample(gssWrap, input.uv).xyz;
-    normal = normalize((normal * 2.0f) - 1.0f);
-    
-    float3x3 viewMatrixRotation = (float3x3) gmtxView;
-    float3 normalV = normalize(mul(normal, viewMatrixRotation)); // ∫‰ ∞¯∞£ ≥Î∏ª
-    
-    //**Light Calculation**//
-    float4 light = Lighting(positionW.xyz, normal);
-    cColor = cColor * light; // SSAOøÕ ∂Û¿Ã∆Æ∏¶ ∞ˆ«œø© √÷¡æ ªˆªÛ ∞ËªÍ
-    
-    cColor += cEmissiveColor;
-    
-    //**FOG Calculation**//
-    //float3 vCameraPosition = gvCameraPosition.xyz;
-    //float3 vPostionToCamera = vCameraPosition - positionW.xyz;
-    //float fDistanceToCamera = length(vPostionToCamera);
-    //float fFogFactor = saturate(1.0f / pow(gvfFogInfo.y + gvfFogInfo.x, pow(fDistanceToCamera * gvfFogInfo.z, 2))) * gvfFogInfo.w;
-    //cColor = lerp(gvFogColor, cColor, fFogFactor);
-    
-    return cColor;
+{
+	float4 cColor = DFTextureTexture.Sample(gssWrap, input.uv);
+	float4 cEmissiveColor = DFTextureEmissive.Sample(gssWrap, input.uv);
+		
+	float4 positionW = DFPositionTexture.Sample(gssWrap, input.uv);
+	
+	float3 normal = DFNormalTexture.Sample(gssWrap, input.uv).xyz;
+	normal = normalize((normal * 2.0f) - 1.0f);
+	
+	float3x3 viewMatrixRotation = (float3x3) gmtxView;
+	float3 normalV = normalize(mul(normal, viewMatrixRotation)); // Î∑∞ Í≥µÍ∞Ñ ÎÖ∏Îßê
+	
+	//**Light Calculation**//
+	float4 light = Lighting(positionW.xyz, normal);
+	cColor = cColor * light; // SSAOÏôÄ ÎùºÏù¥Ìä∏Î•º Í≥±ÌïòÏó¨ ÏµúÏ¢Ö ÏÉâÏÉÅ Í≥ÑÏÇ∞
+	
+	cColor += cEmissiveColor;
+	
+	//**FOG Calculation**//
+	//float3 vCameraPosition = gvCameraPosition.xyz;
+	//float3 vPostionToCamera = vCameraPosition - positionW.xyz;
+	//float fDistanceToCamera = length(vPostionToCamera);
+	//float fFogFactor = saturate(1.0f / pow(gvfFogInfo.y + gvfFogInfo.x, pow(fDistanceToCamera * gvfFogInfo.z, 2))) * gvfFogInfo.w;
+	//cColor = lerp(gvFogColor, cColor, fFogFactor);
+	
+	return cColor;
 }

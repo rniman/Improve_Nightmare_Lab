@@ -24,69 +24,69 @@
 
 struct MATERIAL
 {
-    float4 m_cAmbient;
-    float4 m_cAlbedo;
-    float4 m_cSpecular; //a = power
-    float4 m_cEmissive;
+	float4 m_cAmbient;
+	float4 m_cAlbedo;
+	float4 m_cSpecular; //a = power
+	float4 m_cEmissive;
 };
 
 cbuffer cbCameraInfo : register(b0)
 {
-    matrix gmtxView : packoffset(c0);
-    matrix gmtxProjection : packoffset(c4);
-    matrix gmtxInverseView : packoffset(c8);
-    matrix gmtxInverseViewProjection : packoffset(c12);
-    float4 gvCameraPosition : packoffset(c16); // 16¹ÙÀÌÆ®¸¦ ¸ÂÃß±â À§ÇØ w°ª: ´õ¹Ì Ãß°¡
-    float4 gvFogColor : packoffset(c17);
-    float4 gvfFogInfo : packoffset(c18); // START, RANGE, Density, MOD
+	matrix gmtxView : packoffset(c0);
+	matrix gmtxProjection : packoffset(c4);
+	matrix gmtxInverseView : packoffset(c8);
+	matrix gmtxInverseViewProjection : packoffset(c12);
+	float4 gvCameraPosition : packoffset(c16); // 16ë°”ì´íŠ¸ë¥¼ ë§ì¶”ê¸° ìœ„í•´ wê°’: ë”ë¯¸ ì¶”ê°€
+	float4 gvFogColor : packoffset(c17);
+	float4 gvfFogInfo : packoffset(c18); // START, RANGE, Density, MOD
 };
 
 struct OPTION
 {
-    float alphaValue;
-    float3 padding;
+	float alphaValue;
+	float3 padding;
 };
 
 cbuffer cbGameObjectInfo : register(b1)
 {
-    matrix gmtxGameObject : packoffset(c0);
-    MATERIAL gMaterial : packoffset(c4);
-    OPTION option : packoffset(c8);
-    uint gnTexturesMask : packoffset(c9);
+	matrix gmtxGameObject : packoffset(c0);
+	MATERIAL gMaterial : packoffset(c4);
+	OPTION option : packoffset(c8);
+	uint gnTexturesMask : packoffset(c9);
 };
 
 cbuffer cbBoneOffsets : register(b3)
 {
-    float4x4 gpmtxBoneOffsets[SKINNED_ANIMATION_BONES];
+	float4x4 gpmtxBoneOffsets[SKINNED_ANIMATION_BONES];
 };
 
 cbuffer cbBoneTransforms : register(b4)
 {
-    float4x4 gpmtxBoneTransforms[SKINNED_ANIMATION_BONES];
+	float4x4 gpmtxBoneTransforms[SKINNED_ANIMATION_BONES];
 };
 
 
 cbuffer cbFrameInfo : register(b5)
 {
-    float time : packoffset(c0.x);
-    float localTime : packoffset(c0.y);
-    float usePattern : packoffset(c0.z);
-    float gfTrackingTime : packoffset(c0.w);
-    
-    // Occlusion Info
-    float gfScale : packoffset(c1.x);
-    float gfBias : packoffset(c1.y);
-    float gfIntesity : packoffset(c1.z);
+	float time : packoffset(c0.x);
+	float localTime : packoffset(c0.y);
+	float usePattern : packoffset(c0.z);
+	float gfTrackingTime : packoffset(c0.w);
+	
+	// Occlusion Info
+	float gfScale : packoffset(c1.x);
+	float gfBias : packoffset(c1.y);
+	float gfIntesity : packoffset(c1.z);
 }
 
 cbuffer cbFrameworkInfo : register(b6)
 {
-    float gfCurrentTime : packoffset(c0.x);
-    float gfElapsedTime : packoffset(c0.y);
-    float gfSecondsPerFirework : packoffset(c0.z);
-    int gnFlareParticlesToEmit : packoffset(c0.w);
-    float3 gf3Gravity : packoffset(c1.x);
-    int gnMaxFlareType2Particles : packoffset(c1.w);
+	float gfCurrentTime : packoffset(c0.x);
+	float gfElapsedTime : packoffset(c0.y);
+	float gfSecondsPerFirework : packoffset(c0.z);
+	int gnFlareParticlesToEmit : packoffset(c0.w);
+	float3 gf3Gravity : packoffset(c1.x);
+	int gnMaxFlareType2Particles : packoffset(c1.w);
 };
 
 SamplerState gssWrap : register(s0);
@@ -109,17 +109,17 @@ Texture2D PatternTexture : register(t11);
 
 struct VS_STANDARD_OUTPUT
 {
-    float4 position : SV_POSITION;
-    float3 positionW : POSITION;
-    float3 normalW : NORMAL;
-    float3 tangentW : TANGENT;
-    float3 bitangentW : BITANGENT;
-    float2 uv : TEXCOORD;
+	float4 position : SV_POSITION;
+	float3 positionW : POSITION;
+	float3 normalW : NORMAL;
+	float3 tangentW : TANGENT;
+	float3 bitangentW : BITANGENT;
+	float2 uv : TEXCOORD;
 };
 
 struct PS_POSTPROCESSING_OUT
 {
-    float4 position : SV_Position;
-    float2 uv : UV0;
-    float4 uvs[MAX_LIGHTS] : UV1; // ÃÖÀûÈ­°¡ ÇÊ¿ä.. ÇÈ¼¿½¦ÀÌ´õ¿¡¼­ °è»êÁßÀÎ ºûÀÇ viewProjectionÀ» ¹öÅØ½º½¦ÀÌ´õ¿¡¼­ ÇÏµµ·Ï ¹Ù²ÙÀÚ.
+	float4 position : SV_Position;
+	float2 uv : UV0;
+	float4 uvs[MAX_LIGHTS] : UV1; // ìµœì í™”ê°€ í•„ìš”.. í”½ì…€ì‰ì´ë”ì—ì„œ ê³„ì‚°ì¤‘ì¸ ë¹›ì˜ viewProjectionì„ ë²„í…ìŠ¤ì‰ì´ë”ì—ì„œ í•˜ë„ë¡ ë°”ê¾¸ì.
 };
