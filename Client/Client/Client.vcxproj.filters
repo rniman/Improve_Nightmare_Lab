@@ -249,9 +249,6 @@
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Light.hlsl" />
-    <FxCompile Include="BlendAnimation.hlsl">
-      <Filter>TextureBlendShader</Filter>
-    </FxCompile>
     <FxCompile Include="VSStandard.hlsl">
       <Filter>HLSL%28cso%29</Filter>
     </FxCompile>
@@ -326,9 +323,6 @@
     </FxCompile>
     <FxCompile Include="PSFullScreen.hlsl">
       <Filter>HLSL%28cso%29</Filter>
-    </FxCompile>
-    <FxCompile Include="ParticleShader.hlsl">
-      <Filter>HLSL%28cso%29\Particle</Filter>
     </FxCompile>
     <FxCompile Include="VSParticleStreamOutput.hlsl">
       <Filter>HLSL%28cso%29\Particle</Filter>

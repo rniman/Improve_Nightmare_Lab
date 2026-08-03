@@ -24,13 +24,11 @@ D3D12_INPUT_LAYOUT_DESC CTrailShader::CreateInputLayout()
 D3D12_SHADER_BYTECODE CTrailShader::CreateVertexShader()
 {
 	return CShader::ReadCompiledShaderFromFile(L"cso/VS_TRAIL.cso", m_pd3dVertexShaderBlob.GetAddressOf());
-	//return(CShader::CompileShaderFromFile(L"Trail.hlsl", "VS_TRAIL", "vs_5_1", m_pd3dVertexShaderBlob.GetAddressOf()));
 }
 
 D3D12_SHADER_BYTECODE CTrailShader::CreatePixelShader()
 {
 	return CShader::ReadCompiledShaderFromFile(L"cso/PS_TRAIL.cso", m_pd3dPixelShaderBlob.GetAddressOf());
-	//return(CShader::CompileShaderFromFile(L"Trail.hlsl", "PS_TRAIL", "ps_5_1", m_pd3dPixelShaderBlob.GetAddressOf()));
 }
 
 D3D12_RASTERIZER_DESC CTrailShader::CreateRasterizerState()
@@ -98,7 +96,9 @@ void CTrailShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandL
 	m_nPipelineState = 1;
 	m_vpd3dPipelineState.reserve(m_nPipelineState);
 	for (int i = 0; i < m_nPipelineState; ++i)
+	{
 		m_vpd3dPipelineState.emplace_back();
+	}
 
 	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat);
 }
@@ -113,7 +113,8 @@ void CTrailShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, const shar
 {
 	UpdatePipeLineState(pd3dCommandList, 0);
 
-	for (auto& trail : m_vpTrail) {
+	for (auto& trail : m_vpTrail)
+	{
 		trail->Render(pd3dCommandList);
 	}
 }
