@@ -336,7 +336,7 @@ namespace Plane
 		XMVECTOR vectorPoint1 = XMLoadFloat3(&xmf3Point1);
 		XMVECTOR vectorPoint2 = XMLoadFloat3(&xmf3Point2);
 		XMVECTOR vectorPoint3 = XMLoadFloat3(&xmf3Point3);
-		
+
 		XMFLOAT4 xmf4Result;
 		XMStoreFloat4(&xmf4Result, XMPlaneFromPoints(vectorPoint1, vectorPoint2, vectorPoint3));
 		return xmf4Result;
@@ -346,7 +346,7 @@ namespace Plane
 	{
 		float fy;
 		fy = -(xmf4Plane.x * xmf3Point.x + xmf4Plane.z * xmf3Point.z + xmf4Plane.w) / xmf4Plane.y;
-		
+
 		XMFLOAT3 xmf3Result;
 		xmf3Result = XMFLOAT3(xmf3Point.x, fy, xmf3Point.z);
 		return xmf3Result;

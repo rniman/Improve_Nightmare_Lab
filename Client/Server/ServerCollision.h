@@ -51,8 +51,8 @@ public:
 private:
 	static int m_nCollisionObject;
 
-	vector<shared_ptr<CServerGameObject>> m_vpCollisionObject;	// ¹øÈ£¸¦ ÀÌ¿ëÇØ¼­ Ãæµ¹ °´Ã¼¸¦ ºü¸£°Ô °¡Á®¿À±âÀ§ÇÔ
-	vector<shared_ptr<CServerGameObject>> m_vpOutSpaceObject;	// °ø°£ ºÐÇÒÀÇ ¾÷µ¥ÀÌÆ®°¡ ÀÏ¾î³ª¸é ¾î¶² ¿ÀºêÁ§Æ®´Â ÇÑ¹ø °ø°£¿Ü¿¡¼­ÀÇ ¾÷µ¥ÀÌÆ®°¡ ÇÊ¿äÇÏ´Ù
+	vector<shared_ptr<CServerGameObject>> m_vpCollisionObject;	// ë²ˆí˜¸ë¥¼ ì´ìš©í•´ì„œ ì¶©ëŒ ê°ì²´ë¥¼ ë¹ ë¥´ê²Œ ê°€ì ¸ì˜¤ê¸°ìœ„í•¨
+	vector<shared_ptr<CServerGameObject>> m_vpOutSpaceObject;	// ê³µê°„ ë¶„í• ì˜ ì—…ë°ì´íŠ¸ê°€ ì¼ì–´ë‚˜ë©´ ì–´ë–¤ ì˜¤ë¸Œì íŠ¸ëŠ” í•œë²ˆ ê³µê°„ì™¸ì—ì„œì˜ ì—…ë°ì´íŠ¸ê°€ í•„ìš”í•˜ë‹¤
 
 	int m_nHeight; // == Floor
 	int m_nWidth;

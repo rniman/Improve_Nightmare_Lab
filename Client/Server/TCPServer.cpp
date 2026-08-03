@@ -11,14 +11,14 @@ INT8 TCPServer::m_nClient = 0;
 
 void ConvertCharToLPWSTR(const char* pstr, LPWSTR dest, int destSize)
 {
-	// MultiByteToWideChar ÇÔ¼ö¸¦ »ç¿ëÇÏ¿© char*À» LPWSTR·Î º¯È¯
+	// MultiByteToWideChar í•¨ìˆ˜ë¥¼ ì‚¬ìš©í•˜ì—¬ char*ì„ LPWSTRë¡œ ë³€í™˜
 	MultiByteToWideChar(
 		CP_UTF8,
-		0,                   // º¯È¯ ¿É¼Ç
-		pstr,                 // º¯È¯ÇÒ ¹®ÀÚ¿­
-		-1,                  // ÀÚµ¿À¸·Î ¹®ÀÚ¿­ ±æÀÌ °è»ê
-		dest,                // ´ë»ó ¹öÆÛ
-		destSize             // ´ë»ó ¹öÆÛÀÇ Å©±â
+		0,                   // ë³€í™˜ ì˜µì…˜
+		pstr,                 // ë³€í™˜í•  ë¬¸ìì—´
+		-1,                  // ìë™ìœ¼ë¡œ ë¬¸ìì—´ ê¸¸ì´ ê³„ì‚°
+		dest,                // ëŒ€ìƒ ë²„í¼
+		destSize             // ëŒ€ìƒ ë²„í¼ì˜ í¬ê¸°
 	);
 }
 
@@ -63,8 +63,7 @@ TCPServer::TCPServer()
 }
 
 TCPServer::~TCPServer()
-{
-}
+{}
 
 void TCPServer::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
@@ -129,7 +128,7 @@ void TCPServer::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 
 void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	
+
 	SOCKET sockClient;
 	struct sockaddr_in addrClient;
 	int nAddrlen = sizeof(sockaddr_in);
@@ -141,25 +140,25 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		return;
 	}
 
-	// Ãß°¡µÈ Å¬¶óÀÌ¾ğÆ®ÀÇ Á¤º¸¸¦ Ãß°¡ÇÑ´Ù.
+	// ì¶”ê°€ëœ í´ë¼ì´ì–¸íŠ¸ì˜ ì •ë³´ë¥¼ ì¶”ê°€í•œë‹¤.
 	INT8 nSocketIndex = AddSocketInfo(sockClient, addrClient, nAddrlen);
-	
-	// MAX_CLIENTº¸´Ù ´õ ¸¹Àº Á¢¼Ó ¿ä±¸
-	if (nSocketIndex == -1)	
+
+	// MAX_CLIENTë³´ë‹¤ ë” ë§ì€ ì ‘ì† ìš”êµ¬
+	if (nSocketIndex == -1)
 	{
-		closesocket(sockClient); // Å¬¶óÀÌ¾ğÆ® ¼ÒÄÏ Á¾·á
-		err_display("Maximum number of clients reached. Connection refused."); // ¿¬°á °ÅºÎ ¸Ş½ÃÁö Ç¥½Ã
+		closesocket(sockClient); // í´ë¼ì´ì–¸íŠ¸ ì†Œì¼“ ì¢…ë£Œ
+		err_display("Maximum number of clients reached. Connection refused."); // ì—°ê²° ê±°ë¶€ ë©”ì‹œì§€ í‘œì‹œ
 		return;
 	}
 
 	if (m_nGameState == GAME_STATE::IN_GAME)
 	{
-		closesocket(sockClient); // Å¬¶óÀÌ¾ğÆ® ¼ÒÄÏ Á¾·á
-		err_display("Game that has already started."); // ¿¬°á °ÅºÎ ¸Ş½ÃÁö Ç¥½Ã
+		closesocket(sockClient); // í´ë¼ì´ì–¸íŠ¸ ì†Œì¼“ ì¢…ë£Œ
+		err_display("Game that has already started."); // ì—°ê²° ê±°ë¶€ ë©”ì‹œì§€ í‘œì‹œ
 		return;
 	}
 
-	//printf("\n[TCP ¼­¹ö] Å¬¶óÀÌ¾ğÆ® Á¢¼Ó: IP ÁÖ¼Ò=%s, Æ÷Æ® ¹øÈ£=%d\n", m_vSocketInfoList[nSocketIndex].m_pAddr, ntohs(m_vSocketInfoList[nSocketIndex].m_addrClient.sin_port));
+	//printf("\n[TCP ì„œë²„] í´ë¼ì´ì–¸íŠ¸ ì ‘ì†: IP ì£¼ì†Œ=%s, í¬íŠ¸ ë²ˆí˜¸=%d\n", m_vSocketInfoList[nSocketIndex].m_pAddr, ntohs(m_vSocketInfoList[nSocketIndex].m_addrClient.sin_port));
 
 	int retval = WSAAsyncSelect(sockClient, hWnd, WM_SOCKET, FD_READ | FD_WRITE | FD_CLOSE);
 	if (retval == SOCKET_ERROR)
@@ -170,11 +169,11 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 	WCHAR pszList[256];
 	WCHAR pszIP[16];
 	ConvertCharToLPWSTR(m_vSocketInfoList[nSocketIndex].m_pAddr, pszIP, 16);
-	wsprintf(pszList, L"CLIENT[%d], IP: %s, Æ÷Æ® ¹øÈ£: %d\n", nSocketIndex, pszIP, ntohs(m_vSocketInfoList[nSocketIndex].m_addrClient.sin_port));
+	wsprintf(pszList, L"CLIENT[%d], IP: %s, í¬íŠ¸ ë²ˆí˜¸: %d\n", nSocketIndex, pszIP, ntohs(m_vSocketInfoList[nSocketIndex].m_addrClient.sin_port));
 	SendMessage(m_hClientListBox, LB_ADDSTRING, 0, (LPARAM)pszList);
 
-	// ÀÓ½Ã·Î CBlueSuitPlayer¸¸ »ı¼º
-	if (nSocketIndex == ZOMBIEPLAYER)	// Socket Index°¡ 0ÀÌ¸é Zombie
+	// ì„ì‹œë¡œ CBlueSuitPlayerë§Œ ìƒì„±
+	if (nSocketIndex == ZOMBIEPLAYER)	// Socket Indexê°€ 0ì´ë©´ Zombie
 	{
 		m_apPlayers[nSocketIndex] = make_shared<CServerZombiePlayer>();
 		m_apPlayers[nSocketIndex]->SetPlayerId(nSocketIndex);
@@ -186,7 +185,7 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		m_apPlayers[nSocketIndex]->SetPlayerId(nSocketIndex);
 		++m_nBlueSuit;
 	}
-	
+
 	//InitPlayerPosition(m_apPlayers[nSocketIndex], nSocketIndex);
 
 	m_pCollisionManager->AddCollisionPlayer(m_apPlayers[nSocketIndex], nSocketIndex);
@@ -200,7 +199,7 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		sockInfo.m_socketState = SOCKET_STATE::SEND_NUM_OF_CLIENT;
 		PostMessage(m_hWnd, WM_SOCKET, (WPARAM)sockInfo.m_sock, MAKELPARAM(FD_WRITE, 0));
 	}
-	
+
 	return;
 }
 
@@ -216,7 +215,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 	}
 	std::shared_ptr<CServerPlayer> pPlayer = m_apPlayers[nSocketIndex];
 
-	if(!m_vSocketInfoList[nSocketIndex].m_bRecvHead)
+	if (!m_vSocketInfoList[nSocketIndex].m_bRecvHead)
 	{
 		nBufferSize = sizeof(INT8);
 
@@ -245,7 +244,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 		m_nBlueSuit = 0;
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
-			if (!m_vSocketInfoList[i].m_bUsed )
+			if (!m_vSocketInfoList[i].m_bUsed)
 			{
 				continue;
 			}
@@ -274,8 +273,8 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 
 		INT8 nSelectedSlot;
 		memcpy(&nSelectedSlot, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, sizeof(INT8));
-		// ¹» ¹Ù²ã¾ßÇÒ±î
-		if (!m_apPlayers[nSelectedSlot]) // ¾øÀ¸¸é ¸¸µé¾î¼­
+		// ë­˜ ë°”ê¿”ì•¼í• ê¹Œ
+		if (!m_apPlayers[nSelectedSlot]) // ì—†ìœ¼ë©´ ë§Œë“¤ì–´ì„œ
 		{
 			m_apPlayers[nSelectedSlot] = make_shared<CServerBlueSuitPlayer>();
 		}
@@ -299,7 +298,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 		//	m_aUpdateInfo[nSocketIndex].m_nClientId = -1;
 		//	m_apPlayers[nSocketIndex]->SetPlayerId(-1);
 		//}
-	
+
 		if (m_apPlayers[nSelectedSlot]->GetPlayerId() == -1)
 		{
 			m_apPlayers[nSelectedSlot]->SetPlayerId(nSelectedSlot);
@@ -323,7 +322,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 			m_aUpdateInfo[nSocketIndex].m_nClientId = -1;
 			m_apPlayers[nSocketIndex]->SetPlayerId(-1);
 		}
-		else // ±³È¯ÇØ¾ßÇÔ
+		else // êµí™˜í•´ì•¼í•¨
 		{
 			SOCKETINFO sockInfoTemp;
 			sockInfoTemp.m_bUsed = m_vSocketInfoList[nSocketIndex].m_bUsed;
@@ -352,22 +351,22 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 			m_vSocketInfoList[nSocketIndex].SendNum = m_vSocketInfoList[nSelectedSlot].SendNum;
 			m_vSocketInfoList[nSocketIndex].RecvNum = m_vSocketInfoList[nSelectedSlot].RecvNum;
 
-			m_vSocketInfoList[nSelectedSlot].m_bUsed =sockInfoTemp.m_bUsed;
-			m_vSocketInfoList[nSelectedSlot].m_sock =sockInfoTemp.m_sock;
-			m_vSocketInfoList[nSelectedSlot].m_addrClient =sockInfoTemp.m_addrClient;
-			m_vSocketInfoList[nSelectedSlot].m_nAddrlen =sockInfoTemp.m_nAddrlen;
-			memcpy(m_vSocketInfoList[nSelectedSlot].m_pAddr,sockInfoTemp.m_pAddr, INET_ADDRSTRLEN);
-			m_vSocketInfoList[nSelectedSlot].m_bRecvDelayed =sockInfoTemp.m_bRecvDelayed;
-			m_vSocketInfoList[nSelectedSlot].m_bRecvHead =sockInfoTemp.m_bRecvHead;
-			m_vSocketInfoList[nSelectedSlot].m_nCurrentRecvByte =sockInfoTemp.m_nCurrentRecvByte;
-			memcpy(m_vSocketInfoList[nSelectedSlot].m_pCurrentBuffer,sockInfoTemp.m_pCurrentBuffer, BUFSIZE);
-			m_vSocketInfoList[nSelectedSlot].m_socketState =sockInfoTemp.m_socketState;
-			m_vSocketInfoList[nSelectedSlot].SendNum =sockInfoTemp.SendNum;
-			m_vSocketInfoList[nSelectedSlot].RecvNum =sockInfoTemp.RecvNum;
+			m_vSocketInfoList[nSelectedSlot].m_bUsed = sockInfoTemp.m_bUsed;
+			m_vSocketInfoList[nSelectedSlot].m_sock = sockInfoTemp.m_sock;
+			m_vSocketInfoList[nSelectedSlot].m_addrClient = sockInfoTemp.m_addrClient;
+			m_vSocketInfoList[nSelectedSlot].m_nAddrlen = sockInfoTemp.m_nAddrlen;
+			memcpy(m_vSocketInfoList[nSelectedSlot].m_pAddr, sockInfoTemp.m_pAddr, INET_ADDRSTRLEN);
+			m_vSocketInfoList[nSelectedSlot].m_bRecvDelayed = sockInfoTemp.m_bRecvDelayed;
+			m_vSocketInfoList[nSelectedSlot].m_bRecvHead = sockInfoTemp.m_bRecvHead;
+			m_vSocketInfoList[nSelectedSlot].m_nCurrentRecvByte = sockInfoTemp.m_nCurrentRecvByte;
+			memcpy(m_vSocketInfoList[nSelectedSlot].m_pCurrentBuffer, sockInfoTemp.m_pCurrentBuffer, BUFSIZE);
+			m_vSocketInfoList[nSelectedSlot].m_socketState = sockInfoTemp.m_socketState;
+			m_vSocketInfoList[nSelectedSlot].SendNum = sockInfoTemp.SendNum;
+			m_vSocketInfoList[nSelectedSlot].RecvNum = sockInfoTemp.RecvNum;
 
 			m_aUpdateInfo[nSelectedSlot].m_nClientId = nSelectedSlot;
 		}
-		
+
 		m_vSocketInfoList[nSelectedSlot].m_socketState = SOCKET_STATE::SEND_CHANGE_SLOT;
 		nSocketIndex = nSelectedSlot;
 		break;
@@ -377,7 +376,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 		{
 			pPlayer->SetRecvData(true);
 		}
-		 
+
 		std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
 		std::chrono::time_point<std::chrono::steady_clock> client;
 
@@ -419,15 +418,15 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 		pPlayer->SetUp(xmf3Up);
 
 		SC_ANIMATION_INFO animationInfo;
-		memcpy(&animationInfo, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer + sizeOffset, sizeof(SC_ANIMATION_INFO)); 
+		memcpy(&animationInfo, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer + sizeOffset, sizeof(SC_ANIMATION_INFO));
 		m_aUpdateInfo[nSocketIndex].m_animationInfo = animationInfo;
 		sizeOffset += sizeof(SC_ANIMATION_INFO);
-		
+
 		SC_PLAYER_INFO playerInfo;
 		memcpy(&playerInfo, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer + sizeOffset, sizeof(SC_PLAYER_INFO));
 		pPlayer->SetRightClick(playerInfo.m_bRightClick);
 	}
-		break;
+	break;
 	case HEAD_LOADING_COMPLETE: {
 		//cout << "[" << nSocketIndex << "] => LoadComplete!!\n";
 		m_vSocketInfoList[nSocketIndex].m_bLoadComplete = true;
@@ -541,7 +540,7 @@ void TCPServer::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 		}
 	}
-		break;
+	break;
 	case SOCKET_STATE::SEND_NUM_OF_CLIENT:
 		nHead = 2;
 		nBufferSize += sizeof(INT8) + sizeof(m_aUpdateInfo);
@@ -550,7 +549,7 @@ void TCPServer::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
 		{
 		}
-		
+
 		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		break;
 	case SOCKET_STATE::SEND_BLUE_SUIT_WIN:
@@ -661,14 +660,14 @@ bool TCPServer::Init(HWND hWnd)
 	m_mt19937Gen = default_random_engine(random_device()());
 
 	m_hWnd = hWnd;
-	// À©¼Ó ÃÊ±âÈ­
+	// ìœˆì† ì´ˆê¸°í™”
 	WSADATA wsa;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
 	{
 		return false;
 	}
 
-	// ¼ÒÄÏ »ı¼º
+	// ì†Œì¼“ ìƒì„±
 	SOCKET listen_sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (listen_sock == INVALID_SOCKET) err_quit("socket()");
 
@@ -701,10 +700,10 @@ bool TCPServer::Init(HWND hWnd)
 	m_pCollisionManager = make_shared<CServerCollisionManager>();
 	m_pCollisionManager->CreateCollision(SPACE_FLOOR, SPACE_WIDTH, SPACE_DEPTH);
 
-	// ¾À »ı¼º
+	// ì”¬ ìƒì„±
 	LoadScene();
 	vector<int> vDoor;
-	for (int i = 0; i < m_pCollisionManager->GetNumberOfCollisionObject();++i) {
+	for (int i = 0; i < m_pCollisionManager->GetNumberOfCollisionObject(); ++i) {
 		shared_ptr<CServerGameObject> object = m_pCollisionManager->GetCollisionObjectWithNumber(i);
 		auto pElevaterDoor = dynamic_pointer_cast<CServerElevatorDoorObject>(object);
 
@@ -720,27 +719,27 @@ bool TCPServer::Init(HWND hWnd)
 	uniform_int_distribution<int> disInt(0, ELEVATORDOORCOUNT - 1);
 
 	int random_escape_index = disInt(m_mt19937Gen);
-	for (int i = 0; i < ELEVATORDOORCOUNT;++i) {
+	for (int i = 0; i < ELEVATORDOORCOUNT; ++i) {
 		shared_ptr<CServerGameObject> object = m_pCollisionManager->GetCollisionObjectWithNumber(vDoor[i]);
 		auto pElevaterDoor = dynamic_pointer_cast<CServerElevatorDoorObject>(object);
 		if (!pElevaterDoor) {
-			//std::cout << "¿¤¸®º£ÀÌÅÍ ¹®ÀÌ ¾Æ´Õ´Ï´Ù.!" << std::endl;
-			assert(0); //¹İµå½Ã CServerElevatorDoorObject ÀÏ°ÍÀÓ. ¾Æ´Ï¸é ½Ã½ºÅÛ Á¾·á ¾À ¿ÀºêÁ§Æ® Á¤·ÄÀÇ ¹®Á¦ ¹ß»ı
+			//std::cout << "ì—˜ë¦¬ë² ì´í„° ë¬¸ì´ ì•„ë‹™ë‹ˆë‹¤.!" << std::endl;
+			assert(0); //ë°˜ë“œì‹œ CServerElevatorDoorObject ì¼ê²ƒì„. ì•„ë‹ˆë©´ ì‹œìŠ¤í…œ ì¢…ë£Œ ì”¬ ì˜¤ë¸Œì íŠ¸ ì •ë ¬ì˜ ë¬¸ì œ ë°œìƒ
 		}
-		
+
 		if (i == random_escape_index) {
 			pElevaterDoor->SetEscapeDoor(true);
-			for (int pi = 0; pi < MAX_CLIENT;++pi) {
+			for (int pi = 0; pi < MAX_CLIENT; ++pi) {
 				m_aUpdateInfo[pi].m_playerInfo.m_iEscapeDoor = vDoor[i];
 			}
 		}
-		//pElevaterDoor->SetEscapeDoor(false); // µğ¹ö±×¸¦ À§ÇØ¼­ ¸ğµç ¹®À» Àá±İ
+		//pElevaterDoor->SetEscapeDoor(false); // ë””ë²„ê·¸ë¥¼ ìœ„í•´ì„œ ëª¨ë“  ë¬¸ì„ ì ê¸ˆ
 	}
 
-	//std::cout << "»ı¼ºµÈ Ãæµ¹°´Ã¼ = " << m_pCollisionManager->GetNumberOfCollisionObject() << std::endl;
-	// ¾ÆÀÌÅÛ »ı¼º
+	//std::cout << "ìƒì„±ëœ ì¶©ëŒê°ì²´ = " << m_pCollisionManager->GetNumberOfCollisionObject() << std::endl;
+	// ì•„ì´í…œ ìƒì„±
 	CreateItemObject();
-	//std::cout << "¾ÆÀÌÅÛ »ı¼ºÈÄ »ı¼ºµÈ Ãæµ¹°´Ã¼ = " << m_pCollisionManager->GetNumberOfCollisionObject() << std::endl;
+	//std::cout << "ì•„ì´í…œ ìƒì„±í›„ ìƒì„±ëœ ì¶©ëŒê°ì²´ = " << m_pCollisionManager->GetNumberOfCollisionObject() << std::endl;
 
 
 	return true;
@@ -748,7 +747,7 @@ bool TCPServer::Init(HWND hWnd)
 void TCPServer::SimulationLoop()
 {
 	m_timer.Tick();
-	
+
 	if (m_nGameState == GAME_STATE::IN_LOBBY)
 	{
 		return;
@@ -761,7 +760,7 @@ void TCPServer::SimulationLoop()
 		return;
 	}
 
-	// ½ÇÁ¦ ½Ã¹Ä·¹ÀÌ¼ÇÀÌ ÀÏ¾î³¯°÷
+	// ì‹¤ì œ ì‹œë®¬ë ˆì´ì…˜ì´ ì¼ì–´ë‚ ê³³
 	float fElapsedTime = m_timer.GetTimeElapsed();
 	for (auto& pPlayer : m_apPlayers)
 	{
@@ -769,7 +768,7 @@ void TCPServer::SimulationLoop()
 		{
 			continue;
 		}
-		pPlayer->SetPickedObject(m_pCollisionManager);	
+		pPlayer->SetPickedObject(m_pCollisionManager);
 
 		pPlayer->RightClickProcess(m_pCollisionManager);
 		pPlayer->UseItem(m_pCollisionManager);
@@ -777,7 +776,7 @@ void TCPServer::SimulationLoop()
 		pPlayer->UpdatePicking(pPlayer->GetPlayerId());
 		//UpdateInformation(pPlayer);
 		m_pCollisionManager->Collide(fElapsedTime, pPlayer);
-		
+
 		pPlayer->OnUpdateToParent();
 		pPlayer->Declare(fElapsedTime);
 	}
@@ -864,7 +863,7 @@ void TCPServer::UpdateEndGame(int nEndGame)
 	}
 }
 
-// ¼ÒÄÏ Á¤º¸ Ãß°¡
+// ì†Œì¼“ ì •ë³´ ì¶”ê°€
 INT8 TCPServer::AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, int nAddrLen)
 {
 	INT8 nSocketIndex = -1;
@@ -887,8 +886,8 @@ INT8 TCPServer::AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, 
 	sockInfo.m_bRecvHead = false;
 	sockInfo.m_socketState = SOCKET_STATE::SEND_ID;
 	//sockInfo.m_prevSocketState = SOCKET_STATE::SEND_ID;
-	
-	// ¹è¿­¿¡ Á¤º¸ Ãß°¡ 
+
+	// ë°°ì—´ì— ì •ë³´ ì¶”ê°€ 
 	for (int i = 0; i < m_nClient + 1; ++i)
 	{
 		if (m_vSocketInfoList[i].m_bUsed)
@@ -897,7 +896,7 @@ INT8 TCPServer::AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, 
 		}
 		m_nClient++;
 
-		// Å¬¶óÀÌ¾ğÆ® Á¤º¸ ÃÊ±âÈ­
+		// í´ë¼ì´ì–¸íŠ¸ ì •ë³´ ì´ˆê¸°í™”
 		m_aUpdateInfo[i].m_nClientId = i;
 		m_vSocketInfoList[i] = sockInfo;
 		nSocketIndex = i;
@@ -907,7 +906,7 @@ INT8 TCPServer::AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, 
 	return nSocketIndex;
 }
 
-// ¼ÒÄÏ Á¤º¸ ¾ò±â
+// ì†Œì¼“ ì •ë³´ ì–»ê¸°
 INT8 TCPServer::GetSocketIndex(SOCKET sock)
 {
 	INT8 nIndex = -1;
@@ -927,12 +926,12 @@ INT8 TCPServer::GetSocketIndex(SOCKET sock)
 	return nIndex;
 }
 
-// ¼ÒÄÏ Á¤º¸ Á¦°Å
+// ì†Œì¼“ ì •ë³´ ì œê±°
 INT8 TCPServer::RemoveSocketInfo(SOCKET sock)
 {
 	INT8 nIndex = -1;
 	INT8 nListBoxIndex = -1;
-	// ¸®½ºÆ®¿¡¼­ Á¤º¸ Á¦°Å
+	// ë¦¬ìŠ¤íŠ¸ì—ì„œ ì •ë³´ ì œê±°
 	for (auto& sockInfo : m_vSocketInfoList)
 	{
 		nIndex++;
@@ -947,16 +946,16 @@ INT8 TCPServer::RemoveSocketInfo(SOCKET sock)
 
 		if (sockInfo.m_sock == sock)
 		{
-			//printf("[TCP ¼­¹ö] Å¬¶óÀÌ¾ğÆ® Á¾·á: IP ÁÖ¼Ò=%s, Æ÷Æ® ¹øÈ£=%d\n", sockInfo.m_pAddr, ntohs(sockInfo.m_addrClient.sin_port));
+			//printf("[TCP ì„œë²„] í´ë¼ì´ì–¸íŠ¸ ì¢…ë£Œ: IP ì£¼ì†Œ=%s, í¬íŠ¸ ë²ˆí˜¸=%d\n", sockInfo.m_pAddr, ntohs(sockInfo.m_addrClient.sin_port));
 
 			SendMessage(m_hClientListBox, LB_DELETESTRING, (WPARAM)nListBoxIndex, 0);
 
-			closesocket(sockInfo.m_sock); // ¼ÒÄÏ ´İ±â
+			closesocket(sockInfo.m_sock); // ì†Œì¼“ ë‹«ê¸°
 			sockInfo.m_bUsed = false;
-			
+
 			m_aUpdateInfo[nIndex].m_nClientId = -1;
 			m_nClient--;
-			for(auto& otherSocketInfo : m_vSocketInfoList)
+			for (auto& otherSocketInfo : m_vSocketInfoList)
 			{
 				if (!otherSocketInfo.m_bUsed)
 				{
@@ -977,7 +976,7 @@ INT8 TCPServer::RemoveSocketInfo(SOCKET sock)
 int TCPServer::CheckAllClientsSentData(int cur_nPlayer)
 {
 	int sendClientCount{};
-	for (int i = 0; i < cur_nPlayer;++i) {
+	for (int i = 0; i < cur_nPlayer; ++i) {
 		if (m_bDataSend[i]) {
 			sendClientCount++;
 		}
@@ -985,9 +984,9 @@ int TCPServer::CheckAllClientsSentData(int cur_nPlayer)
 	return sendClientCount;
 }
 
-void TCPServer::SetAllClientsSendStatus(int cur_nPlayer,bool val)
+void TCPServer::SetAllClientsSendStatus(int cur_nPlayer, bool val)
 {
-	for (int i = 0; i < cur_nPlayer;++i) {
+	for (int i = 0; i < cur_nPlayer; ++i) {
 		m_bDataSend[i] = val;
 	}
 }
@@ -1024,21 +1023,21 @@ void TCPServer::UpdateInformation()
 		else
 			m_aUpdateInfo[nPlayerId].m_nPickedObjectNum = -1;
 
-		// Áö±İÀº ÀÏ´Ü ÀÌ·¸°Ô ÇØµ×Áö¸¸ ³ªÁß¿¡´Â 0¹øÀÌ Enemy°íÁ¤ÀÏµí
+		// ì§€ê¸ˆì€ ì¼ë‹¨ ì´ë ‡ê²Œ í•´ë’€ì§€ë§Œ ë‚˜ì¤‘ì—ëŠ” 0ë²ˆì´ Enemyê³ ì •ì¼ë“¯
 		if (nPlayerId == ZOMBIEPLAYER)	//Enemy
 		{
 			shared_ptr<CServerZombiePlayer> pZombiePlayer = dynamic_pointer_cast<CServerZombiePlayer>(pPlayer);
 			if (pZombiePlayer) {
-				m_aUpdateInfo[nPlayerId].m_nSlotObjectNum[0] = pZombiePlayer->IsTracking() ? 1 : -1;		// ÃßÀû
-				m_aUpdateInfo[nPlayerId].m_nSlotObjectNum[1] = pZombiePlayer->IsInterruption() ? 1 : -1;	// ½Ã¾ß¹æÇØ
-				m_aUpdateInfo[nPlayerId].m_nSlotObjectNum[2] = pZombiePlayer->IsAttack() ? 1 : -1;			// °ø°İ
+				m_aUpdateInfo[nPlayerId].m_nSlotObjectNum[0] = pZombiePlayer->IsTracking() ? 1 : -1;		// ì¶”ì 
+				m_aUpdateInfo[nPlayerId].m_nSlotObjectNum[1] = pZombiePlayer->IsInterruption() ? 1 : -1;	// ì‹œì•¼ë°©í•´
+				m_aUpdateInfo[nPlayerId].m_nSlotObjectNum[2] = pZombiePlayer->IsAttack() ? 1 : -1;			// ê³µê²©
 
 				m_aUpdateInfo[nPlayerId].m_playerInfo.m_iMineobjectNum = pZombiePlayer->GetCollideMineRef();
-				// Áö·ÚÃæµ¹¿¡ ´ëÇÑ µ¥ÀÌÅÍ ·ÎÁ÷
+				// ì§€ë¢°ì¶©ëŒì— ëŒ€í•œ ë°ì´í„° ë¡œì§
 				if (m_aUpdateInfo[nPlayerId].m_playerInfo.m_iMineobjectNum == -1) {
 					m_aUpdateInfo[nPlayerId].m_playerInfo.m_iMineobjectNum = pZombiePlayer->GetCollideMineRef();
 					pZombiePlayer->SetExplosionDelay(0.0f);
-				} 
+				}
 				else {
 					if (pZombiePlayer->GetExplosionDelay() > 0.05f) {
 						pZombiePlayer->SetCollideMineRef(-1);
@@ -1061,9 +1060,9 @@ void TCPServer::UpdateInformation()
 				m_aUpdateInfo[nPlayerId].m_playerInfo.m_selectItem = pBlueSuitPlayer->GetRightItem();
 				m_aUpdateInfo[nPlayerId].m_playerInfo.m_bTeleportItemUse = pBlueSuitPlayer->IsTeleportUse();
 			}
-			
+
 		}
-		// ¾÷µ¥ÀÌÆ® ¿ÀºêÁ§Æ®´Â ¸®¼Â
+		// ì—…ë°ì´íŠ¸ ì˜¤ë¸Œì íŠ¸ëŠ” ë¦¬ì…‹
 		m_aUpdateInfo[nPlayerId].m_nNumOfObject = 0;
 		for (int i = 0; i < MAX_SEND_OBJECT_INFO; ++i)
 		{
@@ -1129,7 +1128,7 @@ void TCPServer::LoadScene()
 								nReads = (UINT)::fread(xmf4x4World, sizeof(XMFLOAT4X4), nChild, pInFile);
 								for (int i = 0; i < nChild; ++i)
 								{
-									// ¿ÀºêÁ§Æ® »ı¼º
+									// ì˜¤ë¸Œì íŠ¸ ìƒì„±
 									CreateSceneObject(pStrFrameName, Matrix4x4::Transpose(xmf4x4World[i]), voobb);
 								}
 								delete[] xmf4x4World;
@@ -1156,7 +1155,7 @@ void TCPServer::LoadScene()
 				break;
 			}
 		}
-		if (fileEnd) 
+		if (fileEnd)
 		{
 			break;
 		}
@@ -1220,7 +1219,7 @@ void TCPServer::CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4W
 	{
 		pGameObject = make_shared<CServerEnvironmentObject>(pstrFrameName, xmf4x4World, voobb);
 	}
-	else if(!strcmp(pstrFrameName, "Biological_Capsule_1") || !strcmp(pstrFrameName, "Laboratory_Table_1") || !strcmp(pstrFrameName, "Laboratory_Stool_1"))
+	else if (!strcmp(pstrFrameName, "Biological_Capsule_1") || !strcmp(pstrFrameName, "Laboratory_Table_1") || !strcmp(pstrFrameName, "Laboratory_Stool_1"))
 	{
 		pGameObject = make_shared<CServerEnvironmentObject>(pstrFrameName, xmf4x4World, voobb);
 	}
@@ -1255,23 +1254,23 @@ void TCPServer::CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4W
 void TCPServer::CreateItemObject()
 {
 	//CServerItemObject::SetDrawerStartEnd(m_nStartDrawer1, m_nEndDrawer1, m_nStartDrawer2, m_nEndDrawer2);
-	// È®·ü: fus 30, mine 30, tp 30, radar 10
-	uniform_int_distribution<int> dis(0, m_vDrawerId.size()-1); //[CJI 0525] m_vDrawerId ¿¡ ¹øÈ£¸¦ ÀúÀåÇÏ´Â ¹æ½ÄÀ¸·Î º¯°æÇÏ¿© ·£´ıÀ¸·Î »Ì¾Æ »ç¿ë
+	// í™•ë¥ : fus 30, mine 30, tp 30, radar 10
+	uniform_int_distribution<int> dis(0, m_vDrawerId.size() - 1); //[CJI 0525] m_vDrawerId ì— ë²ˆí˜¸ë¥¼ ì €ì¥í•˜ëŠ” ë°©ì‹ìœ¼ë¡œ ë³€ê²½í•˜ì—¬ ëœë¤ìœ¼ë¡œ ë½‘ì•„ ì‚¬ìš©
 	uniform_int_distribution<int> item_dis(0, 99);
 	uniform_int_distribution<int> rotation_dis(1, 360);
 	uniform_real_distribution<float> pos_dis(-0.2f, 0.2f);
 	CServerItemObject::SetDrawerIdContainer(m_vDrawerId);
 
-	for(int i = 0; i < ITEM_COUNT;++i)
+	for (int i = 0; i < ITEM_COUNT; ++i)
 	{
 		int rd_Num = dis(m_mt19937Gen);
 		int nDrawerNum = m_vDrawerId[rd_Num].first;
 		shared_ptr<CServerDrawerObject> pDrawerObject = dynamic_pointer_cast<CServerDrawerObject>(m_pCollisionManager->GetCollisionObjectWithNumber(nDrawerNum));
 		if (!pDrawerObject) //error
 			assert(0);
-			//exit(1);
+		//exit(1);
 
-		if (pDrawerObject->m_pStoredItem)	// ÀÌ¹Ì ´Ù¸¥ ¾ÆÀÌÅÛÀÌ µé¾î¿ÔÀ½
+		if (pDrawerObject->m_pStoredItem)	// ì´ë¯¸ ë‹¤ë¥¸ ì•„ì´í…œì´ ë“¤ì–´ì™”ìŒ
 		{
 			--i;
 			continue;
@@ -1281,10 +1280,10 @@ void TCPServer::CreateItemObject()
 		int nCreateItem = item_dis(m_mt19937Gen);
 		shared_ptr<CServerItemObject> pItemObject;
 
-		XMFLOAT3 xmf3RandOffset =  XMFLOAT3(pos_dis(m_mt19937Gen), 0.0f, pos_dis(m_mt19937Gen));
-		XMFLOAT3 xmf3RandRotation = XMFLOAT3(0.0f, 0.0f,(float)rotation_dis(m_mt19937Gen));
+		XMFLOAT3 xmf3RandOffset = XMFLOAT3(pos_dis(m_mt19937Gen), 0.0f, pos_dis(m_mt19937Gen));
+		XMFLOAT3 xmf3RandRotation = XMFLOAT3(0.0f, 0.0f, (float)rotation_dis(m_mt19937Gen));
 
-		if(i < 9)		// Fuse
+		if (i < 9)		// Fuse
 		{
 			pItemObject = make_shared<CServerFuseObject>();
 			pItemObject->SetDrawerNumber(nDrawerNum);
@@ -1360,8 +1359,8 @@ void TCPServer::CreateSendObject()
 	m_pCollisionManager->GetOutSpaceObject().clear();
 
 	if (vSO_objects.size() != 0) {
-		vector<BYTE> buffer; // µ¥ÀÌÅÍ Àü¼ÛÀ» À§ÇÑ ¹öÆÛ
-		//µ¥ÀÌÅÍ »çÀÌÁî´Â 65,535¸¦ ¾È³ÑÀ»°Í.
+		vector<BYTE> buffer; // ë°ì´í„° ì „ì†¡ì„ ìœ„í•œ ë²„í¼
+		//ë°ì´í„° ì‚¬ì´ì¦ˆëŠ” 65,535ë¥¼ ì•ˆë„˜ì„ê²ƒ.
 		INT8 nHead = static_cast<INT8>(SOCKET_STATE::SEND_SPACEOUT_OBJECTS);
 
 		unsigned short bufferSize = sizeof(SC_SPACEOUT_OBJECT) * vSO_objects.size();
@@ -1371,8 +1370,8 @@ void TCPServer::CreateSendObject()
 		PushBufferData(buffer, &bufferSize, sizeof(unsigned short));
 		PushBufferData(buffer, vSO_objects.data(), bufferSize);
 
-		//cout << "°ø°£ ¿Ü¿¡ ¾÷µ¥ÀÌÆ®°¡ ÇÊ¿äÇÑ ¿ÀºêÁ§Æ® => " << vSO_objects.size() << "°³ ÀÔ´Ï´Ù." << endl;
-		//cout << "ÃÑ º¸³¾ »çÀÌÁî => " << buffer.size() << endl;
+		//cout << "ê³µê°„ ì™¸ì— ì—…ë°ì´íŠ¸ê°€ í•„ìš”í•œ ì˜¤ë¸Œì íŠ¸ => " << vSO_objects.size() << "ê°œ ì…ë‹ˆë‹¤." << endl;
+		//cout << "ì´ ë³´ë‚¼ ì‚¬ì´ì¦ˆ => " << buffer.size() << endl;
 		for (const auto& pPlayer : m_apPlayers)
 		{
 			if (!pPlayer) continue;
@@ -1392,8 +1391,8 @@ void TCPServer::CreateSendObject()
 
 		INT8 nId = pPlayer->GetPlayerId();
 
-		// ÃşÀº ³ªÁß¿¡ °è´ÜÂÊ¿¡¼­¸¸ Ãß°¡ÇÒ¼öÀÖµµ·ÏÇØ¾ßÇÒµí
-		// if(°è´Ü ÂÊÀÌ¸é À§Ãş or ¾Æ·¡Ãş¹üÀ§ °Ë»ç)
+		// ì¸µì€ ë‚˜ì¤‘ì— ê³„ë‹¨ìª½ì—ì„œë§Œ ì¶”ê°€í• ìˆ˜ìˆë„ë¡í•´ì•¼í• ë“¯
+		// if(ê³„ë‹¨ ìª½ì´ë©´ ìœ„ì¸µ or ì•„ë˜ì¸µë²”ìœ„ ê²€ì‚¬)
 		for (int j = pPlayer->GetWidth() - 1; j <= pPlayer->GetWidth() + 1 && nIndex < MAX_SEND_OBJECT_INFO; ++j)
 		{
 			if (j < 0 || j > m_pCollisionManager->GetWidth() - 1)
@@ -1414,17 +1413,17 @@ void TCPServer::CreateSendObject()
 					{
 						continue;
 					}
-					
+
 					m_aUpdateInfo[nId].m_anObjectNum[nIndex] = pGameObject->GetCollisionNum();
 					m_aUpdateInfo[nId].m_axmf4x4World[nIndex] = pGameObject->GetWorldMatrix();
 
 					nIndex++;
 					//if (m_aUpdateInfo[nId].m_anObjectNum[nIndex] >= m_pCollisionManager->GetNumberOfCollisionObject()) {
-					//	std::cout << "index ¹üÀ§¸¦ ³Ñ¾î¼­´Â ¿ÀºêÁ§Æ®¸¦ ´ã¾Ò½À´Ï´Ù.\n";
+					//	std::cout << "index ë²”ìœ„ë¥¼ ë„˜ì–´ì„œëŠ” ì˜¤ë¸Œì íŠ¸ë¥¼ ë‹´ì•˜ìŠµë‹ˆë‹¤.\n";
 					//}
 					if (nIndex == MAX_SEND_OBJECT_INFO)
 					{
-						//std::cout << "º¸³»·Á°í ÇÏ´Â °´Ã¼°¡ MAX_SEND_OBJECT_INFO °³¼ö°¡ µÇ¾ú½À´Ï´Ù.\n";
+						//std::cout << "ë³´ë‚´ë ¤ê³  í•˜ëŠ” ê°ì²´ê°€ MAX_SEND_OBJECT_INFO ê°œìˆ˜ê°€ ë˜ì—ˆìŠµë‹ˆë‹¤.\n";
 						break;
 					}
 				}
@@ -1437,7 +1436,7 @@ void TCPServer::CreateSendObject()
 
 void TCPServer::InitPlayerPosition(shared_ptr<CServerPlayer>& pServerPlayer, int nIndex)
 {
-	// ÈÄº¸Áö¸¦ µÎ°í int °ª¿¡ µû¶ó ±×°÷¿¡ °¡µµ·Ï ÇØ¾ßÇÒµí
+	// í›„ë³´ì§€ë¥¼ ë‘ê³  int ê°’ì— ë”°ë¼ ê·¸ê³³ì— ê°€ë„ë¡ í•´ì•¼í• ë“¯
 	uniform_int_distribution<int> disIntPosition(0, m_axmf3Positions.size() - 1);
 
 	int nStartPosNum = disIntPosition(m_mt19937Gen);
@@ -1469,7 +1468,7 @@ void TCPServer::CreateSendDataBuffer(char* pBuffer, Args&&... args)
 	((memcpy(pBuffer + nOffset, &args, sizeof(args)), nOffset += sizeof(args)), ...);
 }
 
-// ¿©·¯°³ µ¥ÀÌÅÍ¸¦ ¹­¾î¼­ º¸³¾¶§ »ç¿ë
+// ì—¬ëŸ¬ê°œ ë°ì´í„°ë¥¼ ë¬¶ì–´ì„œ ë³´ë‚¼ë•Œ ì‚¬ìš©
 template<class... Args>
 int TCPServer::SendData(SOCKET socket, size_t nBufferSize, Args&&... args)
 {
@@ -1479,7 +1478,7 @@ int TCPServer::SendData(SOCKET socket, size_t nBufferSize, Args&&... args)
 
 	nRetval = send(socket, (char*)pBuffer, nBufferSize, 0);
 	delete[] pBuffer;
-	
+
 	if (nRetval == SOCKET_ERROR)
 	{
 		err_display("send()");
@@ -1490,12 +1489,12 @@ int TCPServer::SendData(SOCKET socket, size_t nBufferSize, Args&&... args)
 
 void TCPServer::PushBufferData(vector<BYTE>& buffer, void* data, size_t size)
 {
-	for (int i = 0; i < size;++i) {
+	for (int i = 0; i < size; ++i) {
 		buffer.push_back(((BYTE*)data)[i]);
 	}
 }
 
-int TCPServer::SendBufferData(SOCKET socket,vector<BYTE>& buffer)
+int TCPServer::SendBufferData(SOCKET socket, vector<BYTE>& buffer)
 {
 	int nRetval;
 
@@ -1514,9 +1513,9 @@ int TCPServer::RecvData(int nSocketIndex, size_t nBufferSize)
 	int nRetval;
 	int nRemainRecvByte = nBufferSize - m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte;
 
-	
+
 	nRetval = recv(m_vSocketInfoList[nSocketIndex].m_sock, (char*)&m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer + m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte, nRemainRecvByte, 0);
-	
+
 	if (nRetval > 0)m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte += nRetval;
 	if (nRetval == SOCKET_ERROR || nRetval == 0) // error
 	{
@@ -1535,7 +1534,7 @@ int TCPServer::RecvData(int nSocketIndex, size_t nBufferSize)
 	}
 }
 
-// ¼ÒÄÏ ÇÔ¼ö ¿À·ù Ãâ·Â ÈÄ Á¾·á
+// ì†Œì¼“ í•¨ìˆ˜ ì˜¤ë¥˜ ì¶œë ¥ í›„ ì¢…ë£Œ
 void err_quit(const char* msg)
 {
 	LPVOID lpMsgBuf;
@@ -1548,7 +1547,7 @@ void err_quit(const char* msg)
 	LocalFree(lpMsgBuf);
 	exit(1);
 }
-// ¼ÒÄÏ ÇÔ¼ö ¿À·ù Ãâ·Â
+// ì†Œì¼“ í•¨ìˆ˜ ì˜¤ë¥˜ ì¶œë ¥
 void err_display(const char* msg)
 {
 	LPVOID lpMsgBuf;
@@ -1560,7 +1559,7 @@ void err_display(const char* msg)
 	//printf("[%s] %s\n", msg, (char*)lpMsgBuf);
 	LocalFree(lpMsgBuf);
 }
-// ¼ÒÄÏ ÇÔ¼ö ¿À·ù Ãâ·Â
+// ì†Œì¼“ í•¨ìˆ˜ ì˜¤ë¥˜ ì¶œë ¥
 void err_display(int errcode)
 {
 	LPVOID lpMsgBuf;
@@ -1569,6 +1568,6 @@ void err_display(int errcode)
 		NULL, errcode,
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		(char*)&lpMsgBuf, 0, NULL);
-	//printf("[¿À·ù] %s\n", (char*)lpMsgBuf);
+	//printf("[ì˜¤ë¥˜] %s\n", (char*)lpMsgBuf);
 	LocalFree(lpMsgBuf);
 }

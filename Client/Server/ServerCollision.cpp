@@ -91,7 +91,7 @@ void CServerCollisionManager::Update(float fElapsedTime)
 
 void CServerCollisionManager::Collide(float fElapsedTime, const shared_ptr<CServerPlayer>& pPlayer)
 {
-	if (!pPlayer->IsAlive()) // Á×À½
+	if (!pPlayer->IsAlive()) // ì£½ìŒ
 	{
 		return;
 	}
@@ -102,7 +102,7 @@ void CServerCollisionManager::Collide(float fElapsedTime, const shared_ptr<CServ
 	aabbPlayer.Extents = pPlayer->GetOOBB(0).Extents;
 	XMVECTOR xmvTranslation = XMVectorSet(pPlayer->GetPosition().x, pPlayer->GetPosition().y, pPlayer->GetPosition().z, 1.0f);
 	aabbPlayer.Transform(aabbPlayer, 1.0f, XMQuaternionIdentity(), xmvTranslation);*/
-	
+
 	//aabbPlayer = pPlayer->GetOOBB(0);
 	aabbPlayer.Center = pPlayer->GetOOBB(0).Center;
 	aabbPlayer.Radius = pPlayer->GetOOBB(0).Extents.z;
@@ -111,7 +111,7 @@ void CServerCollisionManager::Collide(float fElapsedTime, const shared_ptr<CServ
 	//XMStoreFloat4(&aabbPlayer.Orientation, XMQuaternionNormalize(XMLoadFloat4(&aabbPlayer.Orientation)));
 
 	shared_ptr<CServerZombiePlayer> pZombiePlayer = dynamic_pointer_cast<CServerZombiePlayer>(pPlayer);
-	// ÇÃ·¹ÀÌ¾î Ãæµ¹°Ë»ç
+	// í”Œë ˆì´ì–´ ì¶©ëŒê²€ì‚¬
 	for (const auto& pwOtherPlayer : m_apPlayer)
 	{
 		shared_ptr<CServerPlayer> pOtherPlayer = pwOtherPlayer.lock();
@@ -120,7 +120,7 @@ void CServerCollisionManager::Collide(float fElapsedTime, const shared_ptr<CServ
 			continue;
 		}
 
-		if (!pOtherPlayer->IsAlive() || !pOtherPlayer->IsCollision())	// Ãæµ¹ °Ë»ç ´ë»óÀÌ ¾Æ´Ô(EX: Á×À½)
+		if (!pOtherPlayer->IsAlive() || !pOtherPlayer->IsCollision())	// ì¶©ëŒ ê²€ì‚¬ ëŒ€ìƒì´ ì•„ë‹˜(EX: ì£½ìŒ)
 		{
 			continue;
 		}
@@ -171,7 +171,7 @@ void CServerCollisionManager::Collide(float fElapsedTime, const shared_ptr<CServ
 				continue;
 			}
 
-			for (const auto& pGameObject : GetSpaceGameObjects(pPlayer->GetFloor(), i, j))	// ÇÃ·¹ÀÌ¾îÀÇ ±×¸®µå¸¦ ³ªÅ¸³»¾ßÇÔ
+			for (const auto& pGameObject : GetSpaceGameObjects(pPlayer->GetFloor(), i, j))	// í”Œë ˆì´ì–´ì˜ ê·¸ë¦¬ë“œë¥¼ ë‚˜íƒ€ë‚´ì•¼í•¨
 			{
 				if (!pGameObject || !pGameObject->IsCollision())
 				{
@@ -210,7 +210,7 @@ void CServerCollisionManager::Collide(float fElapsedTime, const shared_ptr<CServ
 			}
 		}
 	}
-	
+
 	if (pPlayer->IsStair())
 	{
 		PlayerInStair(pPlayer);
@@ -259,8 +259,7 @@ void CServerCollisionManager::CheckStairTrigger(const std::shared_ptr<CServerGam
 }
 
 void CServerCollisionManager::CollideWithPlayer(float fElapsedTime)
-{
-}
+{}
 
 void CServerCollisionManager::CollideWithMine(shared_ptr<CServerGameObject> pGameObject, shared_ptr<CServerGameObject> pPlayer, BoundingBox& aabbPlayer)
 {
@@ -272,7 +271,7 @@ void CServerCollisionManager::CollideWithMine(shared_ptr<CServerGameObject> pGam
 	if (!zombiePlayer) {
 		return;
 	}
-	//Áö·Ú Ãæµ¹ aabbPlayer
+	//ì§€ë¢° ì¶©ëŒ aabbPlayer
 	auto mine = dynamic_pointer_cast<CServerMineObject>(pGameObject);
 	if (!mine) {
 		return;
@@ -292,7 +291,7 @@ void CServerCollisionManager::CollideWithMine(shared_ptr<CServerGameObject> pGam
 		{
 			return;
 		}
-		//std::cout << "Áö·Ú Ãæµ¹" << std::endl;
+		//std::cout << "ì§€ë¢° ì¶©ëŒ" << std::endl;
 		mine->SetObtain(true);
 		mine->SetExplosionTime(2.0f);
 		zombiePlayer->CollisionMine(mine->GetCollisionNum());

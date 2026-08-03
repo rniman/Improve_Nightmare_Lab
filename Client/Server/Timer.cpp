@@ -18,8 +18,7 @@ CTimer::CTimer()
 }
 
 CTimer::~CTimer()
-{
-}
+{}
 
 void CTimer::Tick(float fLockFPS)
 {

@@ -2,9 +2,9 @@
 #include "TCPServer.h"
 
 TCPServer g_tcpServer;
-HINSTANCE hInst;                  
+HINSTANCE hInst;
 
-// À©µµ¿ì ¸Ş½ÃÁö Ã³¸® ÇÔ¼ö
+// ìœˆë„ìš° ë©”ì‹œì§€ ì²˜ë¦¬ í•¨ìˆ˜
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK OnProcessingWindowMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK OnProcessingSocketMessage(HWND, UINT, WPARAM, LPARAM);
@@ -13,7 +13,7 @@ INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
 int main()
 {
-	// À©µµ¿ì Å¬·¡½º µî·Ï
+	// ìœˆë„ìš° í´ë˜ìŠ¤ ë“±ë¡
 	WNDCLASS wndclass;
 	wndclass.style = CS_HREDRAW | CS_VREDRAW;
 	wndclass.lpfnWndProc = WndProc;
@@ -26,34 +26,34 @@ int main()
 	wndclass.lpszMenuName = NULL;
 	wndclass.lpszClassName = _T("MyWndClass");
 	if (!RegisterClass(&wndclass)) return 1;
-	
-	// À©µµ¿ì »ı¼º
-	HWND hWnd = CreateWindow(_T("MyWndClass"), _T("TCP ¼­¹ö"), WS_OVERLAPPEDWINDOW, 0, 0, 600, 600, NULL, NULL, NULL, NULL);
+
+	// ìœˆë„ìš° ìƒì„±
+	HWND hWnd = CreateWindow(_T("MyWndClass"), _T("TCP ì„œë²„"), WS_OVERLAPPEDWINDOW, 0, 0, 600, 600, NULL, NULL, NULL, NULL);
 	if (hWnd == NULL) return 1;
 	ShowWindow(hWnd, SW_SHOWNORMAL);
 	UpdateWindow(hWnd);
 
 	HWND hListBox = CreateWindowEx(
 		0,
-		L"LISTBOX",              // Å¬·¡½º ÀÌ¸§
-		L"",                       // ÄŞº¸ ¹Ú½º¿¡ Ç¥½ÃµÇ´Â ÅØ½ºÆ® (Ã³À½¿¡´Â ºñ¾î ÀÖÀ½)
-		WS_VISIBLE | WS_CHILD | LBS_STANDARD, // ½ºÅ¸ÀÏ
-		10, 10, 400, 200,          // À§Ä¡¿Í Å©±â
-		hWnd,                      // ºÎ¸ğ À©µµ¿ì ÇÚµé
-		NULL,                      // ¸Ş´º ÇÚµé
-		NULL,						// ÀÎ½ºÅÏ½º ÇÚµé
-		NULL                       // Ãß°¡ ÆÄ¶ó¹ÌÅÍ
+		L"LISTBOX",              // í´ë˜ìŠ¤ ì´ë¦„
+		L"",                       // ì½¤ë³´ ë°•ìŠ¤ì— í‘œì‹œë˜ëŠ” í…ìŠ¤íŠ¸ (ì²˜ìŒì—ëŠ” ë¹„ì–´ ìˆìŒ)
+		WS_VISIBLE | WS_CHILD | LBS_STANDARD, // ìŠ¤íƒ€ì¼
+		10, 10, 400, 200,          // ìœ„ì¹˜ì™€ í¬ê¸°
+		hWnd,                      // ë¶€ëª¨ ìœˆë„ìš° í•¸ë“¤
+		NULL,                      // ë©”ë‰´ í•¸ë“¤
+		NULL,						// ì¸ìŠ¤í„´ìŠ¤ í•¸ë“¤
+		NULL                       // ì¶”ê°€ íŒŒë¼ë¯¸í„°
 	);
 
-	//¼ÒÄÏ ÁØºñÀÛ¾÷
+	//ì†Œì¼“ ì¤€ë¹„ì‘ì—…
 	g_tcpServer.Init(hWnd);
 	g_tcpServer.SetClientListBox(hListBox);
 
 	MSG msg;
-	// ¸Ş½ÃÁö ·çÇÁ
+	// ë©”ì‹œì§€ ë£¨í”„
 	while (1)
 	{
-		if(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
@@ -68,21 +68,21 @@ int main()
 		}
 	}
 
-	// À©¼Ó Á¾·á
+	// ìœˆì† ì¢…ë£Œ
 	WSACleanup();
 	return msg.wParam;
 }
 
-// À©µµ¿ì ¸Ş½ÃÁö Ã³¸®
+// ìœˆë„ìš° ë©”ì‹œì§€ ì²˜ë¦¬
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{	
-	switch (uMsg) 
+{
+	switch (uMsg)
 	{
 	case WM_ACTIVATE:
 	case WM_SOUND:
 		OnProcessingWindowMessage(hWnd, uMsg, wParam, lParam);
 		break;
-	case WM_SOCKET: // ¼ÒÄÏ °ü·Ã À©µµ¿ì ¸Ş½ÃÁö
+	case WM_SOCKET: // ì†Œì¼“ ê´€ë ¨ ìœˆë„ìš° ë©”ì‹œì§€
 		return OnProcessingSocketMessage(hWnd, uMsg, wParam, lParam);
 		break;
 	case WM_DESTROY:
@@ -103,11 +103,11 @@ LRESULT CALLBACK OnProcessingWindowMessage(HWND hWnd, UINT uMsg, WPARAM wParam, 
 	}
 	return 0;
 }
-// ¼ÒÄÏ °ü·Ã ¸Ş½ÃÁö Ã³¸®
+// ì†Œì¼“ ê´€ë ¨ ë©”ì‹œì§€ ì²˜ë¦¬
 LRESULT CALLBACK OnProcessingSocketMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	// ¿À·ù ¹ß»ı ¿©ºÎ È®ÀÎ
-	if (WSAGETSELECTERROR(lParam) && WSAGETSELECTEVENT(lParam) != FD_CLOSE) 
+	// ì˜¤ë¥˜ ë°œìƒ ì—¬ë¶€ í™•ì¸
+	if (WSAGETSELECTERROR(lParam) && WSAGETSELECTEVENT(lParam) != FD_CLOSE)
 	{
 		err_display(WSAGETSELECTERROR(lParam));
 		int nIndex = g_tcpServer.RemoveSocketInfo(wParam);
@@ -115,7 +115,7 @@ LRESULT CALLBACK OnProcessingSocketMessage(HWND hWnd, UINT uMsg, WPARAM wParam, 
 		if (nIndex == ZOMBIEPLAYER)
 		{
 			int nZombie = g_tcpServer.GetNumOfZombie();
-			g_tcpServer.SetNumOfZombie(nZombie-1);
+			g_tcpServer.SetNumOfZombie(nZombie - 1);
 		}
 		else
 		{
@@ -125,12 +125,12 @@ LRESULT CALLBACK OnProcessingSocketMessage(HWND hWnd, UINT uMsg, WPARAM wParam, 
 		return -1;
 	}
 
-	// ¸Ş½ÃÁö Ã³¸®
+	// ë©”ì‹œì§€ ì²˜ë¦¬
 	switch (WSAGETSELECTEVENT(lParam))
 	{
 	case FD_ACCEPT:
 	case FD_READ:
-	case FD_WRITE:		
+	case FD_WRITE:
 	case FD_CLOSE:
 		g_tcpServer.OnProcessingSocketMessage(hWnd, uMsg, wParam, lParam);
 		break;

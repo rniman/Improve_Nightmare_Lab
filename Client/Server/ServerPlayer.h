@@ -94,17 +94,17 @@ public:
 
 	virtual void GameStartLogic() {}
 protected:
-	// Ã¹ µ¥ÀÌÅÍ¸¦ ¹Ş±â ½ÃÀÛ
+	// ì²« ë°ì´í„°ë¥¼ ë°›ê¸° ì‹œì‘
 	bool m_bRecvData = false;
 
-	// Åë½ÅÀ» ÅëÇØ ¹Ş´Â Á¤º¸
-	INT8 m_nPlayerId = -1;	//m_vSocketInfoListÀÎµ¦½º ¹øÈ£
-	
-	//[0511] ÀÌÁ¦ WORD·Î ´Ù·é´Ù
+	// í†µì‹ ì„ í†µí•´ ë°›ëŠ” ì •ë³´
+	INT8 m_nPlayerId = -1;	//m_vSocketInfoListì¸ë±ìŠ¤ ë²ˆí˜¸
+
+	//[0511] ì´ì œ WORDë¡œ ë‹¤ë£¬ë‹¤
 	WORD m_wKeyBuffer = 0;
 
 	bool m_bOccurredCollision = false;
-	bool m_bStair = false;		// °è´Ü¿¡ ÀÖ´Â »óÅÂ
+	bool m_bStair = false;		// ê³„ë‹¨ì— ìˆëŠ” ìƒíƒœ
 
 	float m_fStairMax;
 	float m_fStairMin;
@@ -116,7 +116,7 @@ protected:
 	XMFLOAT3					m_xmf3Up = XMFLOAT3(0.0f, 1.0f, 0.0f);
 	XMFLOAT3					m_xmf3Look = XMFLOAT3(0.0f, 0.0f, 1.0f);
 
-	XMFLOAT3					m_xmf3OldVelocity = XMFLOAT3(0.0f, 0.0f, 0.0f);	// ÀÌµ¿½Ã Àû¿ëµÈ ¼Ó·Â ÀúÀå
+	XMFLOAT3					m_xmf3OldVelocity = XMFLOAT3(0.0f, 0.0f, 0.0f);	// ì´ë™ì‹œ ì ìš©ëœ ì†ë ¥ ì €ì¥
 	XMFLOAT3					m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3     				m_xmf3Gravity = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	float           			m_fMaxVelocityXZ = 0.0f;
@@ -131,7 +131,7 @@ protected:
 	XMFLOAT4X4					m_xmf4x4View;
 	XMFLOAT4X4					m_xmf4x4Projection;
 
-	bool						m_bInvincibility = false;	// HIT°¡ °¡´ÉÇÑ »óÅÂÀÎÁö¸¦ ³ªÅ¸³¿
+	bool						m_bInvincibility = false;	// HITê°€ ê°€ëŠ¥í•œ ìƒíƒœì¸ì§€ë¥¼ ë‚˜íƒ€ëƒ„
 	float						m_fCoolTimeInvincibility = 0.0f;
 	float						m_fDeathTime = 0.0f;
 
@@ -178,7 +178,7 @@ public:
 	virtual void RightClickProcess(shared_ptr<CServerCollisionManager>& pCollisionManager);
 
 	bool IsAttacked() { return m_fCoolTimeInvincibility > 0.0f; }
-	
+
 	void TeleportItemUse();
 	bool IsTeleportUse() { return m_bTeleport; }
 private:
@@ -228,9 +228,9 @@ private:
 
 	bool m_bTracking = false;
 	bool m_bInterruption = false;
-	bool m_bAttack = false;	// true¸é Å¬¶ó¿¡¼­ trackÀ» enable½ÃÅ´
+	bool m_bAttack = false;	// trueë©´ í´ë¼ì—ì„œ trackì„ enableì‹œí‚´
 
-	// Á»ºñ Áö·Ú °ü·Ã
+	// ì¢€ë¹„ ì§€ë¢° ê´€ë ¨
 	bool m_bCollisionMine = false;
 	float m_fStopMove = 0.0f;
 	float m_fNoStopTime = 0.0f;
@@ -249,9 +249,9 @@ public:
 	void SetStopMove(float val) { m_fStopMove = val; }
 	void SetExplosionDelay(float val) { m_fExplosionDelay = val; }
 	void CollisionMine(int ref);
-	
+
 
 	void GameStartLogic() override;
 
-	
+
 };

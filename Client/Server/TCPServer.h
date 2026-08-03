@@ -16,7 +16,7 @@ constexpr WORD KEY_LSHIFT{ 0x200 };
 constexpr WORD KEY_LBUTTON{ 0x400 };
 constexpr WORD KEY_RBUTTON{ 0x800 };
 
-// ¼ÒÄÏ Á¤º¸ ÀúÀåÀ» À§ÇÑ ±¸Á¶Ã¼¿Í º¯¼ö
+// ì†Œì¼“ ì •ë³´ ì €ì¥ì„ ìœ„í•œ êµ¬ì¡°ì²´ì™€ ë³€ìˆ˜
 class CServerGameObject;
 class CServerPlayer;
 class CServerCollisionManager;
@@ -45,14 +45,14 @@ struct SC_ANIMATION_INFO
 	float pitch = 1.0f;
 };
 
-struct SC_PLAYER_INFO 
+struct SC_PLAYER_INFO
 {
 	RightItem m_selectItem;
 	bool m_bRightClick = false;
-	
+
 	int m_iMineobjectNum = -1;
 	bool m_bAttacked = false;
-	
+
 	int m_iEscapeDoor = -1;
 
 	bool m_bTeleportItemUse = false;
@@ -64,14 +64,14 @@ struct SC_UPDATE_INFO
 
 	INT8 m_nClientId = -1;
 	bool m_bAlive = true;
-	bool m_bRunning = false;	// BLUESUIT PLAYER°¡ ´Ş¸®´Â »óÅÂ
+	bool m_bRunning = false;	// BLUESUIT PLAYERê°€ ë‹¬ë¦¬ëŠ” ìƒíƒœ
 	XMFLOAT3 m_xmf3Position;
 	XMFLOAT3 m_xmf3Velocity;
 	XMFLOAT3 m_xmf3Look;
 	int m_nPickedObjectNum = -1;
 
-	int m_nSlotObjectNum[3] = { -1, -1, -1 };	// °¢ ½½·Ô¿¡ Æ÷ÇÔµÈ ¿ÀºêÁ§Æ® ¹øÈ£(¾øÀ¸¸é -1) /// Àû ÇÃ·¹ÀÌ¾î´Â ½ºÅ³ »ç¿ë½Ã 1·Î, ½ºÅ³ ³¡³ª°Å³ª »ç¿ëX½Ã 0 (ÃßÀû, ½Ã¾ß¹æÇØ, °ø°İ) ´Ş¸®±âÀÇ °æ¿ì ¾ÆÁ÷ Á¤ÇÏÁö ¾ÊÀ½(³ªÁß¿¡ Ãß°¡ÇÒ²¨¸é m_bShiftRunÈ°¿ëÇÏ¸é µÉµí)
-	int m_nFuseObjectNum[3] = { -1, -1, -1 };	// Ç»Áî ¿ÀºêÁ§Æ® ¹øÈ£(¾øÀ¸¸é -1)
+	int m_nSlotObjectNum[3] = { -1, -1, -1 };	// ê° ìŠ¬ë¡¯ì— í¬í•¨ëœ ì˜¤ë¸Œì íŠ¸ ë²ˆí˜¸(ì—†ìœ¼ë©´ -1) /// ì  í”Œë ˆì´ì–´ëŠ” ìŠ¤í‚¬ ì‚¬ìš©ì‹œ 1ë¡œ, ìŠ¤í‚¬ ëë‚˜ê±°ë‚˜ ì‚¬ìš©Xì‹œ 0 (ì¶”ì , ì‹œì•¼ë°©í•´, ê³µê²©) ë‹¬ë¦¬ê¸°ì˜ ê²½ìš° ì•„ì§ ì •í•˜ì§€ ì•ŠìŒ(ë‚˜ì¤‘ì— ì¶”ê°€í• êº¼ë©´ m_bShiftRuní™œìš©í•˜ë©´ ë ë“¯)
+	int m_nFuseObjectNum[3] = { -1, -1, -1 };	// í“¨ì¦ˆ ì˜¤ë¸Œì íŠ¸ ë²ˆí˜¸(ì—†ìœ¼ë©´ -1)
 
 	int m_nNumOfObject = -1;
 	std::array<int, MAX_SEND_OBJECT_INFO> m_anObjectNum;
@@ -84,7 +84,7 @@ struct SC_UPDATE_INFO
 enum class SOCKET_STATE
 {
 	SEND_ID,
-	SEND_UPDATE_DATA,			 // Å¬¶óÀÌ¾ğÆ®¿¡ º¸³»´Â ÀÀ´ä
+	SEND_UPDATE_DATA,			 // í´ë¼ì´ì–¸íŠ¸ì— ë³´ë‚´ëŠ” ì‘ë‹µ
 	SEND_NUM_OF_CLIENT,
 	SEND_BLUE_SUIT_WIN,
 	SEND_ZOMBIE_WIN,
@@ -120,9 +120,9 @@ struct SOCKETINFO
 
 	INT8 m_nHead = -1;
 
-	bool m_bRecvDelayed = false;	// ¿À´Â µ¥ÀÌÅÍ¸¦ ÀüºÎ ¹ŞÁö ¸øÇß´Ù
-	bool m_bRecvHead = false;	// ¿À´Â µ¥ÀÌÅÍ¸¦ ÀüºÎ ¹ŞÁö ¸øÇß´Ù
-	int m_nCurrentRecvByte = 0;		// ÇöÀç±îÁö ¹ŞÀº µ¥ÀÌÅÍÀÇ ±æÀÌ
+	bool m_bRecvDelayed = false;	// ì˜¤ëŠ” ë°ì´í„°ë¥¼ ì „ë¶€ ë°›ì§€ ëª»í–ˆë‹¤
+	bool m_bRecvHead = false;	// ì˜¤ëŠ” ë°ì´í„°ë¥¼ ì „ë¶€ ë°›ì§€ ëª»í–ˆë‹¤
+	int m_nCurrentRecvByte = 0;		// í˜„ì¬ê¹Œì§€ ë°›ì€ ë°ì´í„°ì˜ ê¸¸ì´
 	char m_pCurrentBuffer[BUFSIZE];
 
 	SOCKET_STATE m_socketState = SOCKET_STATE::SEND_ID;
@@ -141,7 +141,7 @@ public:
 	TCPServer();
 	~TCPServer();
 
-	// ÀÌº¥Æ®¸¦ Ã³¸®ÇÑ´Ù.
+	// ì´ë²¤íŠ¸ë¥¼ ì²˜ë¦¬í•œë‹¤.
 	void OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	void OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	void OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
@@ -155,7 +155,7 @@ public:
 	int CheckEndGame();
 	void UpdateEndGame(int nEndGame);
 
-	// ¼ÒÄÏ Á¤º¸ °ü¸® ÇÔ¼ö
+	// ì†Œì¼“ ì •ë³´ ê´€ë¦¬ í•¨ìˆ˜
 	INT8 AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, int nAddrLen);
 	INT8 GetSocketIndex(SOCKET sockClient);
 	INT8 RemoveSocketInfo(SOCKET sock);
@@ -164,8 +164,8 @@ public:
 
 	template<class... Args>
 	void CreateSendDataBuffer(char* pBuffer, Args&&... args);
-	template<class... Args>	
-	int SendData(SOCKET socket, size_t nBufferSize, Args&&... args);	
+	template<class... Args>
+	int SendData(SOCKET socket, size_t nBufferSize, Args&&... args);
 	int RecvData(int nSocketIndex, size_t nBufferSize);
 	int SendBufferData(SOCKET socket, vector<BYTE>& buffer);
 	void PushBufferData(vector<BYTE>& buffer, void* data, size_t size);
@@ -175,7 +175,7 @@ public:
 	void CreateItemObject();
 	void CreateSendObject();
 
-	//[0509] ÇÃ·¹ÀÌ¾î ½ÃÀÛ À§Ä¡ °ãÄ¡Áö ¾Êµµ·Ï ÃÊ±âÈ­
+	//[0509] í”Œë ˆì´ì–´ ì‹œì‘ ìœ„ì¹˜ ê²¹ì¹˜ì§€ ì•Šë„ë¡ ì´ˆê¸°í™”
 	void InitPlayerPosition(shared_ptr<CServerPlayer>& pServerPlayer, int nIndex);
 
 	int CheckAllClientsSentData(int cur_nPlayer);
@@ -197,27 +197,27 @@ private:
 	int m_nGameState;
 	CTimer m_timer;
 	static INT8 m_nClient;
-	
+
 	bool m_bSend = true;
 
-	// Á¢¼ÓÇÑ Å¬¶óÀÌ¾ğÆ®µéÀÇ Á¤º¸¸¦ ÀúÀå.
-	std::array<SOCKETINFO, MAX_CLIENT> m_vSocketInfoList;	// ¼ÒÄÏ ÀÎµ¦½º´Â ¼øÂ÷ÀûÀ¸·Î ¹èÁ¤¹Ş´Â´Ù
+	// ì ‘ì†í•œ í´ë¼ì´ì–¸íŠ¸ë“¤ì˜ ì •ë³´ë¥¼ ì €ì¥.
+	std::array<SOCKETINFO, MAX_CLIENT> m_vSocketInfoList;	// ì†Œì¼“ ì¸ë±ìŠ¤ëŠ” ìˆœì°¨ì ìœ¼ë¡œ ë°°ì •ë°›ëŠ”ë‹¤
 
 	int m_nZombie = 0;
 	int m_nBlueSuit = 0;
-	std::array<std::shared_ptr<CServerPlayer>, MAX_CLIENT> m_apPlayers; 
-	std::array<SC_UPDATE_INFO, MAX_CLIENT> m_aUpdateInfo;		
+	std::array<std::shared_ptr<CServerPlayer>, MAX_CLIENT> m_apPlayers;
+	std::array<SC_UPDATE_INFO, MAX_CLIENT> m_aUpdateInfo;
 	std::vector<shared_ptr<CServerGameObject>> m_vpGameObject;
 	std::shared_ptr<CServerCollisionManager> m_pCollisionManager;
 
 	vector<pair<int, int>> m_vDrawerId; // <ObjectCount,type>
 
 	bool m_bDataSend[MAX_CLIENT] = { false };
-	// ¼Û¼ö½Å , µ¥ÀÌÅÍ ¾÷µ¥ÀÌÆ®´Â ½Ì±Û½º·¹µå·Î ÀÌ·ç¾îÁü. µ¥ÀÌÅÍ¸¦ sendÇÑ ÀÌÈÄ¿¡ ¾÷µ¥ÀÌÆ®µÈ µ¥ÀÌÅÍ°¡ sendÀÌÀü¿¡ µ¤¾î¾º¾î¹ö¸®¸é ¿Ã¹Ù¸¥ µ¿±âÈ­°¡ ÀÌ·ïÁöÁö ¾ÊÀ½
+	// ì†¡ìˆ˜ì‹  , ë°ì´í„° ì—…ë°ì´íŠ¸ëŠ” ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ì´ë£¨ì–´ì§. ë°ì´í„°ë¥¼ sendí•œ ì´í›„ì— ì—…ë°ì´íŠ¸ëœ ë°ì´í„°ê°€ sendì´ì „ì— ë®ì–´ì”Œì–´ë²„ë¦¬ë©´ ì˜¬ë°”ë¥¸ ë™ê¸°í™”ê°€ ì´ë¤„ì§€ì§€ ì•ŠìŒ
 
 	HWND m_hClientListBox;
 
-	//[0509] CServerPlayer¿¡¼­ ÃÊ±âÈ­ÇÏ´ø ½ÃÀÛÀ§Ä¡¸¦ ¿Å±è
+	//[0509] CServerPlayerì—ì„œ ì´ˆê¸°í™”í•˜ë˜ ì‹œì‘ìœ„ì¹˜ë¥¼ ì˜®ê¹€
 	array<XMFLOAT3, 28> m_axmf3Positions;
 	array<int, MAX_CLIENT> m_anPlayerStartPosNum;
 };

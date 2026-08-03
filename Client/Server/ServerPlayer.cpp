@@ -23,7 +23,7 @@ CServerPlayer::CServerPlayer()
 	SetMaxVelocityXZ(BLUESUIT_WALK_VELCOCITY);
 	SetMaxVelocityY(8.0f);
 
-	m_xmf4x4Projection = Matrix4x4::PerspectiveFovLH(XMConvertToRadians(60.0f), ASPECT_RATIO, 0.01f, 100.0f); // 1ÀÎÄª
+	m_xmf4x4Projection = Matrix4x4::PerspectiveFovLH(XMConvertToRadians(60.0f), ASPECT_RATIO, 0.01f, 100.0f); // 1ì¸ì¹­
 	//m_xmf4x4Projection = Matrix4x4::PerspectiveFovLH(XMConvertToRadians(60.0f), ASPECT_RATIO, 1.01f, 100.0f);
 
 	XMMATRIX mtxProjection = XMLoadFloat4x4(&m_xmf4x4Projection);
@@ -183,7 +183,7 @@ void CServerPlayer::Collide(const shared_ptr<CServerCollisionManager>& pCollisio
 						continue;
 					}
 
-					if (pGameObject->GetCollisionType() != Standard) //ÀÓ½Ã·Î 2¸é ³Ñ±è
+					if (pGameObject->GetCollisionType() != Standard) //ì„ì‹œë¡œ 2ë©´ ë„˜ê¹€
 					{
 						continue;
 					}
@@ -345,7 +345,7 @@ void CServerPlayer::CollideWithPlayer(const shared_ptr<CServerCollisionManager>&
 		//				continue;
 		//			}
 
-		//			if (pGameObject->GetCollisionType() != Standard) //ÀÓ½Ã·Î 2¸é ³Ñ±è
+		//			if (pGameObject->GetCollisionType() != Standard) //ì„ì‹œë¡œ 2ë©´ ë„˜ê¹€
 		//			{
 		//				continue;
 		//			}
@@ -399,7 +399,7 @@ void CServerPlayer::Move(const XMFLOAT3& xmf3Shift, bool bUpdateVelocity)
 	{
 		m_xmf3Velocity = Vector3::Add(m_xmf3Velocity, xmf3Shift);
 	}
-	else //¼Ó·ÂÀÌ È®Á¤µÇ¸é ÀÌ°ÍÀÌ ÀÛµ¿ÇÔ or °­Á¦·Î À§Ä¡¸¦ ¿Å±æ¶§
+	else //ì†ë ¥ì´ í™•ì •ë˜ë©´ ì´ê²ƒì´ ì‘ë™í•¨ or ê°•ì œë¡œ ìœ„ì¹˜ë¥¼ ì˜®ê¸¸ë•Œ
 	{
 		if (!Vector3::IsZero(xmf3Shift))
 		{
@@ -446,13 +446,13 @@ void CServerPlayer::SetPickedObject(const shared_ptr<CServerCollisionManager> pC
 
 	m_pPickedObject.reset();
 
-	// 1ÀÎÄª
+	// 1ì¸ì¹­
 	XMFLOAT3 pickPosition;
 	pickPosition.x = 0.0f;
 	pickPosition.y = 0.0f;
 	pickPosition.z = 1.0f;
 
-	// ÀÌ°ª Á¶Á¤ÇÏ¸é ÇÇÅ· ÃÖ¼Ò°Å¸® ¼³Á¤ °¡´É
+	// ì´ê°’ ì¡°ì •í•˜ë©´ í”¼í‚¹ ìµœì†Œê±°ë¦¬ ì„¤ì • ê°€ëŠ¥
 	float fNearestHitDistance = 3.0f;
 	for (int i = m_nWidth - 1; i <= m_nWidth + 1; ++i)
 	{
@@ -474,9 +474,9 @@ void CServerPlayer::SetPickedObject(const shared_ptr<CServerCollisionManager> pC
 				if (CServerGameObject::CheckPicking(pCollisionObject, pickPosition, m_xmf4x4View, fHitDistance))
 				{
 					shared_ptr<CServerDrawerObject> pDrawer = dynamic_pointer_cast<CServerDrawerObject>(pCollisionObject);
-					if (pDrawer)	// ¼­¶øÀÇ °æ¿ì ³»ºÎ¿¡ ¾ÆÀÌÅÛÀ» °í·ÁÇØ¾ßÇÔ
+					if (pDrawer)	// ì„œëì˜ ê²½ìš° ë‚´ë¶€ì— ì•„ì´í…œì„ ê³ ë ¤í•´ì•¼í•¨
 					{
-						if (!pDrawer->IsOpen() || !pDrawer->m_pStoredItem)	// ´İÇôÀÖ°Å³ª ³»ºÎ¿¡ ¾ÆÀÌÅÛÀÌ ¾øÀ¸¸é 
+						if (!pDrawer->IsOpen() || !pDrawer->m_pStoredItem)	// ë‹«í˜€ìˆê±°ë‚˜ ë‚´ë¶€ì— ì•„ì´í…œì´ ì—†ìœ¼ë©´ 
 						{
 							if (fHitDistance < fNearestHitDistance)
 							{
@@ -529,7 +529,7 @@ CServerBlueSuitPlayer::CServerBlueSuitPlayer()
 	m_apSlotItems[Mine] = make_shared<CServerMineObject>();
 	m_apSlotItems[Mine]->SetCollision(false);
 
-	for (int i = 0;i < 3;++i)
+	for (int i = 0; i < 3; ++i)
 	{
 		m_apFuseItems[i] = make_shared<CServerFuseObject>();
 		m_apFuseItems[i]->SetCollision(false);
@@ -538,12 +538,12 @@ CServerBlueSuitPlayer::CServerBlueSuitPlayer()
 
 void CServerBlueSuitPlayer::UseItem(shared_ptr<CServerCollisionManager>& pCollisionManager)
 {
-	if (!IsAlive()) // Á×À½
+	if (!IsAlive()) // ì£½ìŒ
 	{
 		return;
 	}
 
-	array<shared_ptr<CServerGameObject>,3> apObjects;
+	array<shared_ptr<CServerGameObject>, 3> apObjects;
 	if (m_wKeyBuffer & KEY_1)
 	{
 		if (m_apSlotItems[Teleport]->IsObtained()) {
@@ -621,7 +621,7 @@ void CServerBlueSuitPlayer::Update(float fElapsedTime, shared_ptr<CServerCollisi
 
 void CServerBlueSuitPlayer::UpdatePicking(INT8 nClientId)
 {
-	if (!IsAlive()) // Á×À½
+	if (!IsAlive()) // ì£½ìŒ
 	{
 		return;
 	}
@@ -637,7 +637,7 @@ void CServerBlueSuitPlayer::UpdatePicking(INT8 nClientId)
 		m_bPressed = false;
 		return;
 	}
-	else if (!m_bPressed)	// Press°¡ Áö¼ÓµÊ
+	else if (!m_bPressed)	// Pressê°€ ì§€ì†ë¨
 	{
 		m_bPressed = true;
 	}
@@ -646,7 +646,7 @@ void CServerBlueSuitPlayer::UpdatePicking(INT8 nClientId)
 		return;
 	}
 
-	if (AddItem(pPickedObject) != -1)	// ÀÌ¹Ì ÀÖ´ø °É ÇÇÅ·ÇÑ°Å -> ³ªÁß¿¡ ¾Æ¿¹ ÇÇÅ· ¾ÈÀâÈ÷°Ô ¼öÁ¤ÇØ¾ßÇÔ
+	if (AddItem(pPickedObject) != -1)	// ì´ë¯¸ ìˆë˜ ê±¸ í”¼í‚¹í•œê±° -> ë‚˜ì¤‘ì— ì•„ì˜ˆ í”¼í‚¹ ì•ˆì¡íˆê²Œ ìˆ˜ì •í•´ì•¼í•¨
 	{
 		pPickedObject->UpdatePicking(m_nPlayerId);
 	}
@@ -658,7 +658,7 @@ void CServerBlueSuitPlayer::Hit()
 	m_bInvincibility = true;
 	m_fCoolTimeInvincibility = 1.5f;
 
-	//printf("%dÀÇ ÇöÀç Ã¼·Â: %d\n", m_nPlayerId, m_nHealthPoint);
+	//printf("%dì˜ í˜„ì¬ ì²´ë ¥: %d\n", m_nPlayerId, m_nHealthPoint);
 
 	if (m_nHealthPoint <= 0)
 	{
@@ -672,7 +672,7 @@ void CServerBlueSuitPlayer::Hit()
 
 int CServerBlueSuitPlayer::AddItem(const shared_ptr<CServerGameObject>& pGameObject)
 {
-	if (!dynamic_pointer_cast<CServerItemObject>(pGameObject))	// ¾ÆÀÌÅÛÀÌ ¾Æ´Ô
+	if (!dynamic_pointer_cast<CServerItemObject>(pGameObject))	// ì•„ì´í…œì´ ì•„ë‹˜
 	{
 		return 0;
 	}
@@ -702,7 +702,7 @@ int CServerBlueSuitPlayer::AddItem(const shared_ptr<CServerGameObject>& pGameObj
 		return nSlot;
 	}
 
-	if (m_apSlotItems[nSlot]->IsObtained())	// È¹µæµÈ »óÅÂ¶ó¸é È¹µæ ÇÒ ¼ö¾øÀ½
+	if (m_apSlotItems[nSlot]->IsObtained())	// íšë“ëœ ìƒíƒœë¼ë©´ íšë“ í•  ìˆ˜ì—†ìŒ
 	{
 		nSlot = -1;
 	}
@@ -711,7 +711,7 @@ int CServerBlueSuitPlayer::AddItem(const shared_ptr<CServerGameObject>& pGameObj
 		switch (nSlot)
 		{
 		case Teleport:
-			// ÇÃ·¹ÀÌ¾îÀÇ ITMEÀº ON ½ÃÅ°°í ÇØ´ç ¾ÆÀÌÅÛÀº OFF ½ÃÄÑ¾ßÇÔ
+			// í”Œë ˆì´ì–´ì˜ ITMEì€ ON ì‹œí‚¤ê³  í•´ë‹¹ ì•„ì´í…œì€ OFF ì‹œì¼œì•¼í•¨
 			//m_apSlotItems[nSlot] = dynamic_pointer_cast<CServerTeleportObject>(pGameObject);
 			break;
 		case Radar:
@@ -732,7 +732,7 @@ int CServerBlueSuitPlayer::AddItem(const shared_ptr<CServerGameObject>& pGameObj
 
 void CServerBlueSuitPlayer::UseFuse(shared_ptr<CServerCollisionManager>& pCollisionManager)
 {
-	// ³ªÁß¿¡ Ç»Áî ¹Ú½º¾Õ¿¡¼­ ½è´Ù´Â°Å È®ÀÎÇÏ±â À§ÇÑ°ª 
+	// ë‚˜ì¤‘ì— í“¨ì¦ˆ ë°•ìŠ¤ì•ì—ì„œ ì¼ë‹¤ëŠ”ê±° í™•ì¸í•˜ê¸° ìœ„í•œê°’ 
 	bool bFuseBox = false;
 
 	shared_ptr<CServerGameObject> pObject;
@@ -794,7 +794,7 @@ void CServerBlueSuitPlayer::TeleportRandomPosition()
 		XMFLOAT3(-30.0f, 4.5f, 12.f),
 	};
 
-	// ÈÄº¸Áö¸¦ µÎ°í int °ª¿¡ µû¶ó ±×°÷¿¡ °¡µµ·Ï ÇØ¾ßÇÒµí
+	// í›„ë³´ì§€ë¥¼ ë‘ê³  int ê°’ì— ë”°ë¼ ê·¸ê³³ì— ê°€ë„ë¡ í•´ì•¼í• ë“¯
 	uniform_int_distribution<int> disFloatPosition(0, axmf3Positions.size() - 1);
 
 	m_xmf3Position = axmf3Positions[disFloatPosition(TCPServer::m_mt19937Gen)];
@@ -853,7 +853,7 @@ void CServerBlueSuitPlayer::RightClickProcess(shared_ptr<CServerCollisionManager
 		auto pPickedObject = m_pPickedObject.lock();
 
 		auto door = dynamic_pointer_cast<CServerElevatorDoorObject>(pPickedObject);
-		if (door) 
+		if (door)
 		{
 			if (door->IsEscape())
 			{
@@ -862,13 +862,13 @@ void CServerBlueSuitPlayer::RightClickProcess(shared_ptr<CServerCollisionManager
 				m_selectItem = RightItem::NONE;
 				m_bWinner = true;
 			}
-			else 
+			else
 			{
-				//std::cout << "Å»Ãâ±¸°¡ ¾Æ´Õ´Ï´Ù." << std::endl;
+				//std::cout << "íƒˆì¶œêµ¬ê°€ ì•„ë‹™ë‹ˆë‹¤." << std::endl;
 			}
 		}
 	}
-		break;
+						break;
 	default:
 		break;
 	}
@@ -916,17 +916,17 @@ void CServerZombiePlayer::UseItem(shared_ptr<CServerCollisionManager>& pCollisio
 	}
 	//else printf("%f \n", m_fCoolTimeRunning);
 
-	if ((m_wKeyBuffer & KEY_1) && m_fCoolTimeTracking <= 0.0f)	// ÃßÀû
+	if ((m_wKeyBuffer & KEY_1) && m_fCoolTimeTracking <= 0.0f)	// ì¶”ì 
 	{
 		m_fCoolTimeTracking = TRACKING_COOLTIME;
 		m_bTracking = true;
 	}
-	if ((m_wKeyBuffer & KEY_2) && m_fCoolTimeInterruption <= 0.0f)	// ½Ã¾ß¹æÇØ
+	if ((m_wKeyBuffer & KEY_2) && m_fCoolTimeInterruption <= 0.0f)	// ì‹œì•¼ë°©í•´
 	{
 		m_fCoolTimeInterruption = INTERRUPTION_COOLTIME;
 		m_bInterruption = true;
 	}
-	if ((m_wKeyBuffer & KEY_3) && m_fCoolTimeRunning <= 0.0f)	// ´Ş¸®±â
+	if ((m_wKeyBuffer & KEY_3) && m_fCoolTimeRunning <= 0.0f)	// ë‹¬ë¦¬ê¸°
 	{
 		m_fCoolTimeRunning = ZOM_RUNNING_COOLTIME;
 		m_bRunning = true;
@@ -946,7 +946,7 @@ void CServerZombiePlayer::Update(float fElapsedTime, shared_ptr<CServerCollision
 
 	m_fCoolTimeAttack -= fElapsedTime;
 	m_fExplosionDelay += fElapsedTime;
-	if (m_fNoStopTime > 0.0f) { // ¿òÁ÷ÀÓ Á¦ÇÑ ÄğÅ¸ÀÓ
+	if (m_fNoStopTime > 0.0f) { // ì›€ì§ì„ ì œí•œ ì¿¨íƒ€ì„
 		m_fNoStopTime -= fElapsedTime;
 
 		if (m_bCollisionMine) {
@@ -962,16 +962,16 @@ void CServerZombiePlayer::Update(float fElapsedTime, shared_ptr<CServerCollision
 	{
 		m_bAttack = false;
 	}
-	if ((m_wKeyBuffer & KEY_LBUTTON) && m_fCoolTimeAttack <= 0.0f)	// ÀÏ¹İ °ø°İ
+	if ((m_wKeyBuffer & KEY_LBUTTON) && m_fCoolTimeAttack <= 0.0f)	// ì¼ë°˜ ê³µê²©
 	{
-		// ¿ø·¡ Å¬¶ó¿¡¼­´Â track 2¹øÀ» enable½ÃÅ´
+		// ì›ë˜ í´ë¼ì—ì„œëŠ” track 2ë²ˆì„ enableì‹œí‚´
 		m_bAttack = true;
 		m_fCoolTimeAttack = 2.0f;
-		
+
 		m_oobbAttackBox.Center = XMFLOAT3(0.0f, 0.8f, 0.0f);
 		m_oobbAttackBox.Extents = XMFLOAT3(0.5f, 0.8f, 0.5f);
 		XMStoreFloat4(&m_oobbAttackBox.Orientation, XMQuaternionIdentity());
-		
+
 		OnUpdateToParent();
 		m_oobbAttackBox.Transform(m_oobbAttackBox, XMLoadFloat4x4(&m_xmf4x4ToParent));
 		XMStoreFloat4(&m_oobbAttackBox.Orientation, XMQuaternionNormalize(XMLoadFloat4(&m_oobbAttackBox.Orientation)));
@@ -1026,7 +1026,7 @@ void CServerZombiePlayer::UpdatePicking(INT8 nClientId)
 		m_bPressed = false;
 		return;
 	}
-	else if (!m_bPressed)	// Press°¡ Áö¼ÓµÊ
+	else if (!m_bPressed)	// Pressê°€ ì§€ì†ë¨
 	{
 		m_bPressed = true;
 	}
@@ -1035,15 +1035,14 @@ void CServerZombiePlayer::UpdatePicking(INT8 nClientId)
 		return;
 	}
 
-	if (!dynamic_pointer_cast<CServerItemObject>(pPickedObject))	// ¾ÆÀÌÅÛÀÌ ¾Æ´Ô
+	if (!dynamic_pointer_cast<CServerItemObject>(pPickedObject))	// ì•„ì´í…œì´ ì•„ë‹˜
 	{
 		pPickedObject->UpdatePicking(m_nPlayerId);
 	}
 }
 
-void CServerZombiePlayer::Hit() 
-{
-}
+void CServerZombiePlayer::Hit()
+{}
 
 void CServerZombiePlayer::CheckAttack(shared_ptr<CServerPlayer>& pPlayer, const BoundingSphere& aabbPlayer)
 {

@@ -23,7 +23,7 @@ public:
 	void SetReferenceNumber(int nObjectNumber) { m_nReferenceNumber = nObjectNumber; }
 
 	void SetRandomRotation(const XMFLOAT3& xmf3Rotation) { m_xmf3Rotation = xmf3Rotation; }
-	virtual void SetRandomPosition(shared_ptr<CServerCollisionManager>& pCollisionManager) {};	// DrawerNumber¸¦ ´Ù½Ã ÇÒ´ç
+	virtual void SetRandomPosition(shared_ptr<CServerCollisionManager>& pCollisionManager) {};	// DrawerNumberë¥¼ ë‹¤ì‹œ í• ë‹¹
 	virtual void SetWorldMatrix(const XMFLOAT4X4& xmf4x4World);
 
 	void SetRandomOffset(const XMFLOAT3& xmf3Offset);
@@ -38,20 +38,20 @@ protected:
 	static int m_nEndDrawer2;*/
 	static vector<pair<int, int>> m_vDrawerId; // <ObjectCount,type>
 
-	// Drawer1 2¿¡ µû¶ó ´Ù¸£°Ô offsetÀ» ÁØ´Ù
+	// Drawer1 2ì— ë”°ë¼ ë‹¤ë¥´ê²Œ offsetì„ ì¤€ë‹¤
 	static float m_fDrawer1OffsetY;
 	static float m_fDrawer2OffsetY;
 
 	XMFLOAT3 m_xmf3Rotation;
-	XMFLOAT3 m_xmf3PositionOffset; // DrawerÀÇ world À§Ä¡¿ÍÀÇ Â÷ÀÌ
+	XMFLOAT3 m_xmf3PositionOffset; // Drawerì˜ world ìœ„ì¹˜ì™€ì˜ ì°¨ì´
 
 	bool m_bObtained = false;
-	int m_nDrawerNumber = -1;		// CollisionManager¿¡ ÀÖ´Â DrawerÁß ÀÚ±â°¡ ¼ÓÇÑ ÀÎµ¦½º °ª
+	int m_nDrawerNumber = -1;		// CollisionManagerì— ìˆëŠ” Drawerì¤‘ ìê¸°ê°€ ì†í•œ ì¸ë±ìŠ¤ ê°’
 	int m_nDrawerType = -1;
 	shared_ptr<CServerDrawerObject> m_pDrawerObject;
 
-	int m_nReferenceNumber = -1;	// ÇÃ·¹ÀÌ¾î°¡ °¡Áø ¾ÆÀÌÅÛ ¿ÀºêÁ§Æ®°¡ ÇöÀç ¾î¶² ¿ÀºêÁ§Æ®¸¦ °¡Á³´ÂÁö(ÇÃ·¹ÀÌ¾î ³»ºÎ ¿ÀºêÁ§Æ® Àü¿ë)
-	// »ç¿ë½Ã ´Ù½Ã -1ÀÌ µÇ¾ßÇÔ
+	int m_nReferenceNumber = -1;	// í”Œë ˆì´ì–´ê°€ ê°€ì§„ ì•„ì´í…œ ì˜¤ë¸Œì íŠ¸ê°€ í˜„ì¬ ì–´ë–¤ ì˜¤ë¸Œì íŠ¸ë¥¼ ê°€ì¡ŒëŠ”ì§€(í”Œë ˆì´ì–´ ë‚´ë¶€ ì˜¤ë¸Œì íŠ¸ ì „ìš©)
+	// ì‚¬ìš©ì‹œ ë‹¤ì‹œ -1ì´ ë˜ì•¼í•¨
 };
 
 /// <CGameObject - CItemObject>

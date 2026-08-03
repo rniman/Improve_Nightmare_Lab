@@ -6,7 +6,7 @@
 
 vector<pair<int, int>> CServerItemObject::m_vDrawerId;
 
-// Drawer1 2¿¡ µû¶ó ´Ù¸£°Ô offsetÀ» ÁØ´Ù
+// Drawer1 2ì— ë”°ë¼ ë‹¤ë¥´ê²Œ offsetì„ ì¤€ë‹¤
 float CServerItemObject::m_fDrawer1OffsetY{ 0.5f };
 float CServerItemObject::m_fDrawer2OffsetY{ 0.2f };
 
@@ -41,7 +41,7 @@ void CServerItemObject::SetWorldMatrix(const XMFLOAT4X4& xmf4x4World)
 		m_xmf4x4FinalWorld._42 += m_fDrawer2OffsetY;
 	}
 
-	// ¿Ö ZÃà È¸ÀüÀÎÁö´Â ¸ğ¸£°Ú;;
+	// ì™œ Zì¶• íšŒì „ì¸ì§€ëŠ” ëª¨ë¥´ê² ;;
 	XMFLOAT4X4 xmf4x4Rotate = Matrix4x4::Rotate(m_xmf3Rotation.x, m_xmf3Rotation.y, m_xmf3Rotation.z);
 	m_xmf4x4FinalWorld = Matrix4x4::Multiply(xmf4x4Rotate, m_xmf4x4FinalWorld);
 
@@ -81,8 +81,7 @@ CServerDrawerObject::CServerDrawerObject(char* pstrFrameName, const XMFLOAT4X4& 
 }
 
 CServerDrawerObject::~CServerDrawerObject()
-{
-}
+{}
 
 void CServerDrawerObject::Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager)
 {
@@ -137,9 +136,9 @@ void CServerDrawerObject::UpdatePicking(INT8 nClientId)
 		m_bAnimate = true;
 		PostMessage(TCPServer::m_hWnd, WM_SOUND, (WPARAM)SOUND_MESSAGE::OPEN_DRAWER, (LPARAM)nClientId);
 	}
-	
-	//¼Ò¸®¸¦ ¾Ë·Á¾ßÇÔ
-	
+
+	//ì†Œë¦¬ë¥¼ ì•Œë ¤ì•¼í•¨
+
 }
 
 /// <CGameObject - CDrawerObject>
@@ -153,8 +152,7 @@ CServerDoorObject::CServerDoorObject(char* pstrFrameName, const XMFLOAT4X4& xmf4
 }
 
 CServerDoorObject::~CServerDoorObject()
-{
-}
+{}
 
 void CServerDoorObject::Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager)
 {
@@ -168,11 +166,11 @@ void CServerDoorObject::Update(float fElapsedTime, shared_ptr<CServerCollisionMa
 		}
 		else
 		{
-			//Z-up ¸ğµ¨ÀÓ
+			//Z-up ëª¨ë¸ì„
 			XMMATRIX mtxRotate = XMMatrixRotationRollPitchYaw(XMConvertToRadians(0.0f), XMConvertToRadians(0.0f), fRotationAngle);
 			m_xmf4x4World = Matrix4x4::Multiply(mtxRotate, m_xmf4x4World);
 
-			// Instancing °´Ã¼´Â worldÇà·Ä¸¸ ¼öÁ¤ÇØÁÖ¸éµÊ
+			// Instancing ê°ì²´ëŠ” worldí–‰ë ¬ë§Œ ìˆ˜ì •í•´ì£¼ë©´ë¨
 			//UpdateTransform(NULL);
 		}
 	}
@@ -213,7 +211,7 @@ CServerElevatorDoorObject::CServerElevatorDoorObject(char* pstrFrameName, const 
 
 void CServerElevatorDoorObject::Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager)
 {
-	if (!IsEscape()) 
+	if (!IsEscape())
 	{
 		return;
 	}
@@ -257,8 +255,7 @@ void CServerElevatorDoorObject::Update(float fElapsedTime, shared_ptr<CServerCol
 }
 
 void CServerElevatorDoorObject::UpdatePicking(INT8 nClientId)
-{
-}
+{}
 
 void CServerElevatorDoorObject::EscapeDoorOpen(INT8 nClientId)
 {
@@ -297,8 +294,7 @@ CServerTeleportObject::CServerTeleportObject()
 }
 
 CServerTeleportObject::~CServerTeleportObject()
-{
-}
+{}
 
 //void CTeleportObject::Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager)
 //{
@@ -335,7 +331,7 @@ void CServerTeleportObject::UpdateUsing(const shared_ptr<CServerGameObject>& pGa
 	}
 	pBlueSuitPlayer->TeleportItemUse();
 
-	// ¾ÆÀÌÅÛ ¸®¼ÂÇÏ´Â ÇÔ¼ö ÀÛ¼º
+	// ì•„ì´í…œ ë¦¬ì…‹í•˜ëŠ” í•¨ìˆ˜ ì‘ì„±
 	m_bObtained = false;
 	m_bCollision = true;
 	SetRandomPosition(pCollisionManager);
@@ -356,9 +352,9 @@ void CServerTeleportObject::SetRandomPosition(shared_ptr<CServerCollisionManager
 
 		if (!pDrawerObject) //error
 			assert(0);
-			//exit(1);
+		//exit(1);
 
-		if (pDrawerObject->m_pStoredItem)	// ÀÌ¹Ì ´Ù¸¥ ¾ÆÀÌÅÛÀÌ µé¾î¿ÔÀ½
+		if (pDrawerObject->m_pStoredItem)	// ì´ë¯¸ ë‹¤ë¥¸ ì•„ì´í…œì´ ë“¤ì–´ì™”ìŒ
 		{
 			continue;
 		}
@@ -381,12 +377,12 @@ void CServerTeleportObject::SetRandomPosition(shared_ptr<CServerCollisionManager
 
 		SetWorldMatrix(xmf4x4World);
 
-		// °ø°£ÀÇ À§Ä¡¸¦ ´Ù½Ã ³õ´Â´Ù.
+		// ê³µê°„ì˜ ìœ„ì¹˜ë¥¼ ë‹¤ì‹œ ë†“ëŠ”ë‹¤.
 		auto iter = pCollisionManager->GetSpaceGameObjects(m_nFloor, m_nWidth, m_nDepth).begin();
 		int i = 0;
 		for (auto pGameObject : pCollisionManager->GetSpaceGameObjects(m_nFloor, m_nWidth, m_nDepth))
 		{
-			if (pGameObject->GetCollisionNum() == m_nCollisionNum)	// µ¿ÀÏÇÑ 
+			if (pGameObject->GetCollisionNum() == m_nCollisionNum)	// ë™ì¼í•œ 
 			{
 				pCollisionManager->GetSpaceGameObjects(m_nFloor, m_nWidth, m_nDepth).erase(iter + i);
 				break;
@@ -420,7 +416,7 @@ CServerMineObject::CServerMineObject()
 
 	BoundingOrientedBox oobb;
 	oobb.Center = XMFLOAT3(0.003596, -0.00012212, -0.01279);
-	oobb.Extents = XMFLOAT3(0.26312/2, 0.066229/2, 0.27357/2);
+	oobb.Extents = XMFLOAT3(0.26312 / 2, 0.066229 / 2, 0.27357 / 2);
 	XMStoreFloat4(&oobb.Orientation, XMQuaternionIdentity());
 
 	m_voobbOrigin.clear();
@@ -433,8 +429,7 @@ CServerMineObject::CServerMineObject()
 }
 
 CServerMineObject::~CServerMineObject()
-{
-}
+{}
 
 void CServerMineObject::Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager)
 {
@@ -442,7 +437,7 @@ void CServerMineObject::Update(float fElapsedTime, shared_ptr<CServerCollisionMa
 		if (m_fExplosionTime > 0.0f) {
 			m_fExplosionTime -= fElapsedTime;
 
-			if (m_fExplosionTime < 0.0f) { // Æø¹ßÀÌ ³¡³­ ÈÄ¿¡ ¿ÀºêÁ§Æ®¸¦ Àç¹èÄ¡ÇÔ
+			if (m_fExplosionTime < 0.0f) { // í­ë°œì´ ëë‚œ í›„ì— ì˜¤ë¸Œì íŠ¸ë¥¼ ì¬ë°°ì¹˜í•¨
 				m_bInstall = false;
 				SetRandomPosition(pCollisionManager);
 			}
@@ -472,7 +467,7 @@ void CServerMineObject::UpdateUsing(const shared_ptr<CServerGameObject>& pGameOb
 		return;
 	}
 
-	//// ¾ÆÀÌÅÛ ¸®¼ÂÇÏ´Â ÇÔ¼ö ÀÛ¼º
+	//// ì•„ì´í…œ ë¦¬ì…‹í•˜ëŠ” í•¨ìˆ˜ ì‘ì„±
 
 	m_bObtained = false;
 	m_bCollision = true;
@@ -484,7 +479,7 @@ void CServerMineObject::UpdateUsing(const shared_ptr<CServerGameObject>& pGameOb
 	int i = 0;
 	for (auto pGameObject : pCollisionManager->GetSpaceGameObjects(m_nFloor, m_nWidth, m_nDepth))
 	{
-		if (pGameObject->GetCollisionNum() == m_nCollisionNum)	// µ¿ÀÏÇÑ 
+		if (pGameObject->GetCollisionNum() == m_nCollisionNum)	// ë™ì¼í•œ 
 		{
 			pCollisionManager->GetSpaceGameObjects(m_nFloor, m_nWidth, m_nDepth).erase(iter + i);
 			break;
@@ -512,7 +507,7 @@ void CServerMineObject::SetRandomPosition(shared_ptr<CServerCollisionManager>& p
 			assert(0);
 		//exit(1);
 
-		if (pDrawerObject->m_pStoredItem)	// ÀÌ¹Ì ´Ù¸¥ ¾ÆÀÌÅÛÀÌ µé¾î¿ÔÀ½
+		if (pDrawerObject->m_pStoredItem)	// ì´ë¯¸ ë‹¤ë¥¸ ì•„ì´í…œì´ ë“¤ì–´ì™”ìŒ
 		{
 			continue;
 		}
@@ -527,19 +522,19 @@ void CServerMineObject::SetRandomPosition(shared_ptr<CServerCollisionManager>& p
 		SetDrawerNumber(nDrawerNum);
 		SetDrawer(pDrawerObject);
 		SetDrawerType(m_vDrawerId[rd_num].second);
-		
+
 		pDrawerObject->m_pStoredItem = dynamic_pointer_cast<CServerMineObject>(shared_from_this());
 
 		SetRandomRotation(xmf3RandRotation);
 		SetRandomOffset(xmf3RandOffset);
 		SetWorldMatrix(xmf4x4World);
 
-		// °ø°£ÀÇ À§Ä¡¸¦ ´Ù½Ã ³õ´Â´Ù.
+		// ê³µê°„ì˜ ìœ„ì¹˜ë¥¼ ë‹¤ì‹œ ë†“ëŠ”ë‹¤.
 		auto iter = pCollisionManager->GetSpaceGameObjects(m_nFloor, m_nWidth, m_nDepth).begin();
 		int i = 0;
 		for (auto pGameObject : pCollisionManager->GetSpaceGameObjects(m_nFloor, m_nWidth, m_nDepth))
 		{
-			if (pGameObject->GetCollisionNum() == m_nCollisionNum)	// µ¿ÀÏÇÑ 
+			if (pGameObject->GetCollisionNum() == m_nCollisionNum)	// ë™ì¼í•œ 
 			{
 				pCollisionManager->GetSpaceGameObjects(m_nFloor, m_nWidth, m_nDepth).erase(iter + i);
 				break;
@@ -573,8 +568,7 @@ CServerFuseObject::CServerFuseObject()
 }
 
 CServerFuseObject::~CServerFuseObject()
-{
-}
+{}
 
 void CServerFuseObject::Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager)
 {
@@ -629,7 +623,7 @@ void CServerFuseObject::SetRandomPosition(shared_ptr<CServerCollisionManager>& p
 			assert(10);
 		}
 
-		if (pDrawerObject->m_pStoredItem)	// ÀÌ¹Ì ´Ù¸¥ ¾ÆÀÌÅÛÀÌ µé¾î¿ÔÀ½
+		if (pDrawerObject->m_pStoredItem)	// ì´ë¯¸ ë‹¤ë¥¸ ì•„ì´í…œì´ ë“¤ì–´ì™”ìŒ
 		{
 			continue;
 		}
@@ -649,12 +643,12 @@ void CServerFuseObject::SetRandomPosition(shared_ptr<CServerCollisionManager>& p
 
 		SetWorldMatrix(xmf4x4World);
 
-		// °ø°£ÀÇ À§Ä¡¸¦ ´Ù½Ã ³õ´Â´Ù.
+		// ê³µê°„ì˜ ìœ„ì¹˜ë¥¼ ë‹¤ì‹œ ë†“ëŠ”ë‹¤.
 		auto iter = pCollisionManager->GetSpaceGameObjects(m_nFloor, m_nWidth, m_nDepth).begin();
 		int i = 0;
 		for (auto pGameObject : pCollisionManager->GetSpaceGameObjects(m_nFloor, m_nWidth, m_nDepth))
 		{
-			if (pGameObject->GetCollisionNum() == m_nCollisionNum)	// µ¿ÀÏÇÑ 
+			if (pGameObject->GetCollisionNum() == m_nCollisionNum)	// ë™ì¼í•œ 
 			{
 				pCollisionManager->GetSpaceGameObjects(m_nFloor, m_nWidth, m_nDepth).erase(iter + i);
 				break;
@@ -699,8 +693,7 @@ CServerRadarObject::CServerRadarObject()
 }
 
 CServerRadarObject::~CServerRadarObject()
-{
-}
+{}
 
 void CServerRadarObject::Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager)
 {
@@ -708,9 +701,9 @@ void CServerRadarObject::Update(float fElapsedTime, shared_ptr<CServerCollisionM
 	{
 		return;
 	}
-	
+
 	XMFLOAT4X4 xmf4x4RadarWorld = m_pDrawerObject->GetWorldMatrix();
-	
+
 	xmf4x4RadarWorld._41 += m_xmf3PositionOffset.x;
 	xmf4x4RadarWorld._42 += m_xmf3PositionOffset.y;
 	xmf4x4RadarWorld._43 += m_xmf3PositionOffset.z;
@@ -726,7 +719,7 @@ void CServerRadarObject::UpdateUsing(const shared_ptr<CServerGameObject>& pGameO
 		return;
 	}
 
-	//// ¾ÆÀÌÅÛ ¸®¼ÂÇÏ´Â ÇÔ¼ö ÀÛ¼º
+	//// ì•„ì´í…œ ë¦¬ì…‹í•˜ëŠ” í•¨ìˆ˜ ì‘ì„±
 	//m_bObtained = false;
 	//m_bCollision = true;
 	//SetRandomPosition(pCollisionManager);
@@ -744,26 +737,26 @@ CServerStairTriggerObject::CServerStairTriggerObject(char* pstrFrameName, const 
 	XMFLOAT3 xmf3Point1, xmf3Point2, xmf3Point3;
 
 	/*float fx, fy, fz, fOffsetY;*/
-	if (xmf3Position.y < 1.0f) // 1Ãş
+	if (xmf3Position.y < 1.0f) // 1ì¸µ
 	{
 		m_fy = 0.2f;
 	}
-	else if (xmf3Position.y < 5.5f) // 2Ãş
+	else if (xmf3Position.y < 5.5f) // 2ì¸µ
 	{
 		m_fy = 4.7f;
 	}
-	else if (xmf3Position.y < 10.0f) // 3Ãş
+	else if (xmf3Position.y < 10.0f) // 3ì¸µ
 	{
 		m_fy = 9.2f;
 	}
-	else if (xmf3Position.y < 14.5f) // 4Ãş
+	else if (xmf3Position.y < 14.5f) // 4ì¸µ
 	{
 		m_fy = 13.7f;
 	}
 
-	if (xmf3Position.z > 0.0f) 
+	if (xmf3Position.z > 0.0f)
 	{
-		if (xmf3Position.x > 0.0f) // °è´Ü ¾Æ·¡
+		if (xmf3Position.x > 0.0f) // ê³„ë‹¨ ì•„ë˜
 		{
 			m_fOffsetY = 4.5f;
 			m_fx = 8.0f;
@@ -777,7 +770,7 @@ CServerStairTriggerObject::CServerStairTriggerObject(char* pstrFrameName, const 
 	}
 	else
 	{
-		if (xmf3Position.x > 0.0f) // °è´Ü À§
+		if (xmf3Position.x > 0.0f) // ê³„ë‹¨ ìœ„
 		{
 			m_fOffsetY = -4.5f;
 			m_fx = 8.0f;

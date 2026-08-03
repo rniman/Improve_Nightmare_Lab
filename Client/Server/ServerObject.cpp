@@ -10,8 +10,7 @@ CServerGameObject::CServerGameObject(char* pstrFrameName, const XMFLOAT4X4& xmf4
 }
 
 void CServerGameObject::Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager)
-{
-}
+{}
 
 void CServerGameObject::Move(XMFLOAT3 xmf3Offset)
 {
@@ -46,7 +45,7 @@ bool CServerGameObject::CheckPicking(const shared_ptr<CServerGameObject>& pColli
 	XMVECTOR xmvCameraOrigin = XMVector3TransformCoord(XMLoadFloat3(&xmf3CameraPosition), mtxModelMatrix);
 	XMFLOAT3 xmf3CameraOrigin;
 	XMStoreFloat3(&xmf3CameraOrigin, xmvCameraOrigin);
-	
+
 	XMVECTOR xmvPickDirection = XMVector3Normalize(XMVector3TransformCoord(XMLoadFloat3(&xmf3PickPosition), mtxModelMatrix) - xmvCameraOrigin);
 	XMFLOAT3 xmf3PickDirection;
 	XMStoreFloat3(&xmf3PickDirection, xmvPickDirection);

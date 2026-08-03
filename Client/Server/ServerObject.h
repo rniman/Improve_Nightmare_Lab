@@ -37,7 +37,7 @@ public:
 	XMFLOAT4X4 GetWorldMatrix()const { return m_xmf4x4World; }
 	vector<BoundingOrientedBox> GetVectorOOBB() const { return m_voobbOrigin; };
 	BoundingOrientedBox GetOOBB(int nIndex) { return m_voobbOrigin[nIndex]; }
-	
+
 	bool IsStatic() const { return m_bStatic; }
 	bool IsAlive() const { return m_bAlive; }
 	bool IsCollision() const { return m_bCollision; }
