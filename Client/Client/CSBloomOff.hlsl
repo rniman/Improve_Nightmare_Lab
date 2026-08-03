@@ -3,44 +3,44 @@ RWTexture2D<float4> gtxtRWOutput : register(u0);
 
 static const float bayer_matrix_8x8[64] =
 {
-    0, 32, 8, 40, 2, 34, 10, 42,
-    48, 16, 56, 24, 50, 18, 58, 26,
-    12, 44, 4, 36, 14, 46, 6, 38,
-    60, 28, 52, 20, 62, 30, 54, 22,
-     3, 35, 11, 43, 1, 33, 9, 41,
-    51, 19, 59, 27, 49, 17, 57, 25,
-    15, 47, 7, 39, 13, 45, 5, 37,
-    63, 31, 55, 23, 61, 29, 53, 21
+	0, 32, 8, 40, 2, 34, 10, 42,
+	48, 16, 56, 24, 50, 18, 58, 26,
+	12, 44, 4, 36, 14, 46, 6, 38,
+	60, 28, 52, 20, 62, 30, 54, 22,
+	 3, 35, 11, 43, 1, 33, 9, 41,
+	51, 19, 59, 27, 49, 17, 57, 25,
+	15, 47, 7, 39, 13, 45, 5, 37,
+	63, 31, 55, 23, 61, 29, 53, 21
 };
 
 [numthreads(32, 32, 1)]
 void CSBloomOff(uint3 n3DispatchThreadID : SV_DispatchThreadID)
 {
-    float4 finalColor = DFLightTexture[n3DispatchThreadID.xy];
-    float4 positionW = DFPositionTexture[n3DispatchThreadID.xy];
+	float4 finalColor = DFLightTexture[n3DispatchThreadID.xy];
+	float4 positionW = DFPositionTexture[n3DispatchThreadID.xy];
 
-    float3 vCameraPosition = gvCameraPosition.xyz;
-    float3 vPostionToCamera = vCameraPosition - positionW.xyz;
-    float fDistanceToCamera = length(vPostionToCamera);
+	float3 vCameraPosition = gvCameraPosition.xyz;
+	float3 vPostionToCamera = vCameraPosition - positionW.xyz;
+	float fDistanceToCamera = length(vPostionToCamera);
   
-    float fFogDensity = gvfFogInfo.z;
-    float fFogFactor = saturate(exp(-fDistanceToCamera * fFogDensity));
-    finalColor = lerp(gvFogColor, finalColor, fFogFactor);
-    
-    // --- µğ´õ¸µ Ãß°¡ ½ÃÀÛ (Àû¿ë ºÎºĞ) ---
-    // 1. ÇöÀç ¾²·¹µåÀÇ È­¸é ÁÂÇ¥¸¦ °¡Á®¿É´Ï´Ù.
-    int2 screenPos = n3DispatchThreadID.xy;
+	float fFogDensity = gvfFogInfo.z;
+	float fFogFactor = saturate(exp(-fDistanceToCamera * fFogDensity));
+	finalColor = lerp(gvFogColor, finalColor, fFogFactor);
+	
+	// --- ë””ë”ë§ ì¶”ê°€ ì‹œì‘ (ì ìš© ë¶€ë¶„) ---
+	// 1. í˜„ì¬ ì“°ë ˆë“œì˜ í™”ë©´ ì¢Œí‘œë¥¼ ê°€ì ¸ì˜µë‹ˆë‹¤.
+	int2 screenPos = n3DispatchThreadID.xy;
 
-    // 2. È­¸é ÁÂÇ¥¸¦ ÀÌ¿ëÇØ 8x8 ¸ÅÆ®¸¯½º¿¡¼­ »ç¿ëÇÒ ÀÎµ¦½º¸¦ ±¸ÇÕ´Ï´Ù.
-    int ditherX = screenPos.x % 8;
-    int ditherY = screenPos.y % 8;
+	// 2. í™”ë©´ ì¢Œí‘œë¥¼ ì´ìš©í•´ 8x8 ë§¤íŠ¸ë¦­ìŠ¤ì—ì„œ ì‚¬ìš©í•  ì¸ë±ìŠ¤ë¥¼ êµ¬í•©ë‹ˆë‹¤.
+	int ditherX = screenPos.x % 8;
+	int ditherY = screenPos.y % 8;
 
-    // 3. Bayer ¸ÅÆ®¸¯½º¿¡¼­ °ªÀ» °¡Á®¿Í -0.5 ~ 0.5 ¹üÀ§·Î Á¤±ÔÈ­ÇÏ°í 8ºñÆ® ´Ü°è¿¡ ¸Â°Ô ½ºÄÉÀÏ¸µÇÕ´Ï´Ù.
-    float ditherValue = bayer_matrix_8x8[ditherY * 8 + ditherX];
-    float ditherOffset = (ditherValue / 64.0 - 0.5) / 255.0;
+	// 3. Bayer ë§¤íŠ¸ë¦­ìŠ¤ì—ì„œ ê°’ì„ ê°€ì ¸ì™€ -0.5 ~ 0.5 ë²”ìœ„ë¡œ ì •ê·œí™”í•˜ê³  8ë¹„íŠ¸ ë‹¨ê³„ì— ë§ê²Œ ìŠ¤ì¼€ì¼ë§í•©ë‹ˆë‹¤.
+	float ditherValue = bayer_matrix_8x8[ditherY * 8 + ditherX];
+	float ditherOffset = (ditherValue / 64.0 - 0.5) / 255.0;
 
-    // 4. ÃÖÁ¾ »ö»ó(RGB)¿¡ µğ´õ¸µ ¿ÀÇÁ¼ÂÀ» ´õÇÕ´Ï´Ù.
-    finalColor.rgb += ditherOffset;
-    
-    gtxtRWOutput[n3DispatchThreadID.xy] = finalColor;
+	// 4. ìµœì¢… ìƒ‰ìƒ(RGB)ì— ë””ë”ë§ ì˜¤í”„ì…‹ì„ ë”í•©ë‹ˆë‹¤.
+	finalColor.rgb += ditherOffset;
+	
+	gtxtRWOutput[n3DispatchThreadID.xy] = finalColor;
 }

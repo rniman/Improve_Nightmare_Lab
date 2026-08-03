@@ -1,6 +1,6 @@
 #pragma once
 
-//¾î¶»°Ô »ç¿ëµÉÁö ¸ğ¸£´Â °´Ã¼¿¡ ÄÄÆ÷³ÍÆ®¸¦ ±¸ÇöÇØ¾ßÇÏ´Âµ¥ ±× ÄÄÆ÷³ÍÆ®ÀÇ Á¾·ùµµ ´Ù¾çÇÒ ¼ö ÀÖ±â ¶§¹®
+//ì–´ë–»ê²Œ ì‚¬ìš©ë ì§€ ëª¨ë¥´ëŠ” ê°ì²´ì— ì»´í¬ë„ŒíŠ¸ë¥¼ êµ¬í˜„í•´ì•¼í•˜ëŠ”ë° ê·¸ ì»´í¬ë„ŒíŠ¸ì˜ ì¢…ë¥˜ë„ ë‹¤ì–‘í•  ìˆ˜ ìˆê¸° ë•Œë¬¸
 class Component
 {
 public:
@@ -8,8 +8,8 @@ public:
 		TIMEONOFF = 0,
 	};
 public:
-	Component(){}
-	virtual ~Component(){}
+	Component() {}
+	virtual ~Component() {}
 
 	virtual void Init() = 0;
 	virtual void Update() = 0;

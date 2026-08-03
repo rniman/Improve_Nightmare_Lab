@@ -60,7 +60,7 @@ public:
 	virtual void ReleaseUploadBuffers();
 
 	virtual void Dispatch(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState);
-	
+
 	virtual void PassFirst(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState);
 	virtual void PassSecond(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState);
 	virtual void PassComposite(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState);
@@ -72,10 +72,10 @@ public:
 	void SetBlur(bool bBlur) { m_bBlur = bBlur; }
 	bool IsBlur() { return m_bBlur; }
 private:
-	shared_ptr<CTexture> m_pTextureFirPassUav;		// ÄÄÇ»Æ® ¼ÎÀÌ´õ Uav ÅØ½ºÃÄ
-	shared_ptr<CTexture> m_pTextureSecPassUav;		// ÄÄÇ»Æ® ¼ÎÀÌ´õ Uav ÅØ½ºÃÄ(ping pongÀ» À§ÇÑ)
-	shared_ptr<CTexture> m_pTextureCompositeUav;	// ÄÄÇ»Æ® ¼ÎÀÌ´õ ÃÖÁ¾ ÅØ½ºÃÄ
-	shared_ptr<CTexture> m_pTextureRtv;				// G-Buffer·Î ½è´ø°Í
+	shared_ptr<CTexture> m_pTextureFirPassUav;		// ì»´í“¨íŠ¸ ì…°ì´ë” Uav í…ìŠ¤ì³
+	shared_ptr<CTexture> m_pTextureSecPassUav;		// ì»´í“¨íŠ¸ ì…°ì´ë” Uav í…ìŠ¤ì³(ping pongì„ ìœ„í•œ)
+	shared_ptr<CTexture> m_pTextureCompositeUav;	// ì»´í“¨íŠ¸ ì…°ì´ë” ìµœì¢… í…ìŠ¤ì³
+	shared_ptr<CTexture> m_pTextureRtv;				// G-Bufferë¡œ ì¼ë˜ê²ƒ
 
 	bool m_bBlur = true;
 };

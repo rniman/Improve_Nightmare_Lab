@@ -1,11 +1,11 @@
 #include "Common.hlsl"
 
-// Ãâ·Â ¸®¼Ò½º
-// u0: ¼öÁ÷ ºí·¯ °á°ú¸¦ ¾µ RWTexture (UAV)
+// ì¶œë ¥ ë¦¬ì†ŒìŠ¤
+// u0: ìˆ˜ì§ ë¸”ëŸ¬ ê²°ê³¼ë¥¼ ì“¸ RWTexture (UAV)
 RWTexture2D<float4> gOutputTexture : register(u0);
 
-// °¡¿ì½Ã¾È ºí·¯ °¡ÁßÄ¡
-static float weight[16] =
+// ê°€ìš°ì‹œì•ˆ ë¸”ëŸ¬ ê°€ì¤‘ì¹˜
+static const float weight[16] =
 {
     0.055,
     0.055,

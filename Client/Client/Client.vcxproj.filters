@@ -248,7 +248,6 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Shaders.hlsl" />
     <FxCompile Include="Light.hlsl" />
     <FxCompile Include="BlendAnimation.hlsl">
       <Filter>TextureBlendShader</Filter>
@@ -375,7 +374,6 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shadow.hlsl" />
     <None Include="Common.hlsl">
       <Filter>HLSL%28cso%29</Filter>
     </None>

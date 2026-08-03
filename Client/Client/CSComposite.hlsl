@@ -1,33 +1,33 @@
 //================================================================================
-// ÃÖÁ¾ ¾À ÇÕ¼º ÄÄÇ»Æ® ¼ÎÀÌ´õ (CSComposite)
+// ìµœì¢… ì”¬ í•©ì„± ì»´í“¨íŠ¸ ì…°ì´ë” (CSComposite)
 //
-// ÀÌ ¼ÎÀÌ´õ´Â ÈÄÃ³¸®(Post-Processing)ÀÇ ¸¶Áö¸· ´Ü°è·Î,
-// ¿©·¯ ¹öÆÛÀÇ µ¥ÀÌÅÍ¸¦ Á¶ÇÕÇÏ¿© ÃÖÁ¾ È­¸éÀ» »ı¼ºÇÕ´Ï´Ù.
+// ì´ ì…°ì´ë”ëŠ” í›„ì²˜ë¦¬(Post-Processing)ì˜ ë§ˆì§€ë§‰ ë‹¨ê³„ë¡œ,
+// ì—¬ëŸ¬ ë²„í¼ì˜ ë°ì´í„°ë¥¼ ì¡°í•©í•˜ì—¬ ìµœì¢… í™”ë©´ì„ ìƒì„±í•©ë‹ˆë‹¤.
 //
-// ¼öÇà ÀÛ¾÷:
-// 1. G-Buffer (Á¶¸í, À§Ä¡) ·Îµå
-// 2. ¾È°³(Fog) °è»ê ¹× Àû¿ë
-// 3. ºí·ë(Emissive Blur) ÅØ½ºÃ³ ·Îµå
-// 4. ºí·ëÀ» ¾À¿¡ ÇÕ¼º (Additive Blending)
-// 5. µğ´õ¸µ(Dithering) Àû¿ë
-// 6. ÃÖÁ¾ °á°ú¸¦ Ãâ·Â ÅØ½ºÃ³¿¡ ¾¸
+// ìˆ˜í–‰ ì‘ì—…:
+// 1. G-Buffer (ì¡°ëª…, ìœ„ì¹˜) ë¡œë“œ
+// 2. ì•ˆê°œ(Fog) ê³„ì‚° ë° ì ìš©
+// 3. ë¸”ë£¸(Emissive Blur) í…ìŠ¤ì²˜ ë¡œë“œ
+// 4. ë¸”ë£¸ì„ ì”¬ì— í•©ì„± (Additive Blending)
+// 5. ë””ë”ë§(Dithering) ì ìš©
+// 6. ìµœì¢… ê²°ê³¼ë¥¼ ì¶œë ¥ í…ìŠ¤ì²˜ì— ì”€
 //================================================================================
 
 #include "Common.hlsl"
 
-// ÀÔ·Â ¸®¼Ò½º
-// t14: ÀÌÀü ºí·¯ ÆĞ½º(°¡·Î/¼¼·Î)ÀÇ ÃÖÁ¾ °á°ú (ºí·ë ÅØ½ºÃ³)
+// ì…ë ¥ ë¦¬ì†ŒìŠ¤
+// t14: ì´ì „ ë¸”ëŸ¬ íŒ¨ìŠ¤(ê°€ë¡œ/ì„¸ë¡œ)ì˜ ìµœì¢… ê²°ê³¼ (ë¸”ë£¸ í…ìŠ¤ì²˜)
 Texture2D<float4> gInputTexture : register(t14);
 
-// Ãâ·Â ¸®¼Ò½º
-// u0: ÃÖÁ¾ ¾À °á°ú¸¦ ¾µ RWTexture (UAV)
+// ì¶œë ¥ ë¦¬ì†ŒìŠ¤
+// u0: ìµœì¢… ì”¬ ê²°ê³¼ë¥¼ ì“¸ RWTexture (UAV)
 RWTexture2D<float4> gOutputTexture : register(u0);
 
-// »ó¼ö
-// 8x8 º£ÀÌ¾î(Bayer) ¸ÅÆ®¸¯½º (µğ´õ¸µ¿ë)
+// ìƒìˆ˜
+// 8x8 ë² ì´ì–´(Bayer) ë§¤íŠ¸ë¦­ìŠ¤ (ë””ë”ë§ìš©)
 static const float g_mBayerMatrix8x8[64] =
 {
-    0, 32, 8, 40, 2, 34, 10, 42,
+	0, 32, 8, 40, 2, 34, 10, 42,
     48, 16, 56, 24, 50, 18, 58, 26,
     12, 44, 4, 36, 14, 46, 6, 38,
     60, 28, 52, 20, 62, 30, 54, 22,
@@ -41,56 +41,56 @@ static const float g_mBayerMatrix8x8[64] =
 [numthreads(32, 32, 1)]
 void CSComposite(uint3 n3DispatchThreadID : SV_DispatchThreadID)
 {
-    uint2 vPixelCoord = n3DispatchThreadID.xy;
+	uint2 vPixelCoord = n3DispatchThreadID.xy;
 
-    // 1. G-Buffer ¹× Á¶¸í °á°ú ·Îµå
-    // DFLightTexture: Á¶¸í °è»êÀÌ ¿Ï·áµÈ ¾À(Scene) ÄÃ·¯
-    // DFPositionTexture: ¿ùµå °ø°£ À§Ä¡
-    float4 vFinalColor = DFLightTexture[vPixelCoord];
-    float4 vPositionW = DFPositionTexture[vPixelCoord];
+    // 1. G-Buffer ë° ì¡°ëª… ê²°ê³¼ ë¡œë“œ
+    // DFLightTexture: ì¡°ëª… ê³„ì‚°ì´ ì™„ë£Œëœ ì”¬(Scene) ì»¬ëŸ¬
+    // DFPositionTexture: ì›”ë“œ ê³µê°„ ìœ„ì¹˜
+	float4 vFinalColor = DFLightTexture[vPixelCoord];
+	float4 vPositionW = DFPositionTexture[vPixelCoord];
     
-    // 2. ¾È°³(Fog) °è»ê ¹× Àû¿ë
-    // (Áö¼ö ¾È°³ - Exponential Fog ±âÁØ)
-    float3 vCameraPos = gvCameraPosition.xyz;
-    float3 vPixelToCamera = vCameraPos - vPositionW.xyz;
-    float fDistanceToCamera = length(vPixelToCamera);
+    // 2. ì•ˆê°œ(Fog) ê³„ì‚° ë° ì ìš©
+    // (ì§€ìˆ˜ ì•ˆê°œ - Exponential Fog ê¸°ì¤€)
+	float3 vCameraPos = gvCameraPosition.xyz;
+	float3 vPixelToCamera = vCameraPos - vPositionW.xyz;
+	float fDistanceToCamera = length(vPixelToCamera);
  
-    float fFogDensity = gvfFogInfo.z;
+	float fFogDensity = gvfFogInfo.z;
     
-    // fFogFactor: 1.0 = ¾È°³ ¾øÀ½(Ä«¸Ş¶ó¿Í °¡±î¿ò), 0.0 = ¾È°³·Î ¿ÏÀüÈ÷ µ¤ÀÓ
-    float fFogFactor = saturate(exp(-fDistanceToCamera * fFogDensity));
+    // fFogFactor: 1.0 = ì•ˆê°œ ì—†ìŒ(ì¹´ë©”ë¼ì™€ ê°€ê¹Œì›€), 0.0 = ì•ˆê°œë¡œ ì™„ì „íˆ ë®ì„
+	float fFogFactor = saturate(exp(-fDistanceToCamera * fFogDensity));
     
-    vFinalColor = lerp(gvFogColor, vFinalColor, fFogFactor);
+	vFinalColor = lerp(gvFogColor, vFinalColor, fFogFactor);
     
-    float4 vBloomColor = gInputTexture[vPixelCoord];
+	float4 vBloomColor = gInputTexture[vPixelCoord];
 
-    // ºí·ë ÇÕ¼º (Ä¿½ºÅÒ)
-    float fBloomIntensity = length(vBloomColor.xyz);
-    if(fBloomIntensity < 1.f)
-    {
-        // ºí·ëÀÌ ¾àÇÒ ¶§: ¿øº» ¾ÀÀÇ ¹à±â¸¦ ºí·ë °­µµ¸¸Å­ °¨¼Ò½ÃÅ² ÈÄ, ºí·ëÀ» ´õÇÕ´Ï´Ù.
-        vFinalColor *= (1.0f - fBloomIntensity);
-        vFinalColor += vBloomColor;
-    }
-    else
-    {
-        // ºí·ëÀÌ °­ÇÒ ¶§: ¿øº» ¾À¿¡ ºí·ë »ö»ó(ÁõÆø)À» °öÇÕ´Ï´Ù.
-        vFinalColor *= vBloomColor * 2.0f;
-    }
+    // ë¸”ë£¸ í•©ì„± (ì»¤ìŠ¤í…€)
+	float fBloomIntensity = length(vBloomColor.xyz);
+	if (fBloomIntensity < 1.f)
+	{
+        // ë¸”ë£¸ì´ ì•½í•  ë•Œ: ì›ë³¸ ì”¬ì˜ ë°ê¸°ë¥¼ ë¸”ë£¸ ê°•ë„ë§Œí¼ ê°ì†Œì‹œí‚¨ í›„, ë¸”ë£¸ì„ ë”í•©ë‹ˆë‹¤.
+		vFinalColor *= (1.0f - fBloomIntensity);
+		vFinalColor += vBloomColor;
+	}
+	else
+	{
+        // ë¸”ë£¸ì´ ê°•í•  ë•Œ: ì›ë³¸ ì”¬ì— ë¸”ë£¸ ìƒ‰ìƒ(ì¦í­)ì„ ê³±í•©ë‹ˆë‹¤.
+		vFinalColor *= vBloomColor * 2.0f;
+	}
     
-    // µğ´õ¸µ(Dithering) Àû¿ë
-    // 8ºñÆ®(LDR) Ãâ·Â È¯°æ¿¡¼­ ¹ß»ıÇÒ ¼ö ÀÖ´Â ÄÃ·¯ ¹êµù(°è´Ü Çö»ó)À» ¿ÏÈ­ÇÕ´Ï´Ù.
-    int ditherX = vPixelCoord.x % 8;
-    int ditherY = vPixelCoord.y % 8;
+    // ë””ë”ë§(Dithering) ì ìš©
+    // 8ë¹„íŠ¸(LDR) ì¶œë ¥ í™˜ê²½ì—ì„œ ë°œìƒí•  ìˆ˜ ìˆëŠ” ì»¬ëŸ¬ ë°´ë”©(ê³„ë‹¨ í˜„ìƒ)ì„ ì™„í™”í•©ë‹ˆë‹¤.
+	int ditherX = vPixelCoord.x % 8;
+	int ditherY = vPixelCoord.y % 8;
     
-    float fDitherValue = g_mBayerMatrix8x8[ditherY * 8 + ditherX];
-    float fDitherNorm = (fDitherValue / 64.0f) - 0.5f;
+	float fDitherValue = g_mBayerMatrix8x8[ditherY * 8 + ditherX];
+	float fDitherNorm = (fDitherValue / 64.0f) - 0.5f;
     
-    // 8ºñÆ®(1/255) ÄÃ·¯ ½ºÅÜº¸´Ù ÀÛÀº °ªÀ¸·Î ½ºÄÉÀÏ¸µÇÏ¿© ¹Ì¼¼ÇÑ ³ëÀÌÁî Ãß°¡
-    float fDitherOffset = fDitherNorm / 255.0f;
+    // 8ë¹„íŠ¸(1/255) ì»¬ëŸ¬ ìŠ¤í…ë³´ë‹¤ ì‘ì€ ê°’ìœ¼ë¡œ ìŠ¤ì¼€ì¼ë§í•˜ì—¬ ë¯¸ì„¸í•œ ë…¸ì´ì¦ˆ ì¶”ê°€
+	float fDitherOffset = fDitherNorm / 255.0f;
     
-    vFinalColor.rgb += fDitherOffset;
+	vFinalColor.rgb += fDitherOffset;
     
-    // 6. ÃÖÁ¾ Ãâ·Â
-    gOutputTexture[vPixelCoord] = vFinalColor;
+    // 6. ìµœì¢… ì¶œë ¥
+	gOutputTexture[vPixelCoord] = vFinalColor;
 }

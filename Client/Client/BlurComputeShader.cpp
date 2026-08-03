@@ -3,7 +3,7 @@
 #include "Scene.h"
 #include "Object.h"
 
-CTextureToScreenShader::CTextureToScreenShader(shared_ptr<CTexture>& pTexture) 
+CTextureToScreenShader::CTextureToScreenShader(shared_ptr<CTexture>& pTexture)
 {
 	m_pTexture = pTexture;
 }
@@ -15,7 +15,7 @@ D3D12_INPUT_LAYOUT_DESC CTextureToScreenShader::CreateInputLayout()
 
 	pd3dInputElementDescs[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
 	pd3dInputElementDescs[1] = { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
-	
+
 	D3D12_INPUT_LAYOUT_DESC d3dInputLayoutDesc;
 	d3dInputLayoutDesc.pInputElementDescs = pd3dInputElementDescs;
 	d3dInputLayoutDesc.NumElements = nInputElementDescs;
@@ -95,7 +95,7 @@ void CTextureToScreenShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, 
 		pd3dCommandList->SetPipelineState(m_vpd3dPipelineState[0].Get());
 	}
 
-	if (m_pTexture) 
+	if (m_pTexture)
 	{
 		m_pTexture->UpdateShaderVariables(pd3dCommandList);
 	}
@@ -125,7 +125,7 @@ void CComputeShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 	d3dPipelineStateDesc.NodeMask = 0;
 	d3dPipelineStateDesc.CachedPSO = d3dCachedPipelineState;
 	d3dPipelineStateDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-	
+
 	HRESULT hResult = pd3dDevice->CreateComputePipelineState(&d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void**)m_vpd3dPipelineState[m_PipeLineIndex++].GetAddressOf());
 	if (pd3dComputeShaderBlob) pd3dComputeShaderBlob->Release();
 
@@ -200,14 +200,14 @@ void CBlurComputeShader::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12G
 		NULL
 	);
 	m_pTextureSecPassUav->CreateTexture(
-		pd3dDevice, 
-		0, 
-		RESOURCE_TEXTURE2D, 
+		pd3dDevice,
+		0,
+		RESOURCE_TEXTURE2D,
 		FRAME_BUFFER_WIDTH,
-		FRAME_BUFFER_HEIGHT, 
-		1, 
-		0, 
-		DXGI_FORMAT_R8G8B8A8_UNORM, 
+		FRAME_BUFFER_HEIGHT,
+		1,
+		0,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
 		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
 		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
 		NULL
@@ -226,17 +226,17 @@ void CBlurComputeShader::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12G
 		NULL
 	);
 
-	// SRV µð½ºÅ©¸³ÅÍ Èü »ý¼º
+	// SRV ë””ìŠ¤í¬ë¦½í„° íž™ ìƒì„±
 	CScene::CreateShaderResourceViews(pd3dDevice, m_pTextureFirPassUav, 0, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, m_pTextureSecPassUav, 0, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, m_pTextureCompositeUav, 0, 0);
 
-	// UAV µð½ºÅ©¸³ÅÍ Èü »ý¼º
+	// UAV ë””ìŠ¤í¬ë¦½í„° íž™ ìƒì„±
 	CScene::CreateUnorderedAccessViews(pd3dDevice, m_pTextureFirPassUav, 0, 0);
 	CScene::CreateUnorderedAccessViews(pd3dDevice, m_pTextureSecPassUav, 0, 0);
 	CScene::CreateUnorderedAccessViews(pd3dDevice, m_pTextureCompositeUav, 0, 0);
 
-	// 0¹ø ÀÎµ¦½ºÀÇ ÆÄ¶ó¹ÌÅÍ´Â 17(SRV), 1¹ø ÀÎµ¦½ºÀÇ ÆÄ¶ó¹ÌÅÍ´Â 16(UAV)
+	// 0ë²ˆ ì¸ë±ìŠ¤ì˜ íŒŒë¼ë¯¸í„°ëŠ” 17(SRV), 1ë²ˆ ì¸ë±ìŠ¤ì˜ íŒŒë¼ë¯¸í„°ëŠ” 16(UAV)
 	m_pTextureFirPassUav->SetRootParameterIndex(1, 16);
 	m_pTextureFirPassUav->SetRootParameterIndex(0, 17);
 	m_pTextureSecPassUav->SetRootParameterIndex(1, 16);
@@ -249,16 +249,13 @@ void CBlurComputeShader::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12G
 }
 
 void CBlurComputeShader::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
-{
-}
+{}
 
 void CBlurComputeShader::ReleaseShaderVariables()
-{
-}
+{}
 
 void CBlurComputeShader::ReleaseUploadBuffers()
-{
-}
+{}
 
 void CBlurComputeShader::Dispatch(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState)
 {

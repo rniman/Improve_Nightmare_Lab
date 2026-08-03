@@ -1,4 +1,4 @@
-#include "Shaders.hlsl"
+#include "Common.hlsl"
 
 struct VS_BLEND_INPUT
 {
@@ -36,8 +36,8 @@ float4 PS_Blend(VS_BLEND_OUTPUT input) : SV_Target
     
     float2 uv = input.uv / offset;
     
-    float elapsedTime = frac(localTime/1.0f); // ÇöÀç ½Ã°£¿¡¼­ Á¤¼ö ºÎºĞÀ» Á¦°ÅÇÏ¿© °æ°úµÈ ½Ã°£¸¸ ³²±ä´Ù.
-    int count = int(elapsedTime * offset*offset); // 1ÃÊ´ç
+    float elapsedTime = frac(localTime/1.0f); // í˜„ì¬ ì‹œê°„ì—ì„œ ì •ìˆ˜ ë¶€ë¶„ì„ ì œê±°í•˜ì—¬ ê²½ê³¼ëœ ì‹œê°„ë§Œ ë‚¨ê¸´ë‹¤.
+    int count = int(elapsedTime * offset*offset); // 1ì´ˆë‹¹
     
     float t = fmod(count, offset * offset);
     

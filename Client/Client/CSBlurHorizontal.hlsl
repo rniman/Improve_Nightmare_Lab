@@ -1,13 +1,13 @@
 #include "Common.hlsl"
 
-// Ãâ·Â ¸®¼Ò½º
-// u0: ¼öÆò ºí·¯ °á°ú¸¦ ¾µ RWTexture (UAV)
+// ì¶œë ¥ ë¦¬ì†ŒìŠ¤
+// u0: ìˆ˜í‰ ë¸”ëŸ¬ ê²°ê³¼ë¥¼ ì“¸ RWTexture (UAV)
 RWTexture2D<float4> gOutputTexture : register(u0);
 
-// °¡¿ì½Ã¾È ºí·¯ °¡ÁßÄ¡
-static float weight[16] =
+// ê°€ìš°ì‹œì•ˆ ë¸”ëŸ¬ ê°€ì¤‘ì¹˜
+static const float weight[16] =
 {
-    0.055,
+	0.055,
     0.055,
     0.053,
     0.051,
@@ -28,17 +28,17 @@ static float weight[16] =
 [numthreads(32, 32, 1)]
 void CSBlurHorizontal(uint3 n3DispatchThreadID : SV_DispatchThreadID)
 {
-    float4 blurredColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	float4 blurredColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
     
-    const int radius = 15;
+	const int radius = 15;
         
-    for(int y = -radius; y <= radius; y++)
-    {
-        int2 samplePos = int2(n3DispatchThreadID.xy) + int2(0, y);
-        samplePos = clamp(samplePos, int2(0, 0), int2(FRAME_BUFFER_WIDTH - 1, FRAME_BUFFER_HEIGHT - 1));
+	for (int y = -radius; y <= radius; y++)
+	{
+		int2 samplePos = int2(n3DispatchThreadID.xy) + int2(0, y);
+		samplePos = clamp(samplePos, int2(0, 0), int2(FRAME_BUFFER_WIDTH - 1, FRAME_BUFFER_HEIGHT - 1));
 
-        blurredColor += DFTextureEmissive[samplePos] * weight[abs(y)];
-    }
+		blurredColor += DFTextureEmissive[samplePos] * weight[abs(y)];
+	}
               
-    gOutputTexture[n3DispatchThreadID.xy] = blurredColor;
+	gOutputTexture[n3DispatchThreadID.xy] = blurredColor;
 }
