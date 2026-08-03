@@ -8,7 +8,7 @@
 //#define SHADOW_FRAME_BUFFER_WIDTH 4096
 //#define SHADOW_FRAME_BUFFER_HEIGHT 4096
 
-#define SINGLE_PLAY // define½Ã ½Ì±Û·Î ÁøÇà
+#define SINGLE_PLAY // defineì‹œ ì‹±ê¸€ë¡œ ì§„í–‰
 #define LOADSCENE
 
 #define ADD_RENDERTARGET_COUNT 6 
@@ -21,7 +21,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //OBJECT
-enum class ObjectType { DEFAULT= 0, HEXAHERON};
+enum class ObjectType { DEFAULT = 0, HEXAHERON };
 
 // Dir
 #define DIR_FORWARD					0x01

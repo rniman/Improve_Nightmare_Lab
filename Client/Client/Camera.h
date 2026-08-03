@@ -79,9 +79,9 @@ public:
 	D3D12_RECT GetScissorRect() { return(m_d3dScissorRect); }
 
 	virtual void Move(const XMFLOAT3& xmf3Shift) { m_xmf3Position.x += xmf3Shift.x; m_xmf3Position.y += xmf3Shift.y; m_xmf3Position.z += xmf3Shift.z; }
-	virtual void Rotate(float fPitch = 0.0f, float fYaw = 0.0f, float fRoll = 0.0f) { }
+	virtual void Rotate(float fPitch = 0.0f, float fYaw = 0.0f, float fRoll = 0.0f) {}
 	virtual void Update(XMFLOAT3& xmf3LookAt, float fElapsedTime);
-	virtual void SetLookAt(XMFLOAT3& xmf3LookAt) { }
+	virtual void SetLookAt(XMFLOAT3& xmf3LookAt) {}
 
 	D3D12_GPU_DESCRIPTOR_HANDLE GetDescriptorHandle();
 	void SetDescriptorHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle);
@@ -162,7 +162,7 @@ class CFirstPersonCamera : public CCamera
 {
 public:
 	CFirstPersonCamera(const shared_ptr<CCamera>& pCamera);
-	virtual ~CFirstPersonCamera() { }
+	virtual ~CFirstPersonCamera() {}
 
 	virtual void Update(XMFLOAT3& xmf3LookAt, float fElapsedTime);
 	virtual void Rotate(float fPitch = 0.0f, float fYaw = 0.0f, float fRoll = 0.0f);
@@ -172,7 +172,7 @@ class CThirdPersonCamera : public CCamera
 {
 public:
 	CThirdPersonCamera(const shared_ptr<CCamera>& pCamera);
-	virtual ~CThirdPersonCamera() { }
+	virtual ~CThirdPersonCamera() {}
 
 	virtual void Update(XMFLOAT3& xmf3LookAt, float fElapsedTime);
 	virtual void SetLookAt(XMFLOAT3& vLookAt);
@@ -184,10 +184,10 @@ class CLightCamera : public CCamera
 {
 public:
 	CLightCamera();
-	virtual ~CLightCamera() { }
+	virtual ~CLightCamera() {}
 
 	//bool operator<(const CLightCamera& A) {
-	//	const float epsilon = 1e-5f; // Çã¿ë ¿ÀÂ÷
+	//	const float epsilon = 1e-5f; // í—ˆìš© ì˜¤ì°¨
 	//	//XMFLOAT3 clToA = Vector3::Subtract(clientCamera->GetPosition(), A->GetPosition());
 	//	//XMFLOAT3 clToB = Vector3::Subtract(clientCamera->GetPosition(), B->GetPosition());
 	//	//return Vector3::Length(clToA) - Vector3::Length(clToB) < epsilon;

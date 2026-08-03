@@ -37,7 +37,7 @@ public:
 
 	void BlendLeftArm(float fElapsedTime);
 
-	//ÇÃ·¹ÀÌ¾î°¡ µé°í ÀÖ´Â ÇÃ·¹½Ã¶óÀÌÆ®ÀÇ ¿ùµåº¯È¯Á¤º¸¸¦ ¹İÈ¯
+	//í”Œë ˆì´ì–´ê°€ ë“¤ê³  ìˆëŠ” í”Œë ˆì‹œë¼ì´íŠ¸ì˜ ì›”ë“œë³€í™˜ì •ë³´ë¥¼ ë°˜í™˜
 	int GetBoneFrameIndexToFlashLight() { return m_nPlayerFlashLight; }
 	int GetBoneFrameIndexToRightHandRaderItem() { return m_nRaderItem; }
 	int GetBoneFrameIndexToRightHandTeleportItem() { return m_nTeleportItem; }
@@ -77,16 +77,16 @@ private:
 	int m_nElbow_R = -1;
 	int m_nHead_M = -1;
 
-	// ÆÈÀÇ °¢µµ
+	// íŒ”ì˜ ê°ë„
 	float m_fLElbowPitch = 0.0f;
 	float m_fLShoulderPitch = 0.0f;
-	
+
 	bool m_bSelectItem = false;
 };
 
-constexpr float ZOMBIE_LFET_FOOT[2]{0.1f, 0.6f};
-constexpr float ZOMBIE_RIGHT_FOOT[2]{0.3f, 0.8f};
-constexpr float ZOMBIE_ATTACK[2]{0.3f, 0.6f};
+constexpr float ZOMBIE_LFET_FOOT[2]{ 0.1f, 0.6f };
+constexpr float ZOMBIE_RIGHT_FOOT[2]{ 0.3f, 0.8f };
+constexpr float ZOMBIE_ATTACK[2]{ 0.3f, 0.6f };
 
 class CZombieAnimationController : public CAnimationController
 {

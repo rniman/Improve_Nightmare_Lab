@@ -6,13 +6,13 @@
 
 constexpr UINT WM_CHANGE_SLOT{ WM_USER + 5 };
 
-// m_vShader ½¦ÀÌ´õ¿¡ AddDefaultObject ½Ã¿¡ Á¢±ÙÇÒ °¢ ½¦ÀÌ´õ ÀÎµ¦½º¸¦ ÀÇ¹Ì
+// m_vShader ì‰ì´ë”ì— AddDefaultObject ì‹œì— ì ‘ê·¼í•  ê° ì‰ì´ë” ì¸ë±ìŠ¤ë¥¼ ì˜ë¯¸
 #define STANDARD_SHADER 0
 #define INSTANCE_STANDARD_SHADER 1
 #define SKINNEDANIMATION_STANDARD_SHADER 2
 
 // m_vForwardRenderShader
-#define TRANSPARENT_SHADER 0 // Åõ¸í°´Ã¼¿¡ ´ëÇÑ ½¦ÀÌ´õ´Â Ç×»ó ÈÄ¼øÀ§·Î ¹èÄ¡
+#define TRANSPARENT_SHADER 0 // íˆ¬ëª…ê°ì²´ì— ëŒ€í•œ ì‰ì´ë”ëŠ” í•­ìƒ í›„ìˆœìœ„ë¡œ ë°°ì¹˜
 #define PARTICLE_SHADER 1 
 #define TEXTUREBLEND_SHADER 2
 #define TRAIL_SHADER 3
@@ -25,7 +25,7 @@ constexpr UINT WM_CHANGE_SLOT{ WM_USER + 5 };
 
 //#define NOTRENDERING_SHADER 3
 
-// m_vMesh ¸Ş½¬¿¡ Á¢±ÙÇÒ °¢ ÀÎµ¦½º¸¦ ÀÇ¹Ì
+// m_vMesh ë©”ì‰¬ì— ì ‘ê·¼í•  ê° ì¸ë±ìŠ¤ë¥¼ ì˜ë¯¸
 #define HEXAHEDRONMESH 0
 
 #define MAX_LIGHTS						24 + MAX_SURVIVOR
@@ -65,7 +65,7 @@ struct LIGHTS
 struct FrameTimeInfo {
 	float time = 0.0f;
 	float localTime = 0.0f;
-	float usePattern = -1.0f; // shaders¿¡¼­ ÆĞÅÏÅØ½ºÃ³¸¦ »ç¿ëÇÏ´Â°¡? 0º¸´Ù Å«°ªÀÌ¸é »ç¿ëÇÏ´Â °Í. ÃÖÀûÈ­ ÇÊ¿ä. ½¦ÀÌ´õ¸¦ ³ª´©¸é ºĞ±â¹® ÁÙÀÏ¼öÀÖÀ½.
+	float usePattern = -1.0f; // shadersì—ì„œ íŒ¨í„´í…ìŠ¤ì²˜ë¥¼ ì‚¬ìš©í•˜ëŠ”ê°€? 0ë³´ë‹¤ í°ê°’ì´ë©´ ì‚¬ìš©í•˜ëŠ” ê²ƒ. ìµœì í™” í•„ìš”. ì‰ì´ë”ë¥¼ ë‚˜ëˆ„ë©´ ë¶„ê¸°ë¬¸ ì¤„ì¼ìˆ˜ìˆìŒ.
 
 	float fTrackingTime = 0.0f;
 
@@ -117,9 +117,9 @@ protected:
 	ComPtr<ID3D12DescriptorHeap> m_d3dRtvDescriptorHeap;
 
 	ComPtr<ID3D12RootSignature>	m_pd3dGraphicsRootSignature;
-	//·çÆ® ½Ã±×³ÊÃ³¸¦ ³ªÅ¸³»´Â ÀÎÅÍÆäÀÌ½º Æ÷ÀÎÅÍ
-	
-	// ¾À ¹è°æÀ½ ÀÌ¸§
+	//ë£¨íŠ¸ ì‹œê·¸ë„ˆì²˜ë¥¼ ë‚˜íƒ€ë‚´ëŠ” ì¸í„°í˜ì´ìŠ¤ í¬ì¸í„°
+
+	// ì”¬ ë°°ê²½ìŒ ì´ë¦„
 
 protected:
 	static ComPtr<ID3D12DescriptorHeap> m_pd3dCbvSrvUavDescriptorHeap;
@@ -148,7 +148,7 @@ public:
 	static D3D12_GPU_DESCRIPTOR_HANDLE CreateConstantBufferViews(ID3D12Device* pd3dDevice, int nConstantBufferViews, ID3D12Resource* pd3dConstantBuffers, UINT nStride);
 	static void CreateShaderResourceViews(ID3D12Device* pd3dDevice, const shared_ptr<CTexture>& pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex);
 	static D3D12_GPU_DESCRIPTOR_HANDLE CreateShaderResourceView(ID3D12Device* pd3dDevice, ID3D12Resource* pd3dResource, DXGI_FORMAT dxgiSrvFormat);
-	
+
 	static void CreateUnorderedAccessViews(ID3D12Device* pd3dDevice, const shared_ptr<CTexture>& pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex);
 
 
@@ -239,40 +239,40 @@ public:
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, int mainPlayerId) override;
 	void LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 
-	//¿ÀºêÁ§Æ® ¼Ò¸ê °ü·Ã
+	//ì˜¤ë¸Œì íŠ¸ ì†Œë©¸ ê´€ë ¨
 	void ReleaseObjects();
 	void ReleaseShaderVariables();
 	void ReleaseUploadBuffers() override;
 
-	//¾À ¾÷µ¥ÀÌÆ® °ü·Ã
+	//ì”¬ ì—…ë°ì´íŠ¸ ê´€ë ¨
 	virtual bool ProcessInput(UCHAR* pKeysBuffer) override;
 	virtual void AnimateObjects(float fElapsedTime, float fCurTime) override;
 
-	//[0626] Æ÷½ºÆ® ÇÁ·Î¼¼½Ì ¼ÎÀÌ´õ°¡ ¾À³»·Î ¿À¸é¼­ gameframeworkÀÇ PrevRenderTask ÄÚµå Á¤¸®
+	//[0626] í¬ìŠ¤íŠ¸ í”„ë¡œì„¸ì‹± ì…°ì´ë”ê°€ ì”¬ë‚´ë¡œ ì˜¤ë©´ì„œ gameframeworkì˜ PrevRenderTask ì½”ë“œ ì •ë¦¬
 	void PrevRenderTask(ID3D12GraphicsCommandList* pd3dCommandList);
 
-	//·»´õ¸µ °ü·Ã
+	//ë Œë”ë§ ê´€ë ¨
 	void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual void PrepareRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera) override;
-	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera,int nPipelineState) override;
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState) override;
 	void ShadowPreRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState);
 
-	//[0626] Æ÷½ºÆ® ÇÁ·Î¼¼½Ì ¼ÎÀÌ´õ°¡ ¾À³»·Î ¿À¸é¼­ gameframeworkÀÇ frame advance ÄÚµå Á¤¸®
+	//[0626] í¬ìŠ¤íŠ¸ í”„ë¡œì„¸ì‹± ì…°ì´ë”ê°€ ì”¬ë‚´ë¡œ ì˜¤ë©´ì„œ gameframeworkì˜ frame advance ì½”ë“œ ì •ë¦¬
 	void ShadowRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState);
 	void FinalRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle, int nGameState);
 
 	void ForwardRender(int nGameState, ID3D12GraphicsCommandList* pd3dCommandList, const std::shared_ptr<CCamera>& pCamera);
 
 	void BlurDispatch(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle);
-	
-	void AddDefaultObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ObjectType type, XMFLOAT3 position,int shader, int mesh);
-	
-	// ºû °ü·Ã
+
+	void AddDefaultObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ObjectType type, XMFLOAT3 position, int shader, int mesh);
+
+	// ë¹› ê´€ë ¨
 	D3D12_GPU_DESCRIPTOR_HANDLE			m_d3dLightCbvGPUDescriptorHandle;
-	LIGHT*								m_pLights = nullptr;
+	LIGHT* m_pLights = nullptr;
 	int									m_nLights = 0;
 	ComPtr<ID3D12Resource>				m_pd3dcbLights;
-	LIGHTS*								m_pcbMappedLights = NULL;
+	LIGHTS* m_pcbMappedLights = NULL;
 	XMFLOAT4							m_xmf4GlobalAmbient;
 	vector<XMFLOAT3>					m_xmf3lightPositions, m_xmf3lightLooks;
 	vector<XMFLOAT3>& GetLightPositions() { return m_xmf3lightPositions; }
@@ -286,22 +286,22 @@ public:
 	//void SetPlayer(shared_ptr<CPlayer> pPlayer, int nIndex);
 	//void SetMainPlayer(const shared_ptr<CPlayer>& pMainplayer);
 
-	//¾À ³» ¿ÀºêÁ§Æ®(½¦ÀÌ´õ)
+	//ì”¬ ë‚´ ì˜¤ë¸Œì íŠ¸(ì‰ì´ë”)
 	static vector<unique_ptr<CShader>> m_vShader;
 	vector<unique_ptr<CShader>> m_vForwardRenderShader;
-	
+
 	vector<shared_ptr<TextureBlendObject>> m_vTextureBlendObjects;
 	shared_ptr<CMaterial> mt_Electirc;
-	// ¸¶Æ¼¸®¾óÀº Com °´Ã¼¸¦ °¡Áø´Ù.ÅØ½ºÃ³°¡ ¸®¼Ò½º·Î °ü¸®µÇ´Âµ¥ ÀÌ °´Ã¼¸¦ Áö¿ªº¯¼ö·Î ¼±¾ğÇÏ°í »ç¿ëÇÏÁö ¾ÊÀ¸¸é ¾Ë¾Æ¼­ »èÁ¦°¡ µÇ¸é¼­
-	// µğ¹ÙÀÌ½º¿¡¼­ ¿¡·¯¸¦ ¹ß»ı ½ÃÅ²´Ù. 
+	// ë§ˆí‹°ë¦¬ì–¼ì€ Com ê°ì²´ë¥¼ ê°€ì§„ë‹¤.í…ìŠ¤ì²˜ê°€ ë¦¬ì†ŒìŠ¤ë¡œ ê´€ë¦¬ë˜ëŠ”ë° ì´ ê°ì²´ë¥¼ ì§€ì—­ë³€ìˆ˜ë¡œ ì„ ì–¸í•˜ê³  ì‚¬ìš©í•˜ì§€ ì•Šìœ¼ë©´ ì•Œì•„ì„œ ì‚­ì œê°€ ë˜ë©´ì„œ
+	// ë””ë°”ì´ìŠ¤ì—ì„œ ì—ëŸ¬ë¥¼ ë°œìƒ ì‹œí‚¨ë‹¤. 
 
 	vector<unique_ptr<CShader>> m_vPreRenderShader;
 
-	//[0626] gameframework¿¡¼­ sceneÀ¸·Î ¿Å±è
+	//[0626] gameframeworkì—ì„œ sceneìœ¼ë¡œ ì˜®ê¹€
 	CPostProcessingShader* m_pPostProcessingShader = NULL;
 	int	m_nPostPipelineIndex = 0;
 
-	//¸Ş½¬ ÀúÀå
+	//ë©”ì‰¬ ì €ì¥
 	vector<shared_ptr<CMesh>>			m_vMesh;
 
 	float m_fElapsedTime = 0.0f;

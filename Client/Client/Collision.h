@@ -32,7 +32,7 @@ public:
 
 	void AddCollisionObject(const shared_ptr<CGameObject>& pGameObject);
 	void AddNonCollisionObject(const shared_ptr<CGameObject>& pGameObject);
-	
+
 	vpObjects_t& GetSpaceGameObjects(int nHeight, int nWidth, int nDepth);
 
 	//void Collide(float fElapsedTime);
@@ -55,11 +55,11 @@ public:
 private:
 	static int m_nCollisionObject;
 
-	vector<weak_ptr<CGameObject>> m_pCollisionObject;	// ¹øÈ£¸¦ ÀÌ¿ëÇØ¼­ Ãæµ¹ °´Ã¼¸¦ ºü¸£°Ô °¡Á®¿À±âÀ§ÇÔ
-	vector<weak_ptr<CGameObject>> m_pNonCollisionObjects;	// ¼­¹ö¿Í´Â »ó°ü¾ø´Â ¿ÀºêÁ§Æ®µé(Á¤ÀûÀÎ ¿ÀºêÁ§Æ®µéÀÌ¸é¼­ Ãæµ¹Ã¼Å©°¡ ÇÊ¿ä¾ø´Â °´Ã¼)
+	vector<weak_ptr<CGameObject>> m_pCollisionObject;	// ë²ˆí˜¸ë¥¼ ì´ìš©í•´ì„œ ì¶©ëŒ ê°ì²´ë¥¼ ë¹ ë¥´ê²Œ ê°€ì ¸ì˜¤ê¸°ìœ„í•¨
+	vector<weak_ptr<CGameObject>> m_pNonCollisionObjects;	// ì„œë²„ì™€ëŠ” ìƒê´€ì—†ëŠ” ì˜¤ë¸Œì íŠ¸ë“¤(ì •ì ì¸ ì˜¤ë¸Œì íŠ¸ë“¤ì´ë©´ì„œ ì¶©ëŒì²´í¬ê°€ í•„ìš”ì—†ëŠ” ê°ì²´)
 
 	int m_nHeight = -1; // == Floor
-	int m_nWidth = -1; 
+	int m_nWidth = -1;
 	int m_nDepth = -1;
 };
 

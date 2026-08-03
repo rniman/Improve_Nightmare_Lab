@@ -83,7 +83,7 @@ public:
 	void UpdateSrvShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, int nRootParameterIndex, int nDescriptorHandlesIndex);
 	void UpdateUavShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, int nRootParameterIndex, int nDescriptorHandlesIndex);
 
-	//¸®¼Ò½º¸¦ ³Ñ°Ü¹Ş°í ¸®¼Ò½º¸¦ ÀúÀåÇÔ.
+	//ë¦¬ì†ŒìŠ¤ë¥¼ ë„˜ê²¨ë°›ê³  ë¦¬ì†ŒìŠ¤ë¥¼ ì €ì¥í•¨.
 	void SetTextures(UINT nResourceType, ID3D12Resource* pResource, int idx);
 
 	int GetRootParameters() { return(m_nRootParameters); }
@@ -126,7 +126,7 @@ public:
 	virtual void UpdateShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, VS_CB_OBJECT_INFO* objectInfo);
 
 	virtual void ReleaseUploadBuffers();
-	
+
 	void LoadTextureFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, UINT nType, UINT nRootParameter, _TCHAR* pwstrTextureName, shared_ptr<CTexture>& pTexture, shared_ptr<CGameObject> pParent, FILE* pInFile);
 public:
 	UINT							m_nType = 0x00;
@@ -157,11 +157,11 @@ struct CALLBACKKEY
 class CAnimationCallbackHandler
 {
 public:
-	CAnimationCallbackHandler() { }
-	~CAnimationCallbackHandler() { }
+	CAnimationCallbackHandler() {}
+	~CAnimationCallbackHandler() {}
 
 public:
-	virtual void HandleCallback(void* pCallbackData, float fTrackPosition) { }
+	virtual void HandleCallback(void* pCallbackData, float fTrackPosition) {}
 };
 
 //#define _WITH_ANIMATION_SRT
@@ -213,7 +213,7 @@ public:
 class CAnimationTrack
 {
 public:
-	CAnimationTrack() { }
+	CAnimationTrack() {}
 	~CAnimationTrack();
 
 	void SetAnimationSet(int nAnimationSet) { m_nAnimationSet = nAnimationSet; }
@@ -241,7 +241,7 @@ public:
 	int 							m_nType = ANIMATION_TYPE_LOOP; //Once, Loop, PingPong
 
 	int 							m_nCallbackKeys = 0;
-	CALLBACKKEY*					m_pCallbackKeys = NULL;
+	CALLBACKKEY* m_pCallbackKeys = NULL;
 
 	shared_ptr<CAnimationCallbackHandler> m_pAnimationCallbackHandler;
 };
@@ -295,11 +295,11 @@ public:
 	int m_nNowState;
 	int m_nNextState;
 
-	float m_fExitTime = 0.0f;	//»óÅÂÀüÀÌ¸¦ ½ÃÀÛÇÒ¼öÀÖ´Â ½ÃÁ¡(ÀüÃ¼ ¾Ö´Ï¸ŞÀÌ¼Ç ±æÀÌ¿¡¼­(0 ~ 1))
+	float m_fExitTime = 0.0f;	//ìƒíƒœì „ì´ë¥¼ ì‹œì‘í• ìˆ˜ìˆëŠ” ì‹œì (ì „ì²´ ì• ë‹ˆë©”ì´ì…˜ ê¸¸ì´ì—ì„œ(0 ~ 1))
 	float m_fTransitionStart = 0.0f;
 
-	float m_fTransitionDuration = 0.0f;	//»óÅÂÀüÀÌ¿¡ °É¸®´Â ½Ã°£
-	float m_fTransitionTime = 0.0f;	//ÇöÀç±îÁö »óÅÂÀüÀÌ¿¡ °É¸° ½Ã°£
+	float m_fTransitionDuration = 0.0f;	//ìƒíƒœì „ì´ì— ê±¸ë¦¬ëŠ” ì‹œê°„
+	float m_fTransitionTime = 0.0f;	//í˜„ì¬ê¹Œì§€ ìƒíƒœì „ì´ì— ê±¸ë¦° ì‹œê°„
 };
 
 class CAnimationController
@@ -328,8 +328,8 @@ public:
 
 	void SetRootMotion(bool bRootMotion) { m_bRootMotion = bRootMotion; }
 
-	virtual void OnRootMotion(CGameObject* pRootGameObject) { }
-	virtual void OnAnimationIK(CGameObject* pRootGameObject) { }
+	virtual void OnRootMotion(CGameObject* pRootGameObject) {}
+	virtual void OnAnimationIK(CGameObject* pRootGameObject) {}
 
 	//
 	XMFLOAT4X4 GetBoneFrameTransform(int index);
@@ -341,7 +341,7 @@ public:
 
 	bool IsAnimation() const { return m_bAnimation; }
 public:
-	bool m_bAnimation = true;	// false°¡ µÇ¸é ¿ÏÀüÈ÷ Á×¾î¼­ ÀÌÈÄ ¾Æ¹«°Íµµ ¾ÈÇÔ
+	bool m_bAnimation = true;	// falseê°€ ë˜ë©´ ì™„ì „íˆ ì£½ì–´ì„œ ì´í›„ ì•„ë¬´ê²ƒë„ ì•ˆí•¨
 
 	float 							m_fTime = 0.0f;
 
@@ -355,12 +355,12 @@ public:
 
 	vector<ComPtr<ID3D12Resource>> m_vpd3dcbSkinningBoneTransforms; //[SkinnedMeshes]
 	vector<shared_ptr<XMFLOAT4X4>> m_vpcbxmf4x4MappedSkinningBoneTransforms; //[SkinnedMeshes]
-	
-	// ºí·»µåÀ§ÇÑ °¡ÁßÄ¡
+
+	// ë¸”ë Œë“œìœ„í•œ ê°€ì¤‘ì¹˜
 	std::vector<float> m_vfBlendWeight;
 
-	int m_nState = 0;	// »óÅÂ °³¼ö
-	int m_nTransition = 0;	// »óÅÂÀüÀÌ °³¼ö
+	int m_nState = 0;	// ìƒíƒœ ê°œìˆ˜
+	int m_nTransition = 0;	// ìƒíƒœì „ì´ ê°œìˆ˜
 	vector<CAnimationTransition> m_vAnimationTransitions;
 	bool m_bTransition = false;
 	int m_nNowState;
@@ -370,7 +370,7 @@ public:
 
 	bool m_bRootMotion = false;
 	shared_ptr<CGameObject> m_pModelRootObject;
-	weak_ptr<CGameObject> m_pRootMotionObject;	//Áö±İ »ç¿ë¾ÈÇÏ´Â Áß
+	weak_ptr<CGameObject> m_pRootMotionObject;	//ì§€ê¸ˆ ì‚¬ìš©ì•ˆí•˜ëŠ” ì¤‘
 	XMFLOAT3 m_xmf3FirstRootMotionPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 public:
@@ -382,16 +382,16 @@ protected:
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
- //RenderingÀ» À§ÇÑ ¿ÀºêÁ§Æ®ÀÓ °á±¹ CShader¿¡ Æ÷ÇÔµÉ ¿î¸íÀÓ,  ±Ùµ¥ ÀÎ½ºÅÏ½Ì ¿ÀºêÁ§Æ®ÀÇ °æ¿ì µû·Î Á¤º¸¸¦ °á±¹ ÀúÀåÇØµÖ¾ßÇÔ
+ //Renderingì„ ìœ„í•œ ì˜¤ë¸Œì íŠ¸ì„ ê²°êµ­ CShaderì— í¬í•¨ë  ìš´ëª…ì„,  ê·¼ë° ì¸ìŠ¤í„´ì‹± ì˜¤ë¸Œì íŠ¸ì˜ ê²½ìš° ë”°ë¡œ ì •ë³´ë¥¼ ê²°êµ­ ì €ì¥í•´ë‘¬ì•¼í•¨
 class CGameObject : public std::enable_shared_from_this<CGameObject>
 {
 public:
-	CGameObject(char* pstrFrameName, XMFLOAT4X4& xmf4x4World, CMesh* pMesh); 
+	CGameObject(char* pstrFrameName, XMFLOAT4X4& xmf4x4World, CMesh* pMesh);
 	CGameObject(char* pstrFrameName, XMFLOAT4X4& xmf4x4World, const shared_ptr<CMesh>& pMesh);
 	CGameObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	CGameObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, int nMaterials);
 	virtual ~CGameObject();
-	
+
 	D3D12_GPU_DESCRIPTOR_HANDLE GetDescriptorHandle();
 	void SetDescriptorHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle);
 
@@ -400,11 +400,11 @@ public:
 
 	//Rendering
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList);
-	//Æ¯Á¤ °´Ã¼´Â ·»´õ¸µÇÏÁö ¾ÊÀ»‹š
-	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, char* pstrFramname); 
-	//ºÒÅõ¸íÇÑ ÀçÁúÀÇ ¸Ş½¬¸¸ ·»´õ¸µ
+	//íŠ¹ì • ê°ì²´ëŠ” ë Œë”ë§í•˜ì§€ ì•Šì„ë–„
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, char* pstrFramname);
+	//ë¶ˆíˆ¬ëª…í•œ ì¬ì§ˆì˜ ë©”ì‰¬ë§Œ ë Œë”ë§
 	virtual void RenderOpaque(ID3D12GraphicsCommandList* pd3dCommandList);
-	//Åõ¸íÇÑ ÀçÁúÀÇ ¸Ş½¬¸¸ ·»´õ¸µ
+	//íˆ¬ëª…í•œ ì¬ì§ˆì˜ ë©”ì‰¬ë§Œ ë Œë”ë§
 	virtual void RenderTransparent(ID3D12GraphicsCommandList* pd3dCommandList);
 
 	virtual void CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
@@ -452,7 +452,7 @@ public:
 	static shared_ptr<CGameObject> LoadFrameHierarchyFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, shared_ptr<CGameObject> pParent, FILE* pInFile, int* pnSkinnedMeshes, MeshType meshtype);
 	static shared_ptr<CGameObject> LoadInstanceFrameHierarchyFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, shared_ptr<CGameObject> pParent, FILE* pInFile, int* pnSkinnedMeshes);
 	static void PrintFrameInfo(const shared_ptr<CGameObject>& pGameObject, const shared_ptr<CGameObject>& pParent);
-	
+
 	shared_ptr<CSkinnedMesh> FindSkinnedMesh(char* pstrSkinnedMeshName);
 	void FindAndSetSkinnedMesh(vector<shared_ptr<CSkinnedMesh>>& vpSkinnedMeshes, int* pnSkinnedMesh);
 
@@ -460,7 +460,7 @@ public:
 	void SetTrackAnimationPosition(int nAnimationTrack, float fPosition);
 
 	void SetRootMotion(bool bRootMotion) { if (m_pSkinnedAnimationController) m_pSkinnedAnimationController->SetRootMotion(bRootMotion); }
-	
+
 	static void LoadAnimationFromFile(FILE* pInFile, const shared_ptr<CLoadedModelInfo>& pLoadedModel);
 	static shared_ptr<CLoadedModelInfo> LoadGeometryAndAnimationFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const char* pstrFileName, MeshType meshtype);
 
@@ -506,10 +506,10 @@ public:
 	void SetInstance(int bInstance) { m_bInstance = bInstance; }
 	bool IsInstance() const { return m_bInstance; }
 public:
-	//[0514] ½ºÅÂÆ½ Ãß°¡
+	//[0514] ìŠ¤íƒœí‹± ì¶”ê°€
 	bool m_bStatic = true;
 
-	//Áßº¹µÈ ¸Ş½¬¸¦ ¾ø¾Ö±â À§ÇØ ÃÖÃÊ ¸Ş½¬µéÀ» ÀÌ°÷¿¡ ÀúÀåÇÑ´Ù.
+	//ì¤‘ë³µëœ ë©”ì‰¬ë¥¼ ì—†ì• ê¸° ìœ„í•´ ìµœì´ˆ ë©”ì‰¬ë“¤ì„ ì´ê³³ì— ì €ì¥í•œë‹¤.
 	static vector<shared_ptr<CMesh>> m_vMeshContainer;
 
 	char m_pstrFrameName[64];
@@ -526,9 +526,9 @@ public:
 	shared_ptr<CGameObject> m_pSibling;
 
 	ComPtr<ID3D12Resource> m_d3dcbvObject;
-	VS_CB_OBJECT_INFO* m_cbMappedObject = NULL;// m_d3dcbvObject°¡ Á¦°ÅµÇ´Â ½ÃÁ¡¿¡ °°ÀÌ Á¦°ÅµÇ¹Ç·Î º°µµ ÇØÁ¦ X
+	VS_CB_OBJECT_INFO* m_cbMappedObject = NULL;// m_d3dcbvObjectê°€ ì œê±°ë˜ëŠ” ì‹œì ì— ê°™ì´ ì œê±°ë˜ë¯€ë¡œ ë³„ë„ í•´ì œ X
 	D3D12_GPU_DESCRIPTOR_HANDLE	m_d3dCbvGPUDescriptorHandle;
-	// ¾Ö´Ï¸ŞÀÌ¼Ç °ü·Ã
+	// ì• ë‹ˆë©”ì´ì…˜ ê´€ë ¨
 	shared_ptr<CAnimationController> m_pSkinnedAnimationController;
 
 	bool m_bAlive = true;
@@ -537,11 +537,11 @@ public:
 	int m_nCollisionType = 0; // 0:None, 1:Standard, 2:Picking
 	int m_nCollisionNum = -1;
 
-	// Åõ¸í ¿ÀºêÁ§Æ® ºĞ·ù
+	// íˆ¬ëª… ì˜¤ë¸Œì íŠ¸ ë¶„ë¥˜
 	bool m_bThisContainTransparent = false;
 	vector<int> m_vTransparentMaterialNumbers;
 
-	//[0524] ÀÎ½ºÅÏ½º ¿ÀºêÁ§Æ®ÀÎÁö
+	//[0524] ì¸ìŠ¤í„´ìŠ¤ ì˜¤ë¸Œì íŠ¸ì¸ì§€
 	bool m_bInstance = false;
 };
 
@@ -579,14 +579,14 @@ public:
 class CFullScreenTextureObject : public CGameObject
 {
 public:
-	CFullScreenTextureObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,shared_ptr<CMaterial>& material);
+	CFullScreenTextureObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, shared_ptr<CMaterial>& material);
 	virtual ~CFullScreenTextureObject() {};
 
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList);
 
 	void SetAlphaValue(float val);
-	void SetRender(bool val) { 
-		m_bRender = val; 
+	void SetRender(bool val) {
+		m_bRender = val;
 		if (m_Component) {
 			m_Component->Init();
 		}

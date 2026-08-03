@@ -55,7 +55,7 @@ private:
 	bool m_bOpened = false;
 	bool m_bAnimate = false;
 	XMFLOAT3 m_xmf3OriginPosition;
-	XMFLOAT3 m_xmf3Forward;	
+	XMFLOAT3 m_xmf3Forward;
 };
 
 /// <CGameObject - CDrawerObject>
@@ -127,7 +127,7 @@ public:
 class CMineObject : public CItemObject
 {
 public:
-	
+
 	CMineObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
 	virtual ~CMineObject();
 

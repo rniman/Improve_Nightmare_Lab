@@ -5,8 +5,8 @@ class CInstanceObject;
 
 class CMesh
 {
-//private:
-//	int								m_nReferences = 0;
+	//private:
+	//	int								m_nReferences = 0;
 public:
 	CMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual ~CMesh();
@@ -72,7 +72,7 @@ protected:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// [0504] UIÀ§ÇÑ »ç°¢Çü ¸Ş½¬
+// [0504] UIìœ„í•œ ì‚¬ê°í˜• ë©”ì‰¬
 class CUserInterfaceRectMesh : public CMesh
 {
 public:
@@ -98,7 +98,7 @@ protected:
 // HexahedronMesh
 class HexahedronMesh : public CMesh {
 public:
-	HexahedronMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,float xSize ,float ySize,float zSize);
+	HexahedronMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float xSize, float ySize, float zSize);
 	~HexahedronMesh();
 
 	virtual void OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList);
@@ -114,7 +114,7 @@ protected:
 class CStandardMesh : public CMesh
 {
 public:
-	// ÀÎ½ºÅÏ½º ¸Ş½¬¸¦ ÀúÀåÇÒ ÄÁÅ×ÀÌ³Ê
+	// ì¸ìŠ¤í„´ìŠ¤ ë©”ì‰¬ë¥¼ ì €ì¥í•  ì»¨í…Œì´ë„ˆ
 	static vector<shared_ptr<CStandardMesh>> g_vAllstandardMesh;
 
 	CStandardMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
@@ -178,11 +178,11 @@ public:
 
 	virtual void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList);
 
-	// ¿©±â¼­ ÇÏµåÄÚµùÀ¸·Î Ãæµ¹Ã¼¿¡ µû¸¥ °ÔÀÓ ¿ÀºêÁ§Æ®¸¦ ¸¸µå´Â ÀÛ¾÷À» ÇÏ°Ô ÇØµÒ
+	// ì—¬ê¸°ì„œ í•˜ë“œì½”ë”©ìœ¼ë¡œ ì¶©ëŒì²´ì— ë”°ë¥¸ ê²Œì„ ì˜¤ë¸Œì íŠ¸ë¥¼ ë§Œë“œëŠ” ì‘ì—…ì„ í•˜ê²Œ í•´ë‘ 
 	void CreateInstanceObjectInfo(char* pstrMeshName, XMFLOAT4X4& xmf4x4WorldMatrix);
 
 	XMFLOAT4X4* GetInstanceTransformMatrix() { return m_pxmf4x4InstanceTransformMatrix; }
-	void SetInstanceTransformMatrix(XMFLOAT4X4* transform) {  m_pxmf4x4InstanceTransformMatrix = transform; }
+	void SetInstanceTransformMatrix(XMFLOAT4X4* transform) { m_pxmf4x4InstanceTransformMatrix = transform; }
 	ComPtr<ID3D12Resource>& GetInstanceTransformMatrixBuffer() { return m_pd3dInstanceTransformMatrixBuffer; }
 	D3D12_VERTEX_BUFFER_VIEW GetInstanceTransformMatrixBufferView() const { return m_d3dInstanceTransformMatrixBufferView; }
 
@@ -193,7 +193,7 @@ protected:
 	XMFLOAT4X4* m_pxmf4x4InstanceTransformMatrix = NULL;
 	weak_ptr<CInstanceObject> m_pOriginInstance;
 
-	//int m_nStart = 0;	// CollisionManager ½ÃÀÛ ÀÎµ¦½º (ÀÓ½Ã)
+	//int m_nStart = 0;	// CollisionManager ì‹œì‘ ì¸ë±ìŠ¤ (ì„ì‹œ)
 
 	ComPtr<ID3D12Resource> m_pd3dInstanceTransformMatrixBuffer;
 	ComPtr<ID3D12Resource> m_pd3dInstanceTransformMatrixUploadBuffer;

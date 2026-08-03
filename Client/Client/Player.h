@@ -13,8 +13,8 @@ class CZombiePlayer;
 class CSoundCallbackHandler : public CAnimationCallbackHandler
 {
 public:
-	CSoundCallbackHandler() { }
-	~CSoundCallbackHandler() { }
+	CSoundCallbackHandler() {}
+	~CSoundCallbackHandler() {}
 
 public:
 	virtual void HandleCallback(void* pCallbackData, float fTrackPosition);
@@ -74,8 +74,8 @@ public:
 	void SetMaxVelocityY(float fMaxVelocity) { m_fMaxVelocityY = fMaxVelocity; }
 	void SetVelocity(const XMFLOAT3& xmf3Velocity) { m_xmf3Velocity = xmf3Velocity; }
 
-	virtual void OnPlayerUpdateCallback(float fElapsedTime) { }
-	virtual void OnCameraUpdateCallback(float fElapsedTime) { }
+	virtual void OnPlayerUpdateCallback(float fElapsedTime) {}
+	virtual void OnCameraUpdateCallback(float fElapsedTime) {}
 	void SetPlayerUpdatedContext(LPVOID pContext) { m_pPlayerUpdatedContext = pContext; }
 	void SetCameraUpdatedContext(LPVOID pContext) { m_pCameraUpdatedContext = pContext; }
 
@@ -118,13 +118,13 @@ public:
 	void SetHitDamageScreenObject(shared_ptr<CFullScreenTextureObject>& object) {
 		m_pHitDamageScreenObject = object;
 	}
-	void SetHitRender(bool val) { 
+	void SetHitRender(bool val) {
 		if (m_pHitDamageScreenObject) {
 			m_pHitDamageScreenObject->SetRender(val);
 		}
 	}
-	virtual void RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush) { }
-	//°ÔÀÓ½ÃÀÛ¿¡ ÇÊ¿äÇÑ ÀÛ¾÷ ¼öÇà
+	virtual void RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush) {}
+	//ê²Œì„ì‹œì‘ì— í•„ìš”í•œ ì‘ì—… ìˆ˜í–‰
 	virtual void SetGameStart();
 
 	virtual bool ActiveSense() {
@@ -149,7 +149,7 @@ protected:
 	float           			m_fYaw = 0.0f;
 	float           			m_fRoll = 0.0f;
 
-	XMFLOAT3					m_xmf3OldVelocity = XMFLOAT3(0.0f, 0.0f, 0.0f);	// ÀÌµ¿½Ã Àû¿ëµÈ ¼Ó·Â ÀúÀå
+	XMFLOAT3					m_xmf3OldVelocity = XMFLOAT3(0.0f, 0.0f, 0.0f);	// ì´ë™ì‹œ ì ìš©ëœ ì†ë ¥ ì €ì¥
 	XMFLOAT3					m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3     				m_xmf3Gravity = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	float           			m_fMaxVelocityXZ = 0.0f;
@@ -160,21 +160,21 @@ protected:
 	LPVOID						m_pPlayerUpdatedContext = NULL;
 	LPVOID						m_pCameraUpdatedContext = NULL;
 
-	// Ä«¸Ş¶ó ½ÇÃ¼´Â ÇÃ·¹ÀÌ¾î°¡ ´Ù·é´Ù
+	// ì¹´ë©”ë¼ ì‹¤ì²´ëŠ” í”Œë ˆì´ì–´ê°€ ë‹¤ë£¬ë‹¤
 	shared_ptr<CCamera> m_pCamera;
 	shared_ptr<CGameObject> m_pPickedObject;
 
 	bool	m_bRightClick = false;
 
-	bool	m_bTracking     = false;
+	bool	m_bTracking = false;
 	float	m_fTrackingTime = 0.0f;
 
-	bool	m_bInterruption     = false; // true½Ã ¾È°³ È¿°ú ½ÉÇØÁü
+	bool	m_bInterruption = false; // trueì‹œ ì•ˆê°œ íš¨ê³¼ ì‹¬í•´ì§
 	float	m_fInterruptionTime = 0.0f;
-	float	m_fInterruption     = 0.0f;
+	float	m_fInterruption = 0.0f;
 
-	bool	m_bRunning      = false;
-	float	m_fRunningTime  = 0.0f;
+	bool	m_bRunning = false;
+	float	m_fRunningTime = 0.0f;
 
 	bool	m_ShadowRender;
 	bool	m_SelfShadowRender;
@@ -182,9 +182,9 @@ protected:
 	float	m_fPlayerVolume = 0.0f;
 
 	shared_ptr<CFullScreenTextureObject> m_pHitDamageScreenObject;
-	
-	float	m_fGameStartCount  = 10.f;
-	bool	m_bGameStartWait   = false;
+
+	float	m_fGameStartCount = 10.f;
+	bool	m_bGameStartWait = false;
 
 	bool	m_bSense = false;
 };
@@ -251,14 +251,14 @@ private:
 	float m_fFullStaminaTime = 0.0f;
 
 	XMFLOAT3 m_fEscapePos = XMFLOAT3(0.0f, 0.0f, 0.0f);
-private: 
-	shared_ptr<CGameObject> m_pFlashlight; // ÇÃ·¡½Ã¶óÀÌÆ®
-	shared_ptr<CRadarObject> m_pRader; // ·¹ÀÌ´õ
-	shared_ptr<CTeleportObject> m_pTeleport; // ÅÚ·¹Æ÷Æ®¾ÆÀÌÅÛ
-	shared_ptr<CMineObject> m_pMine; // ÅÚ·¹Æ÷Æ®¾ÆÀÌÅÛ
-	shared_ptr<CFuseObject> m_pFuse;// Ç»Áî ¾ÆÀÌÅÛ
+private:
+	shared_ptr<CGameObject> m_pFlashlight; // í”Œë˜ì‹œë¼ì´íŠ¸
+	shared_ptr<CRadarObject> m_pRader; // ë ˆì´ë”
+	shared_ptr<CTeleportObject> m_pTeleport; // í…”ë ˆí¬íŠ¸ì•„ì´í…œ
+	shared_ptr<CMineObject> m_pMine; // í…”ë ˆí¬íŠ¸ì•„ì´í…œ
+	shared_ptr<CFuseObject> m_pFuse;// í“¨ì¦ˆ ì•„ì´í…œ
 
-	vector<shared_ptr<CMineObject>> m_vpEnvironmentMineItems; // ¸¶ÀÎ ¾ÆÀÌÅÛÀ» ´ãÀº ÄÁÅ×ÀÌ³Ê
+	vector<shared_ptr<CMineObject>> m_vpEnvironmentMineItems; // ë§ˆì¸ ì•„ì´í…œì„ ë‹´ì€ ì»¨í…Œì´ë„ˆ
 public:
 	XMFLOAT4X4* GetLeftHandItemFlashLightModelTransform() const;
 	XMFLOAT4X4 GetRightHandItemRaderModelTransform() const;
@@ -276,13 +276,13 @@ public:
 	XMFLOAT2 GetRadarWindowScreenPos() const { return m_xmf2RadarUIPos; }
 	float GetEscapeLength();
 private:
-	// ·¹ÀÌ´õ ¾ÆÀÌÅÛ Çà·Ä
+	// ë ˆì´ë” ì•„ì´í…œ í–‰ë ¬
 	XMFLOAT4X4 m_xmf4x4Rader;
 	float m_fOpenRadarTime;
 	bool m_bRightClick = false;
 	XMFLOAT2 m_xmf2RadarUIPos;
 
-	//ÇÇ°İ ÅØ½ºÃÄ¸µÀ» À§ÇÑ ÀçÁú
+	//í”¼ê²© í…ìŠ¤ì³ë§ì„ ìœ„í•œ ì¬ì§ˆ
 	shared_ptr<CMaterial> m_pHitEffectMaterial;
 	FrameTimeInfo* m_pcbMappedTime;
 	D3D12_GPU_DESCRIPTOR_HANDLE		m_d3dTimeCbvGPUDescriptorHandle;
@@ -363,7 +363,7 @@ private:
 public:
 	void SetEectricShock();
 	void SetElectiricMt(shared_ptr<CMaterial> mt) { m_pElectircaterial = mt; }
-	
+
 	virtual shared_ptr<CCamera> ChangeCamera(DWORD nNewCameraMode, float fElapsedTime);
 
 	shared_ptr<Trail> m_pRightHandTrail;

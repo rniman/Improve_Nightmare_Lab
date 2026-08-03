@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Timer.h"
 #include "Scene.h"
 #include "TCPClient.h"
@@ -56,7 +56,7 @@ public:
 	void PreRenderTasks(shared_ptr<CMainScene>& pMainScene);
 	void FrameAdvance();
 	void LoadingRender();
-    void ExecuteCommandListAndWaitForGpu();
+	void ExecuteCommandListAndWaitForGpu();
 	void WaitForGpuComplete();
 	void MoveToNextFrame();
 	void UpdateFrameworkShaderVariable();
@@ -97,9 +97,9 @@ public:
 	static ComPtr<IDWriteTextFormat> m_idwSpeakerTextFormat;
 
 private:
-    void BuildLobbyObjects();
-    void BuildMainObjects();
-    void BindPlayersToTcpClient();
+	void BuildLobbyObjects();
+	void BuildMainObjects();
+	void BindPlayersToTcpClient();
 
 	/* 윈도우 플랫폼 관련 멤버 */
 	HINSTANCE m_hInstance = nullptr;
@@ -165,8 +165,8 @@ private:
 
 	/* TCP 관련 */
 	unique_ptr<CTcpClient> m_pTcpClient;
-    HWND m_hIPAddressLabel = nullptr;
-    HFONT m_hEntryFont = nullptr;
+	HWND m_hIPAddressLabel = nullptr;
+	HFONT m_hEntryFont = nullptr;
 	static int m_nMainClientId; // TcpClient에서 받게 된다. -> 플레이어 1인칭으로 그릴때 비교해서 그려주게 하기위해
 
 	bool m_bConnected = false;
