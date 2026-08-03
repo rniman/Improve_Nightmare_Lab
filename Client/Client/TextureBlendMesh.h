@@ -1,6 +1,6 @@
 #pragma once
 #include "Mesh.h"
-//position, uv, normal ¸¸ °¡Áö°í ·»´õ¸µÇÏ´Â ¸Ş½¬
+//position, uv, normal ë§Œ ê°€ì§€ê³  ë Œë”ë§í•˜ëŠ” ë©”ì‰¬
 
 class TextureBlendMesh : public CStandardMesh
 {

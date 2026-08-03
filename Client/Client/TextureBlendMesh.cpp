@@ -8,8 +8,7 @@ TextureBlendMesh::TextureBlendMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsComma
 }
 
 TextureBlendMesh::~TextureBlendMesh()
-{
-}
+{}
 
 void TextureBlendMesh::OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList)
 {

@@ -21,7 +21,7 @@ void CParticleMesh::CreateBufferViewResource(ID3D12Device* pd3dDevice, ID3D12Gra
 	m_d3dVertexBufferView.StrideInBytes = nStride;
 	m_d3dVertexBufferView.SizeInBytes = nStride * nVertices;
 
-	for (int i = 0; i < PARITICLE_INSTANCE_COUNT;++i) {
+	for (int i = 0; i < PARITICLE_INSTANCE_COUNT; ++i) {
 		m_particleInsVertex[i].id = i;
 		m_particleInsVertex[i].start_position = XMFLOAT3(0.0f, 0.f, 0.f);
 		m_particleInsVertex[i].start_Time = 0.0f;
@@ -38,7 +38,7 @@ int CParticleMesh::SetParticleInsEnable(int id, bool val, float fCurTime, XMFLOA
 {
 	int pi = id;
 	if (pi == -1) {
-		for (int i = 0;i < m_ParticleInsInfos.size();++i) {
+		for (int i = 0; i < m_ParticleInsInfos.size(); ++i) {
 			if (!m_ParticleInsInfos[i].b_enabled) {
 				pi = i;
 				break;
@@ -72,7 +72,7 @@ void CParticleMesh::SetParticlePosition(int id, XMFLOAT3& pos)
 
 void CParticleMesh::UpdateUploadBuffer(int newCount, int oldCount, std::vector<int>& v_enable)
 {
-	if (newCount != oldCount) { // ºñÈ°¼ºÈ­µÈ ÆÄÆ¼Å¬ÀÌ Á¸ÀçÇÑ´Ù¸é ÀÎ½ºÅÏ½º °´Ã¼ ¸Ç ¾ÕÀ¸·Î
+	if (newCount != oldCount) { // ë¹„í™œì„±í™”ëœ íŒŒí‹°í´ì´ ì¡´ì¬í•œë‹¤ë©´ ì¸ìŠ¤í„´ìŠ¤ ê°ì²´ ë§¨ ì•ìœ¼ë¡œ
 		void* pData = nullptr;
 		m_pd3dInstanceParticleBuffer->Map(0, nullptr, (void**)&pData);
 		ParticleInstanceVertex* ins_vertex = reinterpret_cast<ParticleInstanceVertex*>(pData);
@@ -80,7 +80,7 @@ void CParticleMesh::UpdateUploadBuffer(int newCount, int oldCount, std::vector<i
 		for (auto& id : v_enable) {
 			m_ParticleInsInfos[id].b_enabled = false;
 			for (int i = 0; i < m_ParticleInsInfos.size(); ++i) {
-				if (m_ParticleInsInfos[i].b_enabled) { // È°¼ºÈ­µÇ¾î ÀÖ´Ù¸é ÀÌ°ªÀº °»½Åx
+				if (m_ParticleInsInfos[i].b_enabled) { // í™œì„±í™”ë˜ì–´ ìˆë‹¤ë©´ ì´ê°’ì€ ê°±ì‹ x
 					continue;
 				}
 				m_ParticleInsInfos[i].b_enabled = true;
@@ -102,7 +102,7 @@ void CSOParticleMesh::CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D12Graph
 
 	ParticleVertex pVertex[1];
 	pVertex[0].lifeTime = 1.0f;
-	pVertex[0].position = position; // ÀÌ À§Ä¡´Â »ó´ëÀûÀÌ¹Ç·Î ¹Ş¾Æ¿Àµµ·Ï ¹Ù²ã¾ßÇÔ.
+	pVertex[0].position = position; // ì´ ìœ„ì¹˜ëŠ” ìƒëŒ€ì ì´ë¯€ë¡œ ë°›ì•„ì˜¤ë„ë¡ ë°”ê¿”ì•¼í•¨.
 	pVertex[0].type = BUBBLE;
 	pVertex[0].velocity = XMFLOAT3(0.0f, 0.1f, 0.0f);
 	pVertex[0].startTime = 0.0f;
@@ -224,7 +224,7 @@ std::mt19937 gen(rd());
 std::uniform_int_distribution<int> rdPos{ -100,100 };
 std::uniform_int_distribution<int> rdSpeed{ -10,10 };
 std::uniform_int_distribution<int> rdLife{ 2,5 };
-std::normal_distribution<> normalDist(0.0, 0.3); // 0.0 Æò±Õ , 1.0ÀÇ Ç¥ÁØÆíÂ÷. ´ë·« +- *3(+-3.0)¿¡ ÇØ´çÇÏ´Â °ªÀÌ µµÃâµÊ.
+std::normal_distribution<> normalDist(0.0, 0.3); // 0.0 í‰ê·  , 1.0ì˜ í‘œì¤€í¸ì°¨. ëŒ€ëµ +- *3(+-3.0)ì— í•´ë‹¹í•˜ëŠ” ê°’ì´ ë„ì¶œë¨.
 std::normal_distribution<> normalDist2(5.0, 1.0);
 
 void CDefaultParticleMesh::CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, TYPE type, UINT nVertices)
@@ -232,7 +232,7 @@ void CDefaultParticleMesh::CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D12
 	m_nVertices = nVertices;
 	m_nStride = sizeof(ParticleVertex);
 
-	for (int i = 0; i < m_nVertices;++i) {
+	for (int i = 0; i < m_nVertices; ++i) {
 		m_particleVertex[i].position.x = 0.0f;
 		m_particleVertex[i].position.y = 0.0f;
 		m_particleVertex[i].position.z = 0.0f;
@@ -259,7 +259,7 @@ void CDefaultParticleMesh::Update(float fcurtime)
 	for (int i = 0; i < PARITICLE_INSTANCE_COUNT; ++i) {
 		if (!m_ParticleInsInfos[i].b_enabled) continue;
 
-		++newcount;// È°¼ºÈ­ µÇ¾î ÀÖ´Â °´Ã¼ °³¼ö
+		++newcount;// í™œì„±í™” ë˜ì–´ ìˆëŠ” ê°ì²´ ê°œìˆ˜
 		v_enable.push_back(i);
 		if (fcurtime - m_ParticleInsInfos[i].startTime > TYPE_TIME::GETITEM) {
 			m_ParticleInsInfos[i].b_enabled = false;
@@ -285,7 +285,7 @@ void CTPParticleMesh::CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D12Graph
 	m_nVertices = 5000;
 	m_nStride = sizeof(ParticleVertex);
 
-	for (int i = 0; i < m_nVertices;++i) {
+	for (int i = 0; i < m_nVertices; ++i) {
 		{// position range
 			m_particleVertex[i].position.x = normalDist(gen) * 10;
 			m_particleVertex[i].position.y = normalDist(gen) * 10;
@@ -316,7 +316,7 @@ void CTPParticleMesh::Update(float fcurtime)
 	for (int i = 0; i < PARITICLE_INSTANCE_COUNT; ++i) {
 		if (!m_ParticleInsInfos[i].b_enabled) continue;
 
-		++newcount;// È°¼ºÈ­ µÇ¾î ÀÖ´Â °´Ã¼ °³¼ö
+		++newcount;// í™œì„±í™” ë˜ì–´ ìˆëŠ” ê°ì²´ ê°œìˆ˜
 		v_enable.push_back(i);
 		if (fcurtime - m_ParticleInsInfos[i].startTime > TYPE_TIME::TP) {
 			m_ParticleInsInfos[i].b_enabled = false;
@@ -329,8 +329,7 @@ void CTPParticleMesh::Update(float fcurtime)
 }
 
 CFootPrintParticleMesh::CFootPrintParticleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) : CDefaultParticleMesh(pd3dDevice, pd3dCommandList)
-{
-}
+{}
 
 void CFootPrintParticleMesh::CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
@@ -350,7 +349,7 @@ void CFootPrintParticleMesh::CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D
 
 	m_d3dVertexBufferView.BufferLocation = m_pd3dVertexBuffer->GetGPUVirtualAddress();
 	m_d3dVertexBufferView.StrideInBytes = m_nStride;
-	m_d3dVertexBufferView.SizeInBytes = m_nStride * 1; // »ı¼º ÇÒ¶§´Â ¹Ì¸® °ø°£À» ¿¹¾àÇÑ´Ù°í »ı°¢ÇÏ¸é µÊ.
+	m_d3dVertexBufferView.SizeInBytes = m_nStride * 1; // ìƒì„± í• ë•ŒëŠ” ë¯¸ë¦¬ ê³µê°„ì„ ì˜ˆì•½í•œë‹¤ê³  ìƒê°í•˜ë©´ ë¨.
 
 	m_nVertices = 1;
 
@@ -359,7 +358,7 @@ void CFootPrintParticleMesh::CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D
 		infos.type = FOOTPRINT;
 	}
 	m_ParticleInsInfos[0].b_enabled = true;
-	draw_instance_count = 1; // AttackÀº ÀÎ½ºÅÏ½Ì X
+	draw_instance_count = 1; // Attackì€ ì¸ìŠ¤í„´ì‹± X
 }
 
 void CFootPrintParticleMesh::Update(float fcurtime)
@@ -388,7 +387,7 @@ void CFootPrintParticleMesh::AddParticle(XMFLOAT3& pos)
 
 	m_pd3dVertexBuffer->Unmap(0, nullptr);
 
-	m_nVertices += 1; // ÆÄÆ¼Å¬ °³¼ö
+	m_nVertices += 1; // íŒŒí‹°í´ ê°œìˆ˜
 
 	m_d3dVertexBufferView.SizeInBytes = m_nStride * m_nVertices;
 }

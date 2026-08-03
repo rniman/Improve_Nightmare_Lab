@@ -2,17 +2,15 @@
 #include "TextureBlendAnimationShader.h"
 
 
-// ºÎºĞÅõ¸íÇÑ ¿ÀºêÁ§Æ® ÀÌÀü¿¡ ·»´õ¸µÇÑ´Ù.
-// ºÒÅõ¸í ¿ÀºêÁ§Æ®¸¦ ·»´õ¸µ ÇÑ ÈÄ¿¡ ·»´õ¸µ.
-// Áï, µğÆÛµå·»´õ¸µ ÅØ½ºÃ³¿¡ ·»´õ¸µ ÇÏ´Â ¼À.
+// ë¶€ë¶„íˆ¬ëª…í•œ ì˜¤ë¸Œì íŠ¸ ì´ì „ì— ë Œë”ë§í•œë‹¤.
+// ë¶ˆíˆ¬ëª… ì˜¤ë¸Œì íŠ¸ë¥¼ ë Œë”ë§ í•œ í›„ì— ë Œë”ë§.
+// ì¦‰, ë””í¼ë“œë Œë”ë§ í…ìŠ¤ì²˜ì— ë Œë”ë§ í•˜ëŠ” ì…ˆ.
 
 TextureBlendAnimationShader::TextureBlendAnimationShader()
-{
-}
+{}
 
 TextureBlendAnimationShader::~TextureBlendAnimationShader()
-{
-}
+{}
 
 D3D12_INPUT_LAYOUT_DESC TextureBlendAnimationShader::CreateInputLayout()
 {
@@ -22,7 +20,7 @@ D3D12_INPUT_LAYOUT_DESC TextureBlendAnimationShader::CreateInputLayout()
 	pd3dInputElementDescs[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
 	pd3dInputElementDescs[1] = { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
 	pd3dInputElementDescs[2] = { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 2, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
-	
+
 	D3D12_INPUT_LAYOUT_DESC d3dInputLayoutDesc;
 	d3dInputLayoutDesc.pInputElementDescs = pd3dInputElementDescs;
 	d3dInputLayoutDesc.NumElements = nInputElementDescs;

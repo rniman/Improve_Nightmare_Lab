@@ -3,8 +3,7 @@
 #include "CTrailShader.h"
 
 CTrailShader::CTrailShader()
-{
-}
+{}
 
 D3D12_INPUT_LAYOUT_DESC CTrailShader::CreateInputLayout()
 {

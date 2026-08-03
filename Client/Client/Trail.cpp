@@ -4,7 +4,7 @@
 #include "Timer.h"
 #include "Scene.h"
 
-Trail::Trail(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList )
+Trail::Trail(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	m_bStart = false;
 	m_fUVTime = 0.0f;
@@ -29,7 +29,7 @@ Trail::Trail(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandLis
 	CScene::CreateShaderResourceViews(pd3dDevice, pTexture, 0, 3); // 3 : Albedo
 }
 
-void Trail::CreateShaderVariable(ID3D12Device* pd3dDevice,ID3D12GraphicsCommandList* pd3dCommandList)
+void Trail::CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	m_nVertices = 99999;
 	TrailVertex* vertices = new TrailVertex[m_nVertices];
@@ -54,7 +54,7 @@ void Trail::CreateShaderVariable(ID3D12Device* pd3dDevice,ID3D12GraphicsCommandL
 
 void Trail::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	m_pMaterial->UpdateShaderVariable(pd3dCommandList,nullptr);
+	m_pMaterial->UpdateShaderVariable(pd3dCommandList, nullptr);
 
 	pd3dCommandList->IASetVertexBuffers(0, 1, &m_d3dVertexBufferView);
 
@@ -97,7 +97,7 @@ void Trail::Update()
 	float interval = 0.25f;
 
 	if (m_nVertices == 0) {
-		// Ã¹ 1 »ï°¢Çü
+		// ì²« 1 ì‚¼ê°í˜•
 		FirstTrailGenerate(interval);
 	}
 	else {
@@ -110,33 +110,33 @@ void Trail::Update()
 		XMFLOAT3 right = m_pObject->GetRight();
 		XMFLOAT3 up = m_pObject->GetUp();
 		XMFLOAT3 temp;
-		// 1 »ï°¢Çü
-		Tv[m_nVertices].position = Tv[m_nVertices - 3].position;//¿À¸¥ÂÊ À§ --- 3 [ÀÌÀü »ï°¢ÇüÀÇ ¿ÞÂÊ À§ 3 Àç»ç¿ë]
+		// 1 ì‚¼ê°í˜•
+		Tv[m_nVertices].position = Tv[m_nVertices - 3].position;//ì˜¤ë¥¸ìª½ ìœ„ --- 3 [ì´ì „ ì‚¼ê°í˜•ì˜ ì™¼ìª½ ìœ„ 3 ìž¬ì‚¬ìš©]
 		Tv[m_nVertices].uv = XMFLOAT2(m_fUVTime * 2 / 3, 0.0f);
 		Tv[m_nVertices].startTime = gGameTimer.GetTotalTime();
-		Tv[m_nVertices + 1].position = Tv[m_nVertices - 1].position;//¿À¸¥ÂÊ ¾Æ·¡ --- 4 [ÀÌÀü »ï°¢ÇüÀÇ ¿ÞÂÊ¾Æ·¡ 4 Àç»ç¿ë]
+		Tv[m_nVertices + 1].position = Tv[m_nVertices - 1].position;//ì˜¤ë¥¸ìª½ ì•„ëž˜ --- 4 [ì´ì „ ì‚¼ê°í˜•ì˜ ì™¼ìª½ì•„ëž˜ 4 ìž¬ì‚¬ìš©]
 		Tv[m_nVertices + 1].uv = XMFLOAT2(m_fUVTime * 2 / 3, 1.f);
 		Tv[m_nVertices + 1].startTime = gGameTimer.GetTotalTime();
 		temp = Vector3::Add(pos, right, -interval);
 		temp = Vector3::Add(temp, up, interval);
-		Tv[m_nVertices + 2].position = temp;//¿ÞÂÊ À§ --- 5 [»õ·Î »ý¼ºÇÏ´Â Á¤Á¡]
+		Tv[m_nVertices + 2].position = temp;//ì™¼ìª½ ìœ„ --- 5 [ìƒˆë¡œ ìƒì„±í•˜ëŠ” ì •ì ]
 		Tv[m_nVertices + 2].uv = XMFLOAT2(m_fUVTime * 2 / 3, 0.f);
 		Tv[m_nVertices + 2].startTime = gGameTimer.GetTotalTime();
 
-		// 2 »ï°¢Çü
-		Tv[m_nVertices + 3].position = Tv[m_nVertices + 2].position;//¿ÞÂÊ À§ --- 5 [5] Àç»ç¿ë
+		// 2 ì‚¼ê°í˜•
+		Tv[m_nVertices + 3].position = Tv[m_nVertices + 2].position;//ì™¼ìª½ ìœ„ --- 5 [5] ìž¬ì‚¬ìš©
 		Tv[m_nVertices + 3].uv = XMFLOAT2(m_fUVTime * 2 / 3, 0.f);
 		Tv[m_nVertices + 3].startTime = gGameTimer.GetTotalTime();
-		Tv[m_nVertices + 4].position = Tv[m_nVertices + 1].position;//¿À¸¥ÂÊ ¾Æ·¡ --- 4 [4] Àç»ç¿ë -> ÀÎµ¦½º°¡ ¾Æ´Ï¹Ç·Î »ç½Ç»ó ´Ù¸¥ Á¤Á¡ÀÓÀ» À¯ÀÇÇÏÀÚ.
+		Tv[m_nVertices + 4].position = Tv[m_nVertices + 1].position;//ì˜¤ë¥¸ìª½ ì•„ëž˜ --- 4 [4] ìž¬ì‚¬ìš© -> ì¸ë±ìŠ¤ê°€ ì•„ë‹ˆë¯€ë¡œ ì‚¬ì‹¤ìƒ ë‹¤ë¥¸ ì •ì ìž„ì„ ìœ ì˜í•˜ìž.
 		Tv[m_nVertices + 4].uv = XMFLOAT2(m_fUVTime * 2 / 3, 1.f);
 		Tv[m_nVertices + 4].startTime = gGameTimer.GetTotalTime();
 		temp = Vector3::Add(pos, right, -interval);
 		temp = Vector3::Add(temp, up, -interval);
-		Tv[m_nVertices + 5].position = temp;//¿ÞÂÊ ¾Æ·¡ --- 6 [»õ Á¤Á¡]
+		Tv[m_nVertices + 5].position = temp;//ì™¼ìª½ ì•„ëž˜ --- 6 [ìƒˆ ì •ì ]
 		Tv[m_nVertices + 5].uv = XMFLOAT2(m_fUVTime * 2 / 3, 1.f);
 		Tv[m_nVertices + 5].startTime = gGameTimer.GetTotalTime();
 
-		m_nVertices += 6; // »ý¼º ÈÄ Áõ°¡½ÃÅ²´Ù.
+		m_nVertices += 6; // ìƒì„± í›„ ì¦ê°€ì‹œí‚¨ë‹¤.
 
 		m_pd3dVertexBuffer->Unmap(0, nullptr);
 		m_d3dVertexBufferView.SizeInBytes = sizeof(TrailVertex) * m_nVertices;
@@ -158,34 +158,34 @@ void Trail::FirstTrailGenerate(float interval)
 
 	temp = Vector3::Add(pos, right, interval);
 	temp = Vector3::Add(temp, up, interval);
-	Tv[m_nVertices].position = temp;//¿À¸¥ÂÊ À§ --- 1
+	Tv[m_nVertices].position = temp;//ì˜¤ë¥¸ìª½ ìœ„ --- 1
 	Tv[m_nVertices].uv = XMFLOAT2(0.f, 0.0f);
 	Tv[m_nVertices].startTime = gGameTimer.GetTotalTime();
 	temp = Vector3::Add(pos, right, interval);
 	temp = Vector3::Add(temp, up, -interval);
-	Tv[m_nVertices + 1].position = temp;//¿À¸¥ÂÊ ¾Æ·¡ --- 2
+	Tv[m_nVertices + 1].position = temp;//ì˜¤ë¥¸ìª½ ì•„ëž˜ --- 2
 	Tv[m_nVertices + 1].uv = XMFLOAT2(0.f, 0.f);
 	Tv[m_nVertices + 1].startTime = gGameTimer.GetTotalTime();
 	temp = Vector3::Add(pos, right, -interval);
 	temp = Vector3::Add(temp, up, interval);
-	Tv[m_nVertices + 2].position = temp;//¿ÞÂÊ À§ --- 3
+	Tv[m_nVertices + 2].position = temp;//ì™¼ìª½ ìœ„ --- 3
 	Tv[m_nVertices + 2].uv = XMFLOAT2(0.f, 0.f);
 	Tv[m_nVertices + 2].startTime = gGameTimer.GetTotalTime();
 
-	// Ã¹ 2 »ï°¢Çü
-	Tv[m_nVertices + 3].position = Tv[m_nVertices + 2].position;//¿ÞÂÊ À§ --- 3 [3] Àç»ç¿ë
+	// ì²« 2 ì‚¼ê°í˜•
+	Tv[m_nVertices + 3].position = Tv[m_nVertices + 2].position;//ì™¼ìª½ ìœ„ --- 3 [3] ìž¬ì‚¬ìš©
 	Tv[m_nVertices + 3].uv = XMFLOAT2(0.f, 0.f);
 	Tv[m_nVertices + 3].startTime = gGameTimer.GetTotalTime();
-	Tv[m_nVertices + 4].position = Tv[m_nVertices + 1].position;//¿À¸¥ÂÊ ¾Æ·¡ --- 2 [2] Àç»ç¿ë
+	Tv[m_nVertices + 4].position = Tv[m_nVertices + 1].position;//ì˜¤ë¥¸ìª½ ì•„ëž˜ --- 2 [2] ìž¬ì‚¬ìš©
 	Tv[m_nVertices + 4].uv = XMFLOAT2(0.f, 0.f);
 	Tv[m_nVertices + 4].startTime = gGameTimer.GetTotalTime();
 	temp = Vector3::Add(pos, right, -interval);
 	temp = Vector3::Add(temp, up, -interval);
-	Tv[m_nVertices + 5].position = temp;//¿ÞÂÊ ¾Æ·¡ --- 4
+	Tv[m_nVertices + 5].position = temp;//ì™¼ìª½ ì•„ëž˜ --- 4
 	Tv[m_nVertices + 5].uv = XMFLOAT2(0.f, 0.f);
 	Tv[m_nVertices + 5].startTime = gGameTimer.GetTotalTime();
 
-	m_nVertices += 6; // »ý¼º ÈÄ Áõ°¡½ÃÅ²´Ù.
+	m_nVertices += 6; // ìƒì„± í›„ ì¦ê°€ì‹œí‚¨ë‹¤.
 
 	m_pd3dVertexBuffer->Unmap(0, nullptr);
 	m_d3dVertexBufferView.SizeInBytes = sizeof(TrailVertex) * m_nVertices;

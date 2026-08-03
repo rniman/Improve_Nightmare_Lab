@@ -17,14 +17,14 @@ public:
 		float startTime;
 	};
 
-	void SetObject(const shared_ptr<CGameObject>& object){
+	void SetObject(const shared_ptr<CGameObject>& object) {
 		m_pObject = object;
 	}
 
 public:
-	// ½¦ÀÌ´õ¸¦ °¡Áö°í ÀÖ´Ù´Â °Í¿¡ À¯ÀÇ, ½¦ÀÌ´õ ·»´õÅ¸°Ù º¯°æ½Ã »ı¼ºÀÚ ¼öÁ¤ÇØ¾ßÇÔ.
+	// ì‰ì´ë”ë¥¼ ê°€ì§€ê³  ìˆë‹¤ëŠ” ê²ƒì— ìœ ì˜, ì‰ì´ë” ë Œë”íƒ€ê²Ÿ ë³€ê²½ì‹œ ìƒì„±ì ìˆ˜ì •í•´ì•¼í•¨.
 	Trail(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
-	~Trail(){}
+	~Trail() {}
 
 	void CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	void Render(ID3D12GraphicsCommandList* pd3dCommandList);

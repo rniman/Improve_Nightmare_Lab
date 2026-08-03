@@ -7,8 +7,7 @@
 
 
 ParticleShader::ParticleShader()
-{
-}
+{}
 
 D3D12_INPUT_LAYOUT_DESC ParticleShader::CreateInputLayout()
 {
@@ -177,7 +176,7 @@ void ParticleShader::CreateParticleShader(ID3D12Device* pd3dDevice, ID3D12Graphi
 	m_d3dPipelineStateDesc.PrimitiveTopologyType = m_topology_type;
 	m_d3dPipelineStateDesc.NumRenderTargets = nRenderTargets;
 	if (pdxgiRtvFormats) {
-		for (int i = 0;i < nRenderTargets;++i) {
+		for (int i = 0; i < nRenderTargets; ++i) {
 			m_d3dPipelineStateDesc.RTVFormats[i] = pdxgiRtvFormats[i];
 		}
 	}
@@ -208,7 +207,7 @@ void ParticleShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 	}
 	m_topology_type = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
 
-	CreateParticleShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, 0,nullptr, DXGI_FORMAT_D24_UNORM_S8_UINT);
+	CreateParticleShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, 0, nullptr, DXGI_FORMAT_D24_UNORM_S8_UINT);
 	DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	CreateParticleShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, 1, &format, DXGI_FORMAT_D24_UNORM_S8_UINT);
 
@@ -224,7 +223,7 @@ void ParticleShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 	m_pRandowmValueTexture->LoadBuffer(pd3dDevice, pd3dCommandList, pxmf4RandomValues, 1024, sizeof(XMFLOAT4), DXGI_FORMAT_R32G32B32A32_FLOAT, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, m_pRandowmValueTexture, 0, 15);
 
-	// ÆÄÆ¼Å¬ ¸¶Æ¼¸®¾ó
+	// íŒŒí‹°í´ ë§ˆí‹°ë¦¬ì–¼
 	shared_ptr<CTexture> pRoundSoftParticleTexture = make_shared<CTexture>(1, RESOURCE_TEXTURE2D, 0, 1);
 	pRoundSoftParticleTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, (wchar_t*)L"Asset/Textures/RoundSoftParticle.dds", RESOURCE_TEXTURE2D, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, pRoundSoftParticleTexture, 0, 3);
@@ -232,7 +231,7 @@ void ParticleShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 	pParticleMaterial->SetMaterialType(MATERIAL_ALBEDO_MAP);
 	pParticleMaterial->SetTexture(pRoundSoftParticleTexture);
 
-	//ÅÚ·¹Æ÷Æ® È¿°ú ÆÄÆ¼Å¬
+	//í…”ë ˆí¬íŠ¸ íš¨ê³¼ íŒŒí‹°í´
 	shared_ptr<CTPParticleMesh> pGSParticleMesh = make_shared<CTPParticleMesh>(pd3dDevice, pd3dCommandList);
 	pGSParticleMesh->CreateShaderVariable(pd3dDevice, pd3dCommandList);
 	shared_ptr<CGSParticleObject> pGSParticleObject = make_shared<CGSParticleObject>(pd3dDevice, pd3dCommandList);
@@ -240,7 +239,7 @@ void ParticleShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 	pGSParticleObject->SetMaterial(0, pParticleMaterial);
 	m_vParticleObjects.push_back(pGSParticleObject);
 
-	//¾ÆÀÌÅÛ È¹µæ È¿°ú ÆÄÆ¼Å¬
+	//ì•„ì´í…œ íšë“ íš¨ê³¼ íŒŒí‹°í´
 	shared_ptr<CDefaultParticleMesh> pDefaultParticleMesh = make_shared<CDefaultParticleMesh>(pd3dDevice, pd3dCommandList);
 	pDefaultParticleMesh->CreateShaderVariable(pd3dDevice, pd3dCommandList, CParticleMesh::SPARK, 64);
 	shared_ptr<CGSParticleObject> pItemGetParticleObject = make_shared<CGSParticleObject>(pd3dDevice, pd3dCommandList);
@@ -248,15 +247,15 @@ void ParticleShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 	pItemGetParticleObject->SetMaterial(0, pParticleMaterial);
 	m_vParticleObjects.push_back(pItemGetParticleObject);
 
-	//¹è¾ç±â ±âÆ÷ È¿°ú ÆÄÆ¼Å¬
+	//ë°°ì–‘ê¸° ê¸°í¬ íš¨ê³¼ íŒŒí‹°í´
 	shared_ptr<CSOParticleMesh> pSOParticleMesh = make_shared<CSOParticleMesh>(pd3dDevice, pd3dCommandList);
-	pSOParticleMesh->CreateShaderVariable(pd3dDevice, pd3dCommandList,MAX_PARTICLE, XMFLOAT3(0.f, 0.f, 0.f));
+	pSOParticleMesh->CreateShaderVariable(pd3dDevice, pd3dCommandList, MAX_PARTICLE, XMFLOAT3(0.f, 0.f, 0.f));
 	shared_ptr<CSOParticleObject> pSOParticleObject = make_shared<CSOParticleObject>(pd3dDevice, pd3dCommandList);
 	pSOParticleObject->SetMesh(pSOParticleMesh);
 	pSOParticleObject->SetMaterial(0, pParticleMaterial);
 	m_vParticleObjects.push_back(pSOParticleObject);
 
-	//°ø°İ È¿°ú ÆÄÆ¼Å¬
+	//ê³µê²© íš¨ê³¼ íŒŒí‹°í´
 	shared_ptr<CFootPrintParticleMesh> pAttackParticleMesh = make_shared<CFootPrintParticleMesh>(pd3dDevice, pd3dCommandList);
 	pAttackParticleMesh->CreateShaderVariable(pd3dDevice, pd3dCommandList);
 	shared_ptr<CGSParticleObject> pAttackParticleObject = make_shared<CGSParticleObject>(pd3dDevice, pd3dCommandList);
@@ -264,7 +263,7 @@ void ParticleShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 	pAttackParticleObject->SetMaterial(0, pParticleMaterial);
 	m_vParticleObjects.push_back(pAttackParticleObject);
 
-	// ¸ğµç ÆÄÆ¼Å¬ °´Ã¼°¡ PSO °´Ã¼¸¦ ÂüÁ¶ ÇÒ ¼ö ÀÖµµ·ÏÇÔ.
+	// ëª¨ë“  íŒŒí‹°í´ ê°ì²´ê°€ PSO ê°ì²´ë¥¼ ì°¸ì¡° í•  ìˆ˜ ìˆë„ë¡í•¨.
 	for (auto& ob : m_vParticleObjects) {
 		ob->SetRefPSO(m_vpd3dPipelineState);
 	}

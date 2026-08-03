@@ -1,7 +1,7 @@
 #pragma once
 #include "Shader.h"
 
-class TextureBlendAnimationShader :  public StandardShader
+class TextureBlendAnimationShader : public StandardShader
 {
 public:
 	TextureBlendAnimationShader();

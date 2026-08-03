@@ -5,7 +5,7 @@
 #include "Scene.h"
 #include "TextureBlendObject.h"
 
-TextureBlendObject::TextureBlendObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,shared_ptr<CGameObject> object,shared_ptr<CPlayer> player)
+TextureBlendObject::TextureBlendObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, shared_ptr<CGameObject> object, shared_ptr<CPlayer> player)
 	: CGameObject(pd3dDevice, pd3dCommandList)
 {
 	m_pMesh = object->m_pMesh;
@@ -16,7 +16,7 @@ TextureBlendObject::TextureBlendObject(ID3D12Device* pd3dDevice, ID3D12GraphicsC
 
 	m_pPlayer = player;
 
-	UINT ncbElementBytes = ((sizeof(FrameTimeInfo) + 255) & ~255); //256¿« πËºˆ
+	UINT ncbElementBytes = ((sizeof(FrameTimeInfo) + 255) & ~255); //256Ïùò Î∞∞Ïàò
 	m_pd3dcbTime = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 	m_pd3dcbTime->Map(0, NULL, (void**)&m_pcbMappedTime);
 	m_pcbMappedTime->time = 0.0f;
@@ -24,12 +24,11 @@ TextureBlendObject::TextureBlendObject(ID3D12Device* pd3dDevice, ID3D12GraphicsC
 	m_pcbMappedTime->usePattern = -1.0f;
 	m_d3dTimeCbvGPUDescriptorHandle = CScene::CreateConstantBufferViews(pd3dDevice, 1, m_pd3dcbTime.Get(), ncbElementBytes);
 
-	m_fLocalTime = 10.0f; // Ω««‡µ«∑¡∏È 1.0f ¿Ã«œø©æﬂ«‘ 
+	m_fLocalTime = 10.0f; // Ïã§ÌñâÎêòÎ†§Î©¥ 1.0f Ïù¥ÌïòÏó¨ÏïºÌï® 
 }
 
 TextureBlendObject::~TextureBlendObject()
-{
-}
+{}
 
 void TextureBlendObject::Animate(float fElapsedTime)
 {

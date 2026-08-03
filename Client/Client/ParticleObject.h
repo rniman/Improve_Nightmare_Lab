@@ -9,9 +9,9 @@ protected:
 	vector<ComPtr<ID3D12PipelineState>> m_vpRefPSO;
 public:
 	CParticleObject() = default;
-	// ÆÄÆ¼Å¬Àº 1°³ÀÇ ÅØ½ºÃÄ¸¦ °¡Áöµµ·Ï ÇÑ´Ù.
-	CParticleObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) 
-		: CGameObject(pd3dDevice, pd3dCommandList,1) {}
+	// íŒŒí‹°í´ì€ 1ê°œì˜ í…ìŠ¤ì³ë¥¼ ê°€ì§€ë„ë¡ í•œë‹¤.
+	CParticleObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+		: CGameObject(pd3dDevice, pd3dCommandList, 1) {}
 
 	~CParticleObject() = default;
 

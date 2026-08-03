@@ -60,7 +60,7 @@ public:
 	array<ParticleTypeInsInfo, PARITICLE_INSTANCE_COUNT>& GetParticleInsInfo() { return m_ParticleInsInfos; }
 
 	void CreateBufferViewResource(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, void* pVertices, UINT nVertices, UINT nStride);
-	/// Id°¡ -1 °ªÀÏ¶§ ³²¾ÆÀÖ´Â ºñÈ°¼ºÈ­ ÀÎ½ºÅÏ½º Áß ÇÏ³ª¸¦ °í¸§
+	/// Idê°€ -1 ê°’ì¼ë•Œ ë‚¨ì•„ìˆëŠ” ë¹„í™œì„±í™” ì¸ìŠ¤í„´ìŠ¤ ì¤‘ í•˜ë‚˜ë¥¼ ê³ ë¦„
 	virtual int SetParticleInsEnable(int id, bool val, float fCurTime, XMFLOAT3& pos);
 	void SetParticlePosition(int id, XMFLOAT3& pos);
 	void UpdateUploadBuffer(int newCount, int oldCount, vector<int>& v_enable);
