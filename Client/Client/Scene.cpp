@@ -120,7 +120,7 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 
 	pd3dDescriptorRanges[13].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	pd3dDescriptorRanges[13].NumDescriptors = 1;
-	pd3dDescriptorRanges[13].BaseShaderRegister = 11; //t9 patterntexture -> t11
+	pd3dDescriptorRanges[13].BaseShaderRegister = 11; // t11: patterntexture
 	pd3dDescriptorRanges[13].RegisterSpace = 0;
 	pd3dDescriptorRanges[13].OffsetInDescriptorsFromTableStart = 0;
 
@@ -270,7 +270,7 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 	d3dSamplerDescs[1].RegisterSpace = 0;
 	d3dSamplerDescs[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	d3dSamplerDescs[2].Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+	d3dSamplerDescs[2].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
 	d3dSamplerDescs[2].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 	d3dSamplerDescs[2].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 	d3dSamplerDescs[2].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -974,13 +974,14 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 
 	m_pd3dcbTime = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 	m_pd3dcbTime->Map(0, NULL, (void**)&m_pcbMappedTime);
-	m_pcbMappedTime->gfScale = 2.0f;
-	m_pcbMappedTime->gfBias = -0.1f;
-	m_pcbMappedTime->gfIntesity = 1.5f;
+	m_pcbMappedTime->gfScale = 0.3f;
+	m_pcbMappedTime->gfBias = 0.002f;
+	m_pcbMappedTime->gfIntesity = 2.0f;
+
 	m_d3dTimeCbvGPUDescriptorHandle = CScene::CreateConstantBufferViews(pd3dDevice, 1, m_pd3dcbTime.Get(), ncbElementBytes);
 
 	//[0626] 포스트 프로세싱 셰이더가 Scene으로 오면서 옮김
-	m_pPostProcessingShader = new CPostProcessingShader();
+	m_pPostProcessingShader = make_shared<CPostProcessingShader>();
 	m_pPostProcessingShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), 1, NULL, DXGI_FORMAT_D24_UNORM_S8_UINT);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_d3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
@@ -993,7 +994,7 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	d3dRtvCPUDescriptorHandle.ptr += (::gnRtvDescriptorIncrementSize * ADD_RENDERTARGET_COUNT);
 	m_pPostProcessingShader->CreateShadowMapResource(pd3dDevice, pd3dCommandList, m_nLights, d3dRtvCPUDescriptorHandle);
 
-	//[0523] 이제 좀비 플레이어 외에도 사용, COutLineShader 내부에서 m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0)을 사용하기위해서 필요
+	// COutLineShader::Render()에서 m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0)을 사용하기위해서 필요
 	dynamic_cast<COutLineShader*>(m_vForwardRenderShader[OUT_LINE_SHADER].get())->SetPostProcessingShader(m_pPostProcessingShader);
 
 	//컴퓨트 셰이더
@@ -1201,7 +1202,8 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 
 					//if (!pLoadedModel->m_pModelRootObject->m_pChild->m_pMesh) continue;
 
-					if (!transparentObjects[pLoadedModel->m_pModelRootObject->m_pstrFrameName].empty()) {
+					if (!transparentObjects[pLoadedModel->m_pModelRootObject->m_pstrFrameName].empty())
+					{
 						pLoadedModel->m_pModelRootObject->SetTransparentObjectInfo(transparentObjects[pLoadedModel->m_pModelRootObject->m_pstrFrameName]);
 						InsStShader->m_vFloorObjects[n_curfloor].push_back(pLoadedModel->m_pModelRootObject);
 						m_vForwardRenderShader[TRANSPARENT_SHADER]->AddGameObject((pLoadedModel->m_pModelRootObject));
@@ -1627,22 +1629,22 @@ bool CMainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM 
 		switch (wParam)
 		{
 		case 'P':
-			m_pcbMappedTime->gfScale += 0.1f;
+			m_pcbMappedTime->gfScale += 0.01f;
 			break;
 		case 'O':
-			m_pcbMappedTime->gfScale -= 0.1f;
+			m_pcbMappedTime->gfScale -= 0.01f;
 			break;
 		case 'L':
-			m_pcbMappedTime->gfIntesity += 0.1f;
+			m_pcbMappedTime->gfIntesity += 0.01f;
 			break;
 		case 'K':
-			m_pcbMappedTime->gfIntesity -= 0.1f;
+			m_pcbMappedTime->gfIntesity -= 0.01f;
 			break;
 		case 'Y':
-			m_pcbMappedTime->gfBias += 0.01f;
+			m_pcbMappedTime->gfBias += 0.001f;
 			break;
 		case 'U':
-			m_pcbMappedTime->gfBias -= 0.01f;
+			m_pcbMappedTime->gfBias -= 0.001f;
 			break;
 		default:
 			break;
@@ -1653,15 +1655,23 @@ bool CMainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM 
 		{
 		case 'M':
 			if (m_pPostProcessingShader->GetPipelineIndex() == 0)
+			{
 				m_pPostProcessingShader->SetPipelineIndex(1);
+			}
 			else
+			{
 				m_pPostProcessingShader->SetPipelineIndex(0);
+			}
 			break;
 		case 'N':
 			if (m_pBlurComputeShader->IsBlur())
+			{
 				m_pBlurComputeShader->SetBlur(false);
+			}
 			else
+			{
 				m_pBlurComputeShader->SetBlur(true);
+			}
 			break;
 		case VK_UP://		m_pcbMappedLights->bias	0.00119999994	float
 			//m_pcbMappedLights->bias += 0.0001f;
@@ -1781,7 +1791,7 @@ void CMainScene::PrepareRender(ID3D12GraphicsCommandList* pd3dCommandList, const
 
 void CMainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState)
 {
-	//PrepareRender(pd3dCommandList, pCamera);
+	// PrepareRender(pd3dCommandList, pCamera);
 
 	for (auto& shader : m_vShader)
 	{
@@ -1943,8 +1953,8 @@ void CMainScene::FinalRender(ID3D12GraphicsCommandList* pd3dCommandList, const s
 
 void CMainScene::ForwardRender(int nGameState, ID3D12GraphicsCommandList* pd3dCommandList, const std::shared_ptr<CCamera>& pCamera)
 {
-	//D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
-	//pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+	 //D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
+	 //pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
 	// 투명 객체 렌더링
 	if (nGameState == GAME_STATE::IN_GAME)

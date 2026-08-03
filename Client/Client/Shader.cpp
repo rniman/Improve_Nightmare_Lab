@@ -759,10 +759,9 @@ void CPostProcessingShader::CreateResourcesAndRtvsSrvs(ID3D12Device* pd3dDevice,
 		handle.ptr = ::gnDsvDescriptorIncrementSize;
 	}
 
-	//m_pNoiseTexture = make_shared<CTexture>(1, RESOURCE_TEXTURE2D, 0, 1);
-	//m_pNoiseTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, (wchar_t*)L"Asset/noise8x8(2).dds", RESOURCE_TEXTURE2D, 0);
-	////m_pNoiseTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, (wchar_t*)L"Asset/noise1600x1024.dds", RESOURCE_TEXTURE2D, 0);
-	//CScene::CreateShaderResourceViews(pd3dDevice, m_pNoiseTexture, 0, 3);
+	m_pNoiseTexture = make_shared<CTexture>(1, RESOURCE_TEXTURE2D, 0, 1);
+	m_pNoiseTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, (wchar_t*)L"Asset/Textures/LDR_LLL1_0.dds", RESOURCE_TEXTURE2D, 0);
+	CScene::CreateShaderResourceViews(pd3dDevice, m_pNoiseTexture, 0, 3);
 }
 
 void CPostProcessingShader::OnPrepareRenderTarget(ID3D12GraphicsCommandList* pd3dCommandList, int nRenderTargets, D3D12_CPU_DESCRIPTOR_HANDLE* pd3dRtvCPUHandles, D3D12_CPU_DESCRIPTOR_HANDLE* pd3dDsvCPUHandle)
@@ -1882,8 +1881,11 @@ void COutLineShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 
 void COutLineShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, const shared_ptr<CPlayer>& pPlayer, int nPipelineState)
 {
-	pd3dCommandList->ClearDepthStencilView(m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
-	pd3dCommandList->OMSetStencilRef(1);
+	if(m_pPostProcessingShader.lock())
+	{
+		pd3dCommandList->ClearDepthStencilView(m_pPostProcessingShader.lock()->GetDsvCPUDesctriptorHandle(0), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+		pd3dCommandList->OMSetStencilRef(1);
+	}
 
 	for (int i = 0; i < m_nPipelineState; ++i)
 	{

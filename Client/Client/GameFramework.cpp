@@ -612,25 +612,6 @@ void CGameFramework::AnimateObjects()
 	float fElapsedTime = gGameTimer.GetTimeElapsed();
 
 	if (m_pScene) m_pScene->AnimateObjects(fElapsedTime, gGameTimer.GetTotalTime());
-
-	//vector<shared_ptr<CLightCamera>>& lightCamera = m_pScene->GetLightCamera();
-
-	//XMFLOAT3 clientCameraPos = m_pCamera.lock().get()->GetPosition();
-	//sort(lightCamera.begin() + 4, lightCamera.end(), [clientCameraPos](const shared_ptr<CLightCamera>& A, const shared_ptr<CLightCamera>& B) {
-	//	//const float epsilon = 1e-5f; // 허용 오차
-	//	XMFLOAT3 clToA = Vector3::Subtract(clientCameraPos, A->GetPosition());
-	//	XMFLOAT3 clToB = Vector3::Subtract(clientCameraPos, B->GetPosition());
-	//	return Vector3::Length(clToA) < Vector3::Length(clToB);
-	//	});
-
-	//for (auto& cm : lightCamera) {
-	//	cm->Update(cm->GetLookAtPosition(), fElapsedTime);
-	//	if (auto player = cm->GetPlayer().lock()) {
-	//		if (player->GetClientId() == -1) {
-	//			cm->m_pLight->m_bEnable = false;
-	//		}
-	//	}
-	//}
 }
 
 void CGameFramework::AnimateEnding()
@@ -810,7 +791,8 @@ void CGameFramework::FrameAdvance()
 
 	WaitForGpuComplete();
 
-	if (m_pScene) {
+	if (m_pScene)
+	{
 		m_pScene->ParticleReadByteTask();
 	}
 
@@ -821,7 +803,36 @@ void CGameFramework::FrameAdvance()
 	gGameTimer.GetFrameRate(m_pszFrameRate + 15, 37);
 	size_t nLength = _tcslen(m_pszFrameRate);
 	XMFLOAT3 xmf3Position = xmf3Position = m_pMainPlayer->GetPosition();
-	_stprintf_s(m_pszFrameRate + nLength, 200 - nLength, _T("ID:%d %d, NumOfClient: %d, (%4f, %4f, %4f), %d"), m_pTcpClient->GetMainClientId(), m_nMainClientId, m_pTcpClient->GetNumOfClient(), xmf3Position.x, xmf3Position.y, xmf3Position.z, g_collisionManager.GetNumOfCollisionObject());
+
+	CMainScene* pMainScene = dynamic_cast<CMainScene*>(m_pScene.get());
+	if (!pMainScene)
+	{
+		::SetWindowText(m_hWnd, m_pszFrameRate);
+		return;
+	}
+
+	if (pMainScene->m_pPostProcessingShader->GetPipelineIndex() == 1)
+	{
+		_stprintf_s(
+			m_pszFrameRate + nLength, 200 - nLength, _T("ID:%d, NumOfClient: %d, (%.3f, %.3f, %.3f)"),
+			m_pTcpClient->GetMainClientId(),
+			m_pTcpClient->GetNumOfClient(),
+			xmf3Position.x, xmf3Position.y, xmf3Position.z
+		);
+	}
+	else
+	{
+		_stprintf_s(
+			m_pszFrameRate + nLength, 200 - nLength, _T("ID:%d, NumOfClient: %d, (%.3f, %.3f, %.3f), S: %.3f, I: %.3f, B: %.3f"),
+			m_pTcpClient->GetMainClientId(),
+			m_pTcpClient->GetNumOfClient(),
+			xmf3Position.x, xmf3Position.y, xmf3Position.z,
+			pMainScene->GetScale(),
+			pMainScene->GetIntesity(),
+			pMainScene->GetBias()
+		);
+	}
+
 	::SetWindowText(m_hWnd, m_pszFrameRate);
 }
 
@@ -855,12 +866,6 @@ void CGameFramework::LoadingRender()
 	m_dxgiSwapChain->Present(0, 0);
 
 	MoveToNextFrame();
-
-	/*gGameTimer.GetFrameRate(m_pszFrameRate + 15, 37);
-	size_t nLength = _tcslen(m_pszFrameRate);
-	XMFLOAT3 xmf3Position = xmf3Position = m_pMainPlayer->GetPosition();
-	_stprintf_s(m_pszFrameRate + nLength, 200 - nLength, _T("ID:%d %d, NumOfClient: %d, (%4f, %4f, %4f), %d"), m_pTcpClient->GetMainClientId(), m_nMainClientId, m_pTcpClient->GetNumOfClient(), xmf3Position.x, xmf3Position.y, xmf3Position.z, g_collisionManager.GetNumOfCollisionObject());
-	::SetWindowText(m_hWnd, m_pszFrameRate);*/
 }
 
 void CGameFramework::ExecuteCommandListAndWaitForGpu()
@@ -1447,7 +1452,8 @@ void CGameFramework::BuildMainObjects()
 		pPlayer->Update(gGameTimer.GetTimeElapsed());
 
 		auto survivor = dynamic_pointer_cast<CBlueSuitPlayer>(pPlayer);
-		if (survivor) {
+		if (survivor)
+		{
 			LightCamera[light_id]->SetPlayer(pPlayer);
 			light_id++;
 		}

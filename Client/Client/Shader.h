@@ -391,7 +391,7 @@ public:
 
 	virtual void AddGameObject(const shared_ptr<CGameObject>& pGameObject);
 
-	void SetPostProcessingShader(CPostProcessingShader* pPostProcessingShader) { m_pPostProcessingShader = pPostProcessingShader; }
+	void SetPostProcessingShader(const shared_ptr<CPostProcessingShader>& pPostProcessingShader) { m_pPostProcessingShader = pPostProcessingShader; }
 private:
 	int m_nMainPlayer;
 	shared_ptr<CGameObject> m_pPickedObject;
@@ -401,7 +401,7 @@ private:
 	vector<shared_ptr<CBlueSuitPlayer>> m_vpBlueSuitPlayer;
 
 	bool m_bOutLine = false;
-	CPostProcessingShader* m_pPostProcessingShader = nullptr;
+	weak_ptr<CPostProcessingShader> m_pPostProcessingShader;
 };
 
 /// <CShader - COutLineShader>

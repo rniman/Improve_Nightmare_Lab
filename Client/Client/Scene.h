@@ -70,9 +70,9 @@ struct FrameTimeInfo {
 	float fTrackingTime = 0.0f;
 
 	// Occlusion Info
-	float gfScale = 2.0f;
-	float gfBias = 0.01f;
-	float gfIntesity = 5.0f;
+	float gfScale = 0.3f;
+	float gfBias = 0.002f;
+	float gfIntesity = 2.0f;
 };
 
 class CPlayer;
@@ -297,12 +297,10 @@ public:
 
 	vector<unique_ptr<CShader>> m_vPreRenderShader;
 
-	//[0626] gameframework에서 scene으로 옮김
-	CPostProcessingShader* m_pPostProcessingShader = NULL;
-	int	m_nPostPipelineIndex = 0;
+	shared_ptr<CPostProcessingShader> m_pPostProcessingShader;
 
 	//메쉬 저장
-	vector<shared_ptr<CMesh>>			m_vMesh;
+	vector<shared_ptr<CMesh>> m_vMesh;
 
 	float m_fElapsedTime = 0.0f;
 
@@ -319,6 +317,7 @@ private:
 	D3D12_GPU_DESCRIPTOR_HANDLE m_d3dTimeCbvGPUDescriptorHandle;
 	ComPtr<ID3D12Resource>		m_pd3dcbTime;
 	FrameTimeInfo* m_pcbMappedTime;
+
 public:
 	void SetParticleTest(float fCurTime);
 	void ParticleReadByteTask();
