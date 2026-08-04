@@ -11,6 +11,7 @@
 #include "SharedObject.h"
 #include "CTrailShader.h"
 #include "BlurComputeShader.h"
+#include "GenerateSSAOShader.h"
 
 ComPtr<ID3D12DescriptorHeap> CScene::m_pd3dCbvSrvUavDescriptorHeap;
 
@@ -793,7 +794,6 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	m_vForwardRenderShader[TRAIL_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), 1, nullptr, DXGI_FORMAT_D24_UNORM_S8_UINT);
 	m_vForwardRenderShader[TRAIL_SHADER]->BuildObjects(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
 
-	//[0505] UI
 	if (mainPlayerId == ZOMBIEPLAYER)
 	{
 		m_vForwardRenderShader.push_back(make_unique<CZombieUserInterfaceShader>());
@@ -810,7 +810,6 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 
 	LoadScene(pd3dDevice, pd3dCommandList);
 
-	// [0523] 좀비 플레이어가 아니어도 OutLineShader를 가지게 수정
 	m_vForwardRenderShader.push_back(make_unique<COutLineShader>(mainPlayerId));
 	m_vForwardRenderShader[OUT_LINE_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), 1, nullptr, DXGI_FORMAT_D24_UNORM_S8_UINT);
 
@@ -864,7 +863,6 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 		shared_ptr<CTeleportObject> flashLight = make_shared<CTeleportObject>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
 		static shared_ptr<CLoadedModelInfo> pflashLightModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), (char*)"Asset/Model/Flashlight.bin", MeshType::Standard);
 		flashLight->ObjectCopy(pd3dDevice, pd3dCommandList, pflashLightModel->m_pModelRootObject);
-		//flashLight->LoadModelAndAnimation(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), pflashLightModel);
 		m_vShader[STANDARD_SHADER]->AddGameObject(flashLight);
 
 		//레이더모델 로드
@@ -899,8 +897,6 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 		}
 	}
 
-	/*auto surviveMainPlayer = dynamic_pointer_cast<CBlueSuitPlayer>(m_apPlayer[mainPlayerId]);
-	auto zombieMainPlayer = dynamic_pointer_cast<CZombiePlayer>(m_apPlayer[mainPlayerId]);*/
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	///////////////////////////// 아이템
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -980,16 +976,57 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 
 	m_d3dTimeCbvGPUDescriptorHandle = CScene::CreateConstantBufferViews(pd3dDevice, 1, m_pd3dcbTime.Get(), ncbElementBytes);
 
-	//[0626] 포스트 프로세싱 셰이더가 Scene으로 오면서 옮김
-	m_pPostProcessingShader = make_shared<CPostProcessingShader>();
-	m_pPostProcessingShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), 1, NULL, DXGI_FORMAT_D24_UNORM_S8_UINT);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_d3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	d3dRtvCPUDescriptorHandle.ptr += (::gnRtvDescriptorIncrementSize * m_nSwapChainBuffers);
 
-	DXGI_FORMAT pdxgiResourceFormats[ADD_RENDERTARGET_COUNT] = { DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R32_FLOAT, DXGI_FORMAT_R32G32B32A32_FLOAT, DXGI_FORMAT_R8G8B8A8_UNORM,	DXGI_FORMAT_R8G8B8A8_UNORM };
+	DXGI_FORMAT dxgiSsaoFormat = DXGI_FORMAT_R16_FLOAT;
+	m_pGenerateSSAOShader = make_shared<CGenerateSSAOShader>();
+	m_pGenerateSSAOShader->CreateShader(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature.Get(),
+		1,
+		&dxgiSsaoFormat,
+		DXGI_FORMAT_UNKNOWN
+	);
 
-	m_pPostProcessingShader->CreateResourcesAndRtvsSrvs(pd3dDevice, pd3dCommandList, ADD_RENDERTARGET_COUNT, pdxgiResourceFormats, d3dRtvCPUDescriptorHandle); //SRV to (Render Targets) + (Depth Buffer) + EMISSIVE 
+	m_pGenerateSSAOShader->CreateResourcesAndRtvsSrvs(
+		pd3dDevice,
+		pd3dCommandList,
+		1,
+		&dxgiSsaoFormat,
+		d3dRtvCPUDescriptorHandle
+	);
+	d3dRtvCPUDescriptorHandle.ptr += ::gnRtvDescriptorIncrementSize;
+
+	m_pPostProcessingShader = make_shared<CPostProcessingShader>();
+	m_pPostProcessingShader->CreateShader(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature.Get(),
+		1,
+		nullptr,
+		DXGI_FORMAT_D24_UNORM_S8_UINT
+	);
+
+	DXGI_FORMAT pdxgiGBufferFormats[ADD_RENDERTARGET_COUNT] =
+	{
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		DXGI_FORMAT_R32_FLOAT,
+		DXGI_FORMAT_R32G32B32A32_FLOAT,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		DXGI_FORMAT_R8G8B8A8_UNORM
+	};
+
+	m_pPostProcessingShader->CreateResourcesAndRtvsSrvs(
+		pd3dDevice,
+		pd3dCommandList,
+		ADD_RENDERTARGET_COUNT,
+		pdxgiGBufferFormats,
+		d3dRtvCPUDescriptorHandle
+	);
 
 	d3dRtvCPUDescriptorHandle.ptr += (::gnRtvDescriptorIncrementSize * ADD_RENDERTARGET_COUNT);
 	m_pPostProcessingShader->CreateShadowMapResource(pd3dDevice, pd3dCommandList, m_nLights, d3dRtvCPUDescriptorHandle);
@@ -1001,8 +1038,6 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	m_pBlurComputeShader = make_shared<CBlurComputeShader>();
 	m_pBlurComputeShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
 	m_pBlurComputeShader->SetTextureRtv(m_pPostProcessingShader->GetTexture());
-
-	//[0626] 
 
 	//[0721] FullScreen
 	m_vFullScreenProcessingShader = make_unique<CFullScreenProcessingShader>();
@@ -1931,19 +1966,19 @@ void CMainScene::FinalRender(ID3D12GraphicsCommandList* pd3dCommandList, const s
 
 	Render(pd3dCommandList, pCamera, 0);
 
+	// Generate raw ambient visibility from the completed G-buffer.
 	m_pPostProcessingShader->TransitionRenderTargetToCommon(pd3dCommandList);
-
-	FLOAT ClearValue[4] = { 1.0f,1.0f,1.0f,1.0f };
-
-	ClearValue[3] = 1.0f;
-	pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, ClearValue, 0, NULL);
-
-	m_pPostProcessingShader->OnPrepareRenderTargetForLight(pd3dCommandList, 0, NULL, &d3dDsvCPUDescriptorHandle);
-
-	//OM 최종타겟으로 재설정
-	//pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
-	//불투명 객체 최종 렌더링
+	m_pPostProcessingShader->GetTexture()->UpdateShaderVariables(pd3dCommandList);
 	pd3dCommandList->SetGraphicsRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
+	m_pGenerateSSAOShader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
+
+	const FLOAT clearValue[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, clearValue, 0, nullptr);
+
+	m_pPostProcessingShader->OnPrepareRenderTargetForLight(pd3dCommandList, 0, nullptr, &d3dDsvCPUDescriptorHandle);
+
+	// Apply the generated ambient visibility during the lighting composite pass.
+	m_pGenerateSSAOShader->GetAmbientOcclusionTexture()->UpdateShaderVariables(pd3dCommandList);
 	m_pPostProcessingShader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
 
 	m_pPostProcessingShader->TransitionRenderTargetToCommonForLight(pd3dCommandList);
@@ -1953,9 +1988,6 @@ void CMainScene::FinalRender(ID3D12GraphicsCommandList* pd3dCommandList, const s
 
 void CMainScene::ForwardRender(int nGameState, ID3D12GraphicsCommandList* pd3dCommandList, const std::shared_ptr<CCamera>& pCamera)
 {
-	 //D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
-	 //pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
-
 	// 투명 객체 렌더링
 	if (nGameState == GAME_STATE::IN_GAME)
 	{

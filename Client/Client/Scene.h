@@ -4,6 +4,8 @@
 #include "TCPClient.h"
 #include "TextureBlendObject.h"
 
+class CGenerateSSAOShader;
+
 constexpr UINT WM_CHANGE_SLOT{ WM_USER + 5 };
 
 // m_vShader 쉐이더에 AddDefaultObject 시에 접근할 각 쉐이더 인덱스를 의미
@@ -268,13 +270,13 @@ public:
 	void AddDefaultObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ObjectType type, XMFLOAT3 position, int shader, int mesh);
 
 	// 빛 관련
-	D3D12_GPU_DESCRIPTOR_HANDLE			m_d3dLightCbvGPUDescriptorHandle;
+	D3D12_GPU_DESCRIPTOR_HANDLE	m_d3dLightCbvGPUDescriptorHandle;
 	LIGHT* m_pLights = nullptr;
-	int									m_nLights = 0;
-	ComPtr<ID3D12Resource>				m_pd3dcbLights;
+	int	m_nLights = 0;
+	ComPtr<ID3D12Resource> m_pd3dcbLights;
 	LIGHTS* m_pcbMappedLights = NULL;
-	XMFLOAT4							m_xmf4GlobalAmbient;
-	vector<XMFLOAT3>					m_xmf3lightPositions, m_xmf3lightLooks;
+	XMFLOAT4 m_xmf4GlobalAmbient;
+	vector<XMFLOAT3> m_xmf3lightPositions, m_xmf3lightLooks;
 	vector<XMFLOAT3>& GetLightPositions() { return m_xmf3lightPositions; }
 	vector<XMFLOAT3>& GetLightLooks() { return m_xmf3lightLooks; }
 
@@ -297,6 +299,7 @@ public:
 
 	vector<unique_ptr<CShader>> m_vPreRenderShader;
 
+	shared_ptr<CGenerateSSAOShader> m_pGenerateSSAOShader;
 	shared_ptr<CPostProcessingShader> m_pPostProcessingShader;
 
 	//메쉬 저장
@@ -307,7 +310,6 @@ public:
 	float GetScale() { return m_pcbMappedTime->gfScale; }
 	float GetIntesity() { return m_pcbMappedTime->gfIntesity; }
 	float GetBias() { return m_pcbMappedTime->gfBias; }
-	//void CreateComputeRootSignature(ID3D12Device* pd3dDevice);
 
 	shared_ptr<CBlurComputeShader> m_pBlurComputeShader;
 	shared_ptr<CTextureToScreenShader> m_pTextureToScreenShaderShader;

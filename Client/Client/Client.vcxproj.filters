@@ -52,6 +52,9 @@
     <Filter Include="Blur">
       <UniqueIdentifier>{f9ad5bc5-4377-4948-8c23-c3874ba70eb3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SSAO">
+      <UniqueIdentifier>{ca5c06f5-fa00-4884-81e4-c96769fa82b9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="targetver.h">
@@ -150,6 +153,9 @@
     <ClInclude Include="Sound.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="GenerateSSAOShader.h">
+      <Filter>SSAO</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Client.cpp">
@@ -233,6 +239,9 @@
     <ClCompile Include="Sound.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="GenerateSSAOShader.cpp">
+      <Filter>SSAO</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Client.rc">
@@ -273,9 +282,6 @@
     <FxCompile Include="PSShadow.hlsl">
       <Filter>HLSL%28cso%29</Filter>
     </FxCompile>
-    <FxCompile Include="PSPostProcessing.hlsl">
-      <Filter>HLSL%28cso%29</Filter>
-    </FxCompile>
     <FxCompile Include="PSTransparent.hlsl">
       <Filter>HLSL%28cso%29</Filter>
     </FxCompile>
@@ -305,9 +311,6 @@
     </FxCompile>
     <FxCompile Include="VSInstanceOutLine.hlsl">
       <Filter>HLSL%28cso%29\OutLine</Filter>
-    </FxCompile>
-    <FxCompile Include="PSPostProcessingWithSSAO.hlsl">
-      <Filter>HLSL%28cso%29</Filter>
     </FxCompile>
     <FxCompile Include="PSLobbyUI.hlsl">
       <Filter>HLSL%28cso%29\Lobby</Filter>
@@ -365,6 +368,18 @@
     </FxCompile>
     <FxCompile Include="CSComposite.hlsl">
       <Filter>Blur</Filter>
+    </FxCompile>
+    <FxCompile Include="PSPostProcessingWithSSAO.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="PSPostProcessing.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="PSGenerateSSAO.hlsl">
+      <Filter>SSAO</Filter>
+    </FxCompile>
+    <FxCompile Include="VSGenerateSSAO.hlsl">
+      <Filter>SSAO</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

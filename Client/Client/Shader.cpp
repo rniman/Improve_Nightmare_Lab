@@ -443,20 +443,6 @@ void InstanceStandardShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, 
 	}
 }
 
-//void InstanceStandardShader::FloorRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, const shared_ptr<CPlayer>& pPlayer, int nPipelineState)
-//{
-//	UpdatePipeLineState(pd3dCommandList, nPipelineState);
-//	auto& pos = pPlayer->GetPosition();
-//	int curFloor = static_cast<int>(std::floor(pos.y / 4.5));
-//	
-//	for (int i = curFloor; i < curFloor + 2;++i) {
-//		if (i > 3) break;
-//		for (const auto& object : m_vFloorObjects[i]) {
-//			object->Render(pd3dCommandList);
-//		}
-//	}
-//}
-
 void InstanceStandardShader::AnimateObjects(float fElapsedTime)
 {
 	for (auto& object : m_vGameObjects)
@@ -759,9 +745,6 @@ void CPostProcessingShader::CreateResourcesAndRtvsSrvs(ID3D12Device* pd3dDevice,
 		handle.ptr = ::gnDsvDescriptorIncrementSize;
 	}
 
-	m_pNoiseTexture = make_shared<CTexture>(1, RESOURCE_TEXTURE2D, 0, 1);
-	m_pNoiseTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, (wchar_t*)L"Asset/Textures/LDR_LLL1_0.dds", RESOURCE_TEXTURE2D, 0);
-	CScene::CreateShaderResourceViews(pd3dDevice, m_pNoiseTexture, 0, 3);
 }
 
 void CPostProcessingShader::OnPrepareRenderTarget(ID3D12GraphicsCommandList* pd3dCommandList, int nRenderTargets, D3D12_CPU_DESCRIPTOR_HANDLE* pd3dRtvCPUHandles, D3D12_CPU_DESCRIPTOR_HANDLE* pd3dDsvCPUHandle)
@@ -780,11 +763,14 @@ void CPostProcessingShader::OnPrepareRenderTarget(ID3D12GraphicsCommandList* pd3
 		::SynchronizeResourceTransition(pd3dCommandList, GetTextureResource(i), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = GetRtvCPUDescriptorHandle(i);
-		if (i == 2) { // 깊이값을 저장하는 렌더타겟
+		if (i == 2)
+		{
+			// 깊이값을 저장하는 렌더타겟
 			FLOAT value[4] = { 1.0f,1.0f,1.0f,1.0f };
 			pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, value, 0, NULL);
 		}
-		else {
+		else
+		{
 			pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, m_fClearValue, 0, NULL);
 		}
 		pd3dAllRtvCPUHandles[nRenderTargets + i] = d3dRtvCPUDescriptorHandle;
@@ -902,7 +888,6 @@ void CPostProcessingShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, c
 
 	if (m_pTexture) m_pTexture->UpdateShaderVariables(pd3dCommandList);
 	if (m_pShadowTextures) m_pShadowTextures->UpdateShaderVariables(pd3dCommandList);
-	if (m_pNoiseTexture) m_pNoiseTexture->UpdateShaderVariables(pd3dCommandList);
 
 	pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pd3dCommandList->DrawInstanced(6, 1, 0, 0);

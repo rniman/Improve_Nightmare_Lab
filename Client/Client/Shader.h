@@ -252,7 +252,6 @@ public:
 	void SetPipelineIndex(UINT nIndex) { m_nPipelineIndex = nIndex; }
 	UINT GetPipelineIndex() const { return m_nPipelineIndex; }
 private:
-	shared_ptr<CTexture> m_pNoiseTexture;
 	UINT m_nPipelineIndex = 0;
 };
 
