@@ -156,6 +156,9 @@
     <ClInclude Include="GenerateSSAOShader.h">
       <Filter>SSAO</Filter>
     </ClInclude>
+    <ClInclude Include="BlurSSAOComputeShader.h">
+      <Filter>SSAO</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Client.cpp">
@@ -240,6 +243,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="GenerateSSAOShader.cpp">
+      <Filter>SSAO</Filter>
+    </ClCompile>
+    <ClCompile Include="BlurSSAOComputeShader.cpp">
       <Filter>SSAO</Filter>
     </ClCompile>
   </ItemGroup>
@@ -379,6 +385,12 @@
       <Filter>SSAO</Filter>
     </FxCompile>
     <FxCompile Include="VSGenerateSSAO.hlsl">
+      <Filter>SSAO</Filter>
+    </FxCompile>
+    <FxCompile Include="CSBlurSSAOVertical.hlsl">
+      <Filter>SSAO</Filter>
+    </FxCompile>
+    <FxCompile Include="CSBlurSSAOHorizontal.hlsl">
       <Filter>SSAO</Filter>
     </FxCompile>
   </ItemGroup>

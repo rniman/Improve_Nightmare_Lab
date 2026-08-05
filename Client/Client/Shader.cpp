@@ -6,6 +6,16 @@
 #include "GameFramework.h"
 #include "Component.h"
 
+#define _WITH_WFOPEN
+//#define _WITH_STD_STREAM
+
+#ifdef _WITH_STD_STREAM
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <sstream>
+#endif
+
 namespace
 {
 	constexpr float kGameEndingFadeDurationSeconds = 3.0f;
@@ -73,15 +83,6 @@ D3D12_SHADER_BYTECODE CShader::CompileShaderFromFile(const WCHAR* pszFileName, L
 	return(d3dShaderByteCode);
 }
 
-#define _WITH_WFOPEN
-//#define _WITH_STD_STREAM
-
-#ifdef _WITH_STD_STREAM
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <sstream>
-#endif
 
 D3D12_SHADER_BYTECODE CShader::ReadCompiledShaderFromFile(const WCHAR* pszFileName, ID3DBlob** ppd3dShaderBlob)
 {
@@ -188,7 +189,12 @@ D3D12_BLEND_DESC CShader::CreateBlendState()
 	return(d3dBlendDesc);
 }
 
-void CShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, UINT nRenderTargets, DXGI_FORMAT* pdxgiRtvFormats, DXGI_FORMAT dxgiDsvFormat)
+void CShader::CreateShader(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	UINT nRenderTargets, DXGI_FORMAT* pdxgiRtvFormats,
+	DXGI_FORMAT dxgiDsvFormat)
 {
 	::ZeroMemory(&m_d3dPipelineStateDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
 	m_d3dPipelineStateDesc.pRootSignature = pd3dGraphicsRootSignature;
@@ -290,6 +296,39 @@ void CShader::AnimateObjects(float fElapsedTime)
 		//object->UpdateTransform(NULL);
 	}
 }
+
+D3D12_SHADER_BYTECODE CComputeShader::CreateComputeShader(ID3DBlob** ppd3dShaderBlob)
+{
+	return D3D12_SHADER_BYTECODE();
+}
+
+void CComputeShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dRootSignature, UINT cxThreadGroups, UINT cyThreadGroups, UINT czThreadGroups)
+{
+	ID3DBlob* pd3dComputeShaderBlob = NULL;
+
+	D3D12_CACHED_PIPELINE_STATE d3dCachedPipelineState = { };
+	D3D12_COMPUTE_PIPELINE_STATE_DESC d3dPipelineStateDesc;
+	::ZeroMemory(&d3dPipelineStateDesc, sizeof(D3D12_COMPUTE_PIPELINE_STATE_DESC));
+	d3dPipelineStateDesc.pRootSignature = pd3dRootSignature;
+	d3dPipelineStateDesc.CS = CreateComputeShader(&pd3dComputeShaderBlob);
+	d3dPipelineStateDesc.NodeMask = 0;
+	d3dPipelineStateDesc.CachedPSO = d3dCachedPipelineState;
+	d3dPipelineStateDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+	HRESULT hResult = pd3dDevice->CreateComputePipelineState(&d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void**)m_vpd3dPipelineState[m_PipeLineIndex++].GetAddressOf());
+	if (pd3dComputeShaderBlob) pd3dComputeShaderBlob->Release();
+
+	m_cxThreadGroups = cxThreadGroups;
+	m_cyThreadGroups = cyThreadGroups;
+	m_czThreadGroups = czThreadGroups;
+}
+
+void CComputeShader::Dispatch(ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	UpdateShaderVariables(pd3dCommandList);
+	pd3dCommandList->Dispatch(m_cxThreadGroups, m_cyThreadGroups, m_czThreadGroups);
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// StandardShader
 
@@ -307,6 +346,7 @@ StandardShader::~StandardShader()
 D3D12_INPUT_LAYOUT_DESC StandardShader::CreateInputLayout()
 {
 	UINT nInputElementDescs = 5;
+	// need to delete this array after use to avoid memory leak
 	D3D12_INPUT_ELEMENT_DESC* pd3dInputElementDescs = new D3D12_INPUT_ELEMENT_DESC[nInputElementDescs];
 
 	pd3dInputElementDescs[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
@@ -376,7 +416,7 @@ void StandardShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 		m_vpd3dPipelineState.emplace_back();
 	}
 
-	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat); //m_ppd3dPipelineStates[0] 생성
+	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nRenderTargets, pdxgiRtvFormats, dxgiDsvFormat);
 
 	DXGI_FORMAT shadowFormat = DXGI_FORMAT_R32_FLOAT;
 	CShader::CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, 1, &shadowFormat, dxgiDsvFormat);

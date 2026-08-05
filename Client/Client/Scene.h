@@ -5,6 +5,7 @@
 #include "TextureBlendObject.h"
 
 class CGenerateSSAOShader;
+class CBlurSSAOComputeShader;
 
 constexpr UINT WM_CHANGE_SLOT{ WM_USER + 5 };
 
@@ -72,9 +73,9 @@ struct FrameTimeInfo {
 	float fTrackingTime = 0.0f;
 
 	// Occlusion Info
-	float gfScale = 0.3f;
+	float gfScale = 0.2f;
 	float gfBias = 0.002f;
-	float gfIntesity = 2.0f;
+	float gfIntesity = 1.0f;
 };
 
 class CPlayer;
@@ -261,7 +262,14 @@ public:
 
 	//[0626] 포스트 프로세싱 셰이더가 씬내로 오면서 gameframework의 frame advance 코드 정리
 	void ShadowRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState);
-	void FinalRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle, int nGameState);
+	void AmbientOcclusionRender(
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		const shared_ptr<CCamera>& pCamera,
+		D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle);
+	void PostProcessingRender(
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		const shared_ptr<CCamera>& pCamera,
+		D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle);
 
 	void ForwardRender(int nGameState, ID3D12GraphicsCommandList* pd3dCommandList, const std::shared_ptr<CCamera>& pCamera);
 
@@ -311,6 +319,7 @@ public:
 	float GetIntesity() { return m_pcbMappedTime->gfIntesity; }
 	float GetBias() { return m_pcbMappedTime->gfBias; }
 
+	shared_ptr<CBlurSSAOComputeShader> m_pBlurSSAOComputeShader;
 	shared_ptr<CBlurComputeShader> m_pBlurComputeShader;
 	shared_ptr<CTextureToScreenShader> m_pTextureToScreenShaderShader;
 	unique_ptr<CFullScreenProcessingShader> m_vFullScreenProcessingShader;

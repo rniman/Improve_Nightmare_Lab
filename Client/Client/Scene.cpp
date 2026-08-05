@@ -12,6 +12,7 @@
 #include "CTrailShader.h"
 #include "BlurComputeShader.h"
 #include "GenerateSSAOShader.h"
+#include "BlurSSAOComputeShader.h"
 
 ComPtr<ID3D12DescriptorHeap> CScene::m_pd3dCbvSrvUavDescriptorHeap;
 
@@ -331,10 +332,6 @@ void CScene::CreateCbvSrvUavDescriptorHeaps(ID3D12Device* pd3dDevice, int nConst
 	d3dDescriptorHeapDesc.NodeMask = 0;
 	HRESULT h = pd3dDevice->CreateDescriptorHeap(&d3dDescriptorHeapDesc, __uuidof(ID3D12DescriptorHeap), (void**)&m_pd3dCbvSrvUavDescriptorHeap);
 
-	//m_d3dCbvCPUDescriptorNextHandle = m_d3dCbvCPUDescriptorStartHandle = m_pd3dCbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	//m_d3dCbvGPUDescriptorNextHandle = m_d3dCbvGPUDescriptorStartHandle = m_pd3dCbvSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
-	//m_d3dSrvCPUDescriptorNextHandle.ptr = m_d3dSrvCPUDescriptorStartHandle.ptr = m_d3dCbvCPUDescriptorStartHandle.ptr + (::gnCbvSrvUavDescriptorIncrementSize * nConstantBufferViews);
-	//m_d3dSrvGPUDescriptorNextHandle.ptr = m_d3dSrvGPUDescriptorStartHandle.ptr = m_d3dCbvGPUDescriptorStartHandle.ptr + (::gnCbvSrvDescriptorIncrementSize * nConstantBufferViews);
 	m_d3dCbvCPUDescriptorStartHandle = m_pd3dCbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	m_d3dCbvGPUDescriptorStartHandle = m_pd3dCbvSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 	m_d3dSrvCPUDescriptorStartHandle.ptr = m_d3dCbvCPUDescriptorStartHandle.ptr + (::gnCbvSrvUavDescriptorIncrementSize * nConstantBufferViews);
@@ -596,7 +593,7 @@ void CLobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	int nCntCbv = 3000;
 	int nCntSrv = 1000;
-	int nCntUav = 3;
+	int nCntUav = 5; // Emissive bloom 3 + SSAO bilateral blur 2
 
 	CreateCbvSrvUavDescriptorHeaps(pd3dDevice, nCntCbv, nCntSrv, nCntUav);
 
@@ -706,8 +703,6 @@ void CLobbyScene::PrepareRender(ID3D12GraphicsCommandList* pd3dCommandList, cons
 
 	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
 	pCamera->UpdateShaderVariables(pd3dCommandList);
-
-	//UpdateShaderVariables(pd3dCommandList);
 }
 
 void CLobbyScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState)
@@ -970,9 +965,9 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 
 	m_pd3dcbTime = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 	m_pd3dcbTime->Map(0, NULL, (void**)&m_pcbMappedTime);
-	m_pcbMappedTime->gfScale = 0.3f;
+	m_pcbMappedTime->gfScale = 0.1f;
 	m_pcbMappedTime->gfBias = 0.002f;
-	m_pcbMappedTime->gfIntesity = 2.0f;
+	m_pcbMappedTime->gfIntesity = 1.0f;
 
 	m_d3dTimeCbvGPUDescriptorHandle = CScene::CreateConstantBufferViews(pd3dDevice, 1, m_pd3dcbTime.Get(), ncbElementBytes);
 
@@ -1035,6 +1030,11 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	dynamic_cast<COutLineShader*>(m_vForwardRenderShader[OUT_LINE_SHADER].get())->SetPostProcessingShader(m_pPostProcessingShader);
 
 	//컴퓨트 셰이더
+	m_pBlurSSAOComputeShader = make_shared<CBlurSSAOComputeShader>();
+	m_pBlurSSAOComputeShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
+	m_pBlurSSAOComputeShader->SetRawAmbientOcclusionTexture(m_pGenerateSSAOShader->GetAmbientOcclusionTexture());
+	m_pBlurSSAOComputeShader->SetGBufferTexture(m_pPostProcessingShader->GetTexture());
+
 	m_pBlurComputeShader = make_shared<CBlurComputeShader>();
 	m_pBlurComputeShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
 	m_pBlurComputeShader->SetTextureRtv(m_pPostProcessingShader->GetTexture());
@@ -1960,17 +1960,27 @@ void CMainScene::ShadowPreRender(ID3D12GraphicsCommandList* pd3dCommandList, con
 	m_vShader[SKINNEDANIMATION_STANDARD_SHADER]->Render(pd3dCommandList, pCamera, m_pMainPlayer, nPipelineState);
 }
 
-void CMainScene::FinalRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle, int nGameState)
+void CMainScene::AmbientOcclusionRender(
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	const shared_ptr<CCamera>& pCamera,
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle)
 {
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
-
-	Render(pd3dCommandList, pCamera, 0);
-
 	// Generate raw ambient visibility from the completed G-buffer.
 	m_pPostProcessingShader->TransitionRenderTargetToCommon(pd3dCommandList);
 	m_pPostProcessingShader->GetTexture()->UpdateShaderVariables(pd3dCommandList);
 	pd3dCommandList->SetGraphicsRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
 	m_pGenerateSSAOShader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
+
+	pd3dCommandList->SetComputeRootSignature(m_pd3dGraphicsRootSignature.Get());
+	m_pBlurSSAOComputeShader->Blur(pd3dCommandList, pCamera);
+}
+
+void CMainScene::PostProcessingRender(
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	const shared_ptr<CCamera>& pCamera,
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle)
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
 
 	const FLOAT clearValue[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 	pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, clearValue, 0, nullptr);
@@ -1978,7 +1988,7 @@ void CMainScene::FinalRender(ID3D12GraphicsCommandList* pd3dCommandList, const s
 	m_pPostProcessingShader->OnPrepareRenderTargetForLight(pd3dCommandList, 0, nullptr, &d3dDsvCPUDescriptorHandle);
 
 	// Apply the generated ambient visibility during the lighting composite pass.
-	m_pGenerateSSAOShader->GetAmbientOcclusionTexture()->UpdateShaderVariables(pd3dCommandList);
+	m_pBlurSSAOComputeShader->GetBlurredAmbientOcclusionTexture()->UpdateShaderVariables(pd3dCommandList);
 	m_pPostProcessingShader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
 
 	m_pPostProcessingShader->TransitionRenderTargetToCommonForLight(pd3dCommandList);
@@ -2004,9 +2014,10 @@ void CMainScene::ForwardRender(int nGameState, ID3D12GraphicsCommandList* pd3dCo
 
 void CMainScene::BlurDispatch(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle)
 {
-	pd3dCommandList->SetComputeRootSignature(m_pd3dGraphicsRootSignature.Get());
-	pd3dCommandList->SetComputeRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
-	pCamera->UpdateComputeShaderVariables(pd3dCommandList);
+	// Already set Compute Root Signature
+	// pd3dCommandList->SetComputeRootSignature(m_pd3dGraphicsRootSignature.Get());
+	// pd3dCommandList->SetComputeRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
+	// pCamera->UpdateComputeShaderVariables(pd3dCommandList);
 
 	if (!m_pBlurComputeShader->IsBlur())
 	{
@@ -2020,7 +2031,7 @@ void CMainScene::BlurDispatch(ID3D12GraphicsCommandList* pd3dCommandList, const 
 	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
-	pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());
+	// pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());
 	pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
 
 	m_pTextureToScreenShaderShader->Render(pd3dCommandList, pCamera, nullptr);

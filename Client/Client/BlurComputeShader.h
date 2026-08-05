@@ -21,28 +21,6 @@ private:
 	shared_ptr<CTexture> m_pTexture;
 };
 
-class CComputeShader : public CShader
-{
-public:
-	CComputeShader() {};
-	virtual ~CComputeShader() {};
-
-	virtual D3D12_SHADER_BYTECODE CreateComputeShader(ID3DBlob** ppd3dShaderBlob);
-
-	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dRootSignature, UINT cxThreadGroups, UINT cyThreadGroups, UINT czThreadGroups);
-
-	virtual void Dispatch(ID3D12GraphicsCommandList* pd3dCommandList);
-	virtual void Dispatch(ID3D12GraphicsCommandList* pd3dCommandList, UINT cxThreadGroups, UINT cyThreadGroups, UINT czThreadGroups);
-
-protected:
-	ComPtr<ID3DBlob> m_pd3dComputeShaderBlob;
-
-	UINT m_cxThreadGroups = 0;
-	UINT m_cyThreadGroups = 0;
-	UINT m_czThreadGroups = 0;
-};
-
-
 class CBlurComputeShader : public CComputeShader
 {
 public:

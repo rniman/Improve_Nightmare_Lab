@@ -769,7 +769,9 @@ void CGameFramework::FrameAdvance()
 
 		pMainScene->PrepareRender(m_d3dCommandList.Get(), m_pCamera.lock());
 		UpdateFrameworkShaderVariable();
-		pMainScene->FinalRender(m_d3dCommandList.Get(), m_pCamera.lock(), d3dRtvCPUDescriptorHandle, m_nGameState);
+		pMainScene->Render(m_d3dCommandList.Get(), m_pCamera.lock(), 0); // Standard Render
+		pMainScene->AmbientOcclusionRender(m_d3dCommandList.Get(), m_pCamera.lock(), d3dRtvCPUDescriptorHandle);
+		pMainScene->PostProcessingRender(m_d3dCommandList.Get(), m_pCamera.lock(), d3dRtvCPUDescriptorHandle);
 
 		pMainScene->BlurDispatch(m_d3dCommandList.Get(), m_pCamera.lock(), d3dRtvCPUDescriptorHandle);
 		pMainScene->ForwardRender(m_nGameState, m_d3dCommandList.Get(), m_pCamera.lock());
