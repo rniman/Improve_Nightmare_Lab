@@ -30,7 +30,11 @@ void ExecuteCommandList(ID3D12GraphicsCommandList* pd3dCommandList, ID3D12Comman
 	::WaitForGpuComplete(pd3dCommandQueue, pd3dFence, nFenceValue, hFenceEvent);
 }
 
-void SynchronizeResourceTransition(ID3D12GraphicsCommandList* pd3dCommandList, ID3D12Resource* pd3dResource, D3D12_RESOURCE_STATES d3dStateBefore, D3D12_RESOURCE_STATES d3dStateAfter)
+void SynchronizeResourceTransition(
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12Resource* pd3dResource,
+	D3D12_RESOURCE_STATES d3dStateBefore,
+	D3D12_RESOURCE_STATES d3dStateAfter)
 {
 	D3D12_RESOURCE_BARRIER d3dResourceBarrier;
 	d3dResourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;

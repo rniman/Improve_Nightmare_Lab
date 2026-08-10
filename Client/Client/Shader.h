@@ -198,12 +198,6 @@ public:
 //
 class CMainScene;
 
-enum SHADER_INDEX
-{
-	PostProcessing = 0,
-	PostProcessingWithSSAO = 1,
-};
-
 class CPostProcessingShader : public CShader
 {
 public:
