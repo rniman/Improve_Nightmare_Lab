@@ -14,6 +14,25 @@
 #include "GenerateSSAOShader.h"
 #include "BlurSSAOComputeShader.h"
 
+namespace
+{
+	constexpr UINT SSAO_COMPOSITE_PIPELINE_INDEX = 0;
+	constexpr UINT DEFAULT_COMPOSITE_PIPELINE_INDEX = 1;
+
+	bool StreamReadString(ifstream& in, string& str);
+
+	template<class T>
+	void StreamReadVariable(ifstream& in, T& data);
+
+	int ReadLightObjectInfo(vector<XMFLOAT3>& positions, vector<XMFLOAT3>& looks);
+
+	void PartisionShaderCollision(
+		unique_ptr<PartitionInsStandardShader>& partitionShader,
+		shared_ptr<CGameObject>& gameObject);
+}
+
+extern bool g_InstanceMeshNotAddCollision;
+
 ComPtr<ID3D12DescriptorHeap> CScene::m_pd3dCbvSrvUavDescriptorHeap;
 
 D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvCPUDescriptorStartHandle;
@@ -22,7 +41,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvCPUDescriptorStartHandle;
 D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvGPUDescriptorStartHandle;
 D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dUavCPUDescriptorStartHandle;
 D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dUavGPUDescriptorStartHandle;
-
+ 
 D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvCPUDescriptorNextHandle;
 D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvGPUDescriptorNextHandle;
 D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvCPUDescriptorNextHandle;
@@ -30,13 +49,141 @@ D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvGPUDescriptorNextHandle;
 D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dUavCPUDescriptorNextHandle;
 D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dUavGPUDescriptorNextHandle;
 
-vector<unique_ptr<CShader>> CMainScene::m_vShader;
-//CShader* CScene::m_pRefShader;
+int CScene::m_nCntCbv = 0;
+int CScene::m_nCntSrv = 0;
+int CScene::m_nCntUav = 0;
 
-extern bool g_InstanceMeshNotAddCollision;
+void CScene::PrepareCommandListState(ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	if (m_pd3dGraphicsRootSignature)
+	{
+		pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());
+	}
 
-int ReadLightObjectInfo(vector<XMFLOAT3>& positions, vector<XMFLOAT3>& looks);
-void PartisionShaderCollision(unique_ptr<PartitionInsStandardShader>& PtShader, shared_ptr<CGameObject>& pObject);
+	if (m_pd3dCbvSrvUavDescriptorHeap)
+	{
+		pd3dCommandList->SetDescriptorHeaps(1, m_pd3dCbvSrvUavDescriptorHeap.GetAddressOf());
+	}
+}
+
+void CScene::CreateCbvSrvUavDescriptorHeaps(ID3D12Device* pd3dDevice, int nConstantBufferViews, int nShaderResourceViews, int nUnorderedAccessViews)
+{
+	if (m_pd3dCbvSrvUavDescriptorHeap.Get())
+	{
+		m_pd3dCbvSrvUavDescriptorHeap.Reset();
+	}
+
+	D3D12_DESCRIPTOR_HEAP_DESC d3dDescriptorHeapDesc;
+	d3dDescriptorHeapDesc.NumDescriptors = nConstantBufferViews + nShaderResourceViews + nUnorderedAccessViews; //CBVs + SRVs
+	d3dDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	d3dDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	d3dDescriptorHeapDesc.NodeMask = 0;
+	HRESULT h = pd3dDevice->CreateDescriptorHeap(&d3dDescriptorHeapDesc, __uuidof(ID3D12DescriptorHeap), (void**)&m_pd3dCbvSrvUavDescriptorHeap);
+
+	m_d3dCbvCPUDescriptorStartHandle = m_pd3dCbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	m_d3dCbvGPUDescriptorStartHandle = m_pd3dCbvSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+	m_d3dSrvCPUDescriptorStartHandle.ptr = m_d3dCbvCPUDescriptorStartHandle.ptr + (::gnCbvSrvUavDescriptorIncrementSize * nConstantBufferViews);
+	m_d3dSrvGPUDescriptorStartHandle.ptr = m_d3dCbvGPUDescriptorStartHandle.ptr + (::gnCbvSrvUavDescriptorIncrementSize * nConstantBufferViews);
+	m_d3dUavCPUDescriptorStartHandle.ptr = m_d3dSrvCPUDescriptorStartHandle.ptr + (::gnCbvSrvUavDescriptorIncrementSize * nShaderResourceViews);
+	m_d3dUavGPUDescriptorStartHandle.ptr = m_d3dSrvGPUDescriptorStartHandle.ptr + (::gnCbvSrvUavDescriptorIncrementSize * nShaderResourceViews);
+
+	m_d3dCbvCPUDescriptorNextHandle = m_d3dCbvCPUDescriptorStartHandle;
+	m_d3dCbvGPUDescriptorNextHandle = m_d3dCbvGPUDescriptorStartHandle;
+	m_d3dSrvCPUDescriptorNextHandle = m_d3dSrvCPUDescriptorStartHandle;
+	m_d3dSrvGPUDescriptorNextHandle = m_d3dSrvGPUDescriptorStartHandle;
+	m_d3dUavCPUDescriptorNextHandle = m_d3dUavCPUDescriptorStartHandle;
+	m_d3dUavGPUDescriptorNextHandle = m_d3dUavGPUDescriptorStartHandle;
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE CScene::CreateConstantBufferViews(ID3D12Device* pd3dDevice, int nConstantBufferViews, ID3D12Resource* pd3dConstantBuffers, UINT nStride)
+{
+	m_nCntCbv++;
+	D3D12_GPU_DESCRIPTOR_HANDLE d3dCbvGPUDescriptorHandle = m_d3dCbvGPUDescriptorNextHandle;
+	D3D12_GPU_VIRTUAL_ADDRESS d3dGpuVirtualAddress = pd3dConstantBuffers->GetGPUVirtualAddress();
+	D3D12_CONSTANT_BUFFER_VIEW_DESC d3dCBVDesc;
+	d3dCBVDesc.SizeInBytes = nStride;
+	for (int j = 0; j < nConstantBufferViews; j++)
+	{
+		d3dCBVDesc.BufferLocation = d3dGpuVirtualAddress + (nStride * j);
+		pd3dDevice->CreateConstantBufferView(&d3dCBVDesc, m_d3dCbvCPUDescriptorNextHandle);
+		m_d3dCbvCPUDescriptorNextHandle.ptr = m_d3dCbvCPUDescriptorNextHandle.ptr + ::gnCbvSrvUavDescriptorIncrementSize;
+		m_d3dCbvGPUDescriptorNextHandle.ptr = m_d3dCbvGPUDescriptorNextHandle.ptr + ::gnCbvSrvUavDescriptorIncrementSize;
+	}
+	return(d3dCbvGPUDescriptorHandle);
+}
+
+void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, const shared_ptr<CTexture>& pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
+{
+	m_nCntSrv++;
+	m_d3dSrvCPUDescriptorNextHandle.ptr += (::gnCbvSrvUavDescriptorIncrementSize * nDescriptorHeapIndex);
+	m_d3dSrvGPUDescriptorNextHandle.ptr += (::gnCbvSrvUavDescriptorIncrementSize * nDescriptorHeapIndex);
+
+	if (pTexture)
+	{
+		int nTextures = pTexture->GetTextures();
+		for (int i = 0; i < nTextures; i++)
+		{
+			ID3D12Resource* pShaderResource = pTexture->GetResource(i);
+			D3D12_SHADER_RESOURCE_VIEW_DESC d3dShaderResourceViewDesc = pTexture->GetShaderResourceViewDesc(i);
+			pd3dDevice->CreateShaderResourceView(pShaderResource, &d3dShaderResourceViewDesc, m_d3dSrvCPUDescriptorNextHandle);
+			m_d3dSrvCPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
+			pTexture->SetSrvGpuDescriptorHandle(i, m_d3dSrvGPUDescriptorNextHandle);
+			m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
+		}
+	}
+
+	int nRootParameters = pTexture->GetRootParameters();
+	for (int j = 0; j < nRootParameters; j++)
+	{
+		pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
+	}
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE CScene::CreateShaderResourceView(ID3D12Device* pd3dDevice, ID3D12Resource* pd3dResource, DXGI_FORMAT dxgiSrvFormat)
+{
+	D3D12_SHADER_RESOURCE_VIEW_DESC d3dShaderResourceViewDesc;
+	d3dShaderResourceViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	d3dShaderResourceViewDesc.Format = dxgiSrvFormat;
+	d3dShaderResourceViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	d3dShaderResourceViewDesc.Texture2D.MipLevels = 1;
+	d3dShaderResourceViewDesc.Texture2D.MostDetailedMip = 0;
+	d3dShaderResourceViewDesc.Texture2D.PlaneSlice = 0;
+	d3dShaderResourceViewDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+	D3D12_GPU_DESCRIPTOR_HANDLE d3dSrvGPUDescriptorHandle = m_d3dSrvGPUDescriptorNextHandle;
+	pd3dDevice->CreateShaderResourceView(pd3dResource, &d3dShaderResourceViewDesc, m_d3dSrvCPUDescriptorNextHandle);
+	m_d3dSrvCPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
+	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
+
+	return(d3dSrvGPUDescriptorHandle);
+}
+
+void CScene::CreateUnorderedAccessViews(ID3D12Device* pd3dDevice, const shared_ptr<CTexture>& pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
+{
+	m_nCntUav++;
+
+	m_d3dUavCPUDescriptorNextHandle.ptr += (::gnCbvSrvUavDescriptorIncrementSize * nDescriptorHeapIndex);
+	m_d3dUavGPUDescriptorNextHandle.ptr += (::gnCbvSrvUavDescriptorIncrementSize * nDescriptorHeapIndex);
+
+	if (pTexture)
+	{
+		int nTextures = pTexture->GetTextures();
+		for (int i = 0; i < nTextures; i++)
+		{
+			ID3D12Resource* pShaderResource = pTexture->GetResource(i);
+			D3D12_UNORDERED_ACCESS_VIEW_DESC d3dUnorderedAccessViewDesc = pTexture->GetUnorderedAccessViewDesc(i);
+			pd3dDevice->CreateUnorderedAccessView(pShaderResource, NULL, &d3dUnorderedAccessViewDesc, m_d3dUavCPUDescriptorNextHandle);
+			m_d3dUavCPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
+			pTexture->SetUavGpuDescriptorHandle(i, m_d3dUavGPUDescriptorNextHandle);
+			m_d3dUavGPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
+		}
+	}
+
+	int nRootParameters = pTexture->GetRootParameters();
+	for (int j = 0; j < nRootParameters; j++)
+	{
+		pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
+	}
+}
 
 void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 {
@@ -44,19 +191,19 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 
 	pd3dDescriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
 	pd3dDescriptorRanges[0].NumDescriptors = 1;
-	pd3dDescriptorRanges[0].BaseShaderRegister = 0; //b0 Camera: 
+	pd3dDescriptorRanges[0].BaseShaderRegister = 0; //b0 Camera:
 	pd3dDescriptorRanges[0].RegisterSpace = 0;
 	pd3dDescriptorRanges[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 	pd3dDescriptorRanges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
 	pd3dDescriptorRanges[1].NumDescriptors = 1;
-	pd3dDescriptorRanges[1].BaseShaderRegister = 1; //b1 GameObject: 
+	pd3dDescriptorRanges[1].BaseShaderRegister = 1; //b1 GameObject:
 	pd3dDescriptorRanges[1].RegisterSpace = 0;
 	pd3dDescriptorRanges[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 	pd3dDescriptorRanges[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
 	pd3dDescriptorRanges[2].NumDescriptors = 1;
-	pd3dDescriptorRanges[2].BaseShaderRegister = 2; //b2 Light?: 
+	pd3dDescriptorRanges[2].BaseShaderRegister = 2; //b2 Light?:
 	pd3dDescriptorRanges[2].RegisterSpace = 0;
 	pd3dDescriptorRanges[2].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
@@ -104,7 +251,7 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 
 	pd3dDescriptorRanges[10].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	pd3dDescriptorRanges[10].NumDescriptors = ADD_RENDERTARGET_COUNT;
-	pd3dDescriptorRanges[10].BaseShaderRegister = 5; //t5,t6,t7,t8: Deferred Render Texture,  t9: emissive, t10: compute 
+	pd3dDescriptorRanges[10].BaseShaderRegister = 5; //t5,t6,t7,t8: Deferred Render Texture,  t9: emissive, t10: compute
 	pd3dDescriptorRanges[10].RegisterSpace = 0;
 	pd3dDescriptorRanges[10].OffsetInDescriptorsFromTableStart = 0;
 
@@ -140,7 +287,7 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 
 	pd3dDescriptorRanges[16].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
 	pd3dDescriptorRanges[16].NumDescriptors = 1;
-	pd3dDescriptorRanges[16].BaseShaderRegister = 0; //u0: RWTexture2D 
+	pd3dDescriptorRanges[16].BaseShaderRegister = 0; //u0: RWTexture2D
 	pd3dDescriptorRanges[16].RegisterSpace = 0;
 	pd3dDescriptorRanges[16].OffsetInDescriptorsFromTableStart = 0;
 
@@ -299,142 +446,27 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 	d3dRootSignatureDesc.pStaticSamplers = d3dSamplerDescs;
 	d3dRootSignatureDesc.Flags = d3dRootSignatureFlags;
 
-	ID3DBlob* pd3dSignatureBlob = NULL;
-	ID3DBlob* pd3dErrorBlob = NULL;
-	::D3D12SerializeRootSignature(&d3dRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-		&pd3dSignatureBlob, &pd3dErrorBlob);
-	pd3dDevice->CreateRootSignature(0, pd3dSignatureBlob->GetBufferPointer(),
-		pd3dSignatureBlob->GetBufferSize(), __uuidof(ID3D12RootSignature), (void**)
-		&m_pd3dGraphicsRootSignature);
-	if (pd3dSignatureBlob) {
+	ID3DBlob* pd3dSignatureBlob = nullptr;
+	ID3DBlob* pd3dErrorBlob = nullptr;
+	::D3D12SerializeRootSignature(
+		&d3dRootSignatureDesc,
+		D3D_ROOT_SIGNATURE_VERSION_1,
+		&pd3dSignatureBlob,
+		&pd3dErrorBlob);
+	pd3dDevice->CreateRootSignature(
+		0,
+		pd3dSignatureBlob->GetBufferPointer(),
+		pd3dSignatureBlob->GetBufferSize(),
+		__uuidof(ID3D12RootSignature),
+		(void**)&m_pd3dGraphicsRootSignature);
+
+	if (pd3dSignatureBlob)
+	{
 		pd3dSignatureBlob->Release();
 	}
-	if (pd3dErrorBlob) {
+	if (pd3dErrorBlob)
+	{
 		pd3dErrorBlob->Release();
-	}
-}
-
-int CScene::m_nCntCbv = 0;
-int CScene::m_nCntSrv = 0;
-int CScene::m_nCntUav = 0;
-
-void CScene::CreateCbvSrvUavDescriptorHeaps(ID3D12Device* pd3dDevice, int nConstantBufferViews, int nShaderResourceViews, int nUnorderedAccessViews)
-{
-	if (m_pd3dCbvSrvUavDescriptorHeap.Get())
-	{
-		m_pd3dCbvSrvUavDescriptorHeap.Reset();
-	}
-
-	D3D12_DESCRIPTOR_HEAP_DESC d3dDescriptorHeapDesc;
-	d3dDescriptorHeapDesc.NumDescriptors = nConstantBufferViews + nShaderResourceViews + nUnorderedAccessViews; //CBVs + SRVs 
-	d3dDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	d3dDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	d3dDescriptorHeapDesc.NodeMask = 0;
-	HRESULT h = pd3dDevice->CreateDescriptorHeap(&d3dDescriptorHeapDesc, __uuidof(ID3D12DescriptorHeap), (void**)&m_pd3dCbvSrvUavDescriptorHeap);
-
-	m_d3dCbvCPUDescriptorStartHandle = m_pd3dCbvSrvUavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	m_d3dCbvGPUDescriptorStartHandle = m_pd3dCbvSrvUavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
-	m_d3dSrvCPUDescriptorStartHandle.ptr = m_d3dCbvCPUDescriptorStartHandle.ptr + (::gnCbvSrvUavDescriptorIncrementSize * nConstantBufferViews);
-	m_d3dSrvGPUDescriptorStartHandle.ptr = m_d3dCbvGPUDescriptorStartHandle.ptr + (::gnCbvSrvUavDescriptorIncrementSize * nConstantBufferViews);
-	m_d3dUavCPUDescriptorStartHandle.ptr = m_d3dSrvCPUDescriptorStartHandle.ptr + (::gnCbvSrvUavDescriptorIncrementSize * nShaderResourceViews);
-	m_d3dUavGPUDescriptorStartHandle.ptr = m_d3dSrvGPUDescriptorStartHandle.ptr + (::gnCbvSrvUavDescriptorIncrementSize * nShaderResourceViews);
-
-	m_d3dCbvCPUDescriptorNextHandle = m_d3dCbvCPUDescriptorStartHandle;
-	m_d3dCbvGPUDescriptorNextHandle = m_d3dCbvGPUDescriptorStartHandle;
-	m_d3dSrvCPUDescriptorNextHandle = m_d3dSrvCPUDescriptorStartHandle;
-	m_d3dSrvGPUDescriptorNextHandle = m_d3dSrvGPUDescriptorStartHandle;
-	m_d3dUavCPUDescriptorNextHandle = m_d3dUavCPUDescriptorStartHandle;
-	m_d3dUavGPUDescriptorNextHandle = m_d3dUavGPUDescriptorStartHandle;
-}
-
-D3D12_GPU_DESCRIPTOR_HANDLE CScene::CreateConstantBufferViews(ID3D12Device* pd3dDevice, int nConstantBufferViews, ID3D12Resource* pd3dConstantBuffers, UINT nStride)
-{
-	m_nCntCbv++;
-	D3D12_GPU_DESCRIPTOR_HANDLE d3dCbvGPUDescriptorHandle = m_d3dCbvGPUDescriptorNextHandle;
-	D3D12_GPU_VIRTUAL_ADDRESS d3dGpuVirtualAddress = pd3dConstantBuffers->GetGPUVirtualAddress();
-	D3D12_CONSTANT_BUFFER_VIEW_DESC d3dCBVDesc;
-	d3dCBVDesc.SizeInBytes = nStride;
-	for (int j = 0; j < nConstantBufferViews; j++)
-	{
-		d3dCBVDesc.BufferLocation = d3dGpuVirtualAddress + (nStride * j);
-		pd3dDevice->CreateConstantBufferView(&d3dCBVDesc, m_d3dCbvCPUDescriptorNextHandle);
-		m_d3dCbvCPUDescriptorNextHandle.ptr = m_d3dCbvCPUDescriptorNextHandle.ptr + ::gnCbvSrvUavDescriptorIncrementSize;
-		m_d3dCbvGPUDescriptorNextHandle.ptr = m_d3dCbvGPUDescriptorNextHandle.ptr + ::gnCbvSrvUavDescriptorIncrementSize;
-	}
-	return(d3dCbvGPUDescriptorHandle);
-}
-
-void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, const shared_ptr<CTexture>& pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
-{
-	m_nCntSrv++;
-	m_d3dSrvCPUDescriptorNextHandle.ptr += (::gnCbvSrvUavDescriptorIncrementSize * nDescriptorHeapIndex);
-	m_d3dSrvGPUDescriptorNextHandle.ptr += (::gnCbvSrvUavDescriptorIncrementSize * nDescriptorHeapIndex);
-
-	if (pTexture)
-	{
-		int nTextures = pTexture->GetTextures();
-		for (int i = 0; i < nTextures; i++)
-		{
-			ID3D12Resource* pShaderResource = pTexture->GetResource(i);
-			D3D12_SHADER_RESOURCE_VIEW_DESC d3dShaderResourceViewDesc = pTexture->GetShaderResourceViewDesc(i);
-			pd3dDevice->CreateShaderResourceView(pShaderResource, &d3dShaderResourceViewDesc, m_d3dSrvCPUDescriptorNextHandle);
-			m_d3dSrvCPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
-			pTexture->SetSrvGpuDescriptorHandle(i, m_d3dSrvGPUDescriptorNextHandle);
-			m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
-		}
-	}
-
-	int nRootParameters = pTexture->GetRootParameters();
-	for (int j = 0; j < nRootParameters; j++)
-	{
-		pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
-	}
-}
-
-D3D12_GPU_DESCRIPTOR_HANDLE CScene::CreateShaderResourceView(ID3D12Device* pd3dDevice, ID3D12Resource* pd3dResource, DXGI_FORMAT dxgiSrvFormat)
-{
-	D3D12_SHADER_RESOURCE_VIEW_DESC d3dShaderResourceViewDesc;
-	d3dShaderResourceViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	d3dShaderResourceViewDesc.Format = dxgiSrvFormat;
-	d3dShaderResourceViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	d3dShaderResourceViewDesc.Texture2D.MipLevels = 1;
-	d3dShaderResourceViewDesc.Texture2D.MostDetailedMip = 0;
-	d3dShaderResourceViewDesc.Texture2D.PlaneSlice = 0;
-	d3dShaderResourceViewDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-	D3D12_GPU_DESCRIPTOR_HANDLE d3dSrvGPUDescriptorHandle = m_d3dSrvGPUDescriptorNextHandle;
-	pd3dDevice->CreateShaderResourceView(pd3dResource, &d3dShaderResourceViewDesc, m_d3dSrvCPUDescriptorNextHandle);
-	m_d3dSrvCPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
-	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
-
-	return(d3dSrvGPUDescriptorHandle);
-}
-
-// 일단은 어차피 Uav하나만 있으면 되니 그대로 사용해보자
-void CScene::CreateUnorderedAccessViews(ID3D12Device* pd3dDevice, const shared_ptr<CTexture>& pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
-{
-	m_nCntUav++;
-
-	m_d3dUavCPUDescriptorNextHandle.ptr += (::gnCbvSrvUavDescriptorIncrementSize * nDescriptorHeapIndex);
-	m_d3dUavGPUDescriptorNextHandle.ptr += (::gnCbvSrvUavDescriptorIncrementSize * nDescriptorHeapIndex);
-
-	if (pTexture)
-	{
-		int nTextures = pTexture->GetTextures();
-		for (int i = 0; i < nTextures; i++)
-		{
-			ID3D12Resource* pShaderResource = pTexture->GetResource(i);
-			D3D12_UNORDERED_ACCESS_VIEW_DESC d3dUnorderedAccessViewDesc = pTexture->GetUnorderedAccessViewDesc(i);
-			pd3dDevice->CreateUnorderedAccessView(pShaderResource, NULL, &d3dUnorderedAccessViewDesc, m_d3dUavCPUDescriptorNextHandle);
-			m_d3dUavCPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
-			pTexture->SetUavGpuDescriptorHandle(i, m_d3dUavGPUDescriptorNextHandle);
-			m_d3dUavGPUDescriptorNextHandle.ptr += ::gnCbvSrvUavDescriptorIncrementSize;
-		}
-	}
-
-	int nRootParameters = pTexture->GetRootParameters();
-	for (int j = 0; j < nRootParameters; j++)
-	{
-		pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
 	}
 }
 
@@ -483,7 +515,7 @@ bool CLobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wP
 		nRetVal = pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::CHANGE_BUTTON_UP);
 		if (nRetVal == 2)
 		{
-			// CHANGE 
+			// CHANGE
 			PostMessage(hWnd, WM_CHANGE_SLOT, 0, 0);
 			break;
 		}
@@ -491,6 +523,161 @@ bool CLobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wP
 	break;
 	}
 	return false;
+}
+
+bool CLobbyScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+{
+	return true;
+}
+
+bool CLobbyScene::ProcessInput(UCHAR* pKeysBuffer)
+{
+	shared_ptr<CLobbyUserInterfaceShader> pLobbyUIShader = dynamic_pointer_cast<CLobbyUserInterfaceShader>(m_vpShader[LOBBY_UI_SHADER]);
+
+	POINT ptCursorPos = m_ptCursor;
+	ptCursorPos.y = FRAME_BUFFER_HEIGHT - ptCursorPos.y;
+
+	// START BUTTON
+	float fWidth, fHeight;
+	float fCenterX, fCenterY;
+	fCenterX = FRAME_BUFFER_WIDTH * 0.75f;
+	fCenterY = FRAME_BUFFER_HEIGHT * 0.2f;
+	fWidth = FRAME_BUFFER_WIDTH / 2.0f * 0.5f;
+
+	float fButtonScale = 160.0f / 680.0f;
+	fHeight = FRAME_BUFFER_HEIGHT / 2.0f * fButtonScale;
+
+
+	if (CheckCursor(ptCursorPos, fCenterX, fCenterY, fWidth, fHeight))
+	{
+		pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::START_BUTTON_SEL);
+	}
+	else
+	{
+		pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::START_BUTTON_NON);
+	}
+
+	fCenterX = FRAME_BUFFER_WIDTH * 0.25f;
+	if (CheckCursor(ptCursorPos, fCenterX, fCenterY, fWidth, fHeight))
+	{
+		pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::CHANGE_BUTTON_SEL);
+	}
+	else
+	{
+		pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::CHANGE_BUTTON_NON);
+	}
+
+	return false;
+}
+
+void CLobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, int mainPlayerId)
+{
+	CreateGraphicsRootSignature(pd3dDevice);
+
+	int nCntCbv = 3000;
+	int nCntSrv = 1000;
+	int nCntUav = 5; // Emissive bloom 3 + SSAO bilateral blur 2
+
+	CreateCbvSrvUavDescriptorHeaps(pd3dDevice, nCntCbv, nCntSrv, nCntUav);
+
+	// 쉐이더 vector에 삽입한 순서대로 인덱스 define한 값으로 접근
+	m_vpShader.push_back(make_shared<CLobbyStandardShader>());
+	m_vpShader[LOBBY_SATANDARD_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
+
+	m_vpShader.push_back(make_shared<CLobbyUserInterfaceShader>(mainPlayerId));
+	m_vpShader[LOBBY_UI_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
+
+	//Player 생성 + 아이템
+	for (int i = 0; i < MAX_CLIENT; ++i)
+	{
+		if (i == ZOMBIEPLAYER)
+		{
+			m_apPlayer[i] = std::make_shared<CZombiePlayer>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), nullptr);
+			shared_ptr<CLoadedModelInfo> pZombiePlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(
+				pd3dDevice,
+				pd3dCommandList,
+				m_pd3dGraphicsRootSignature.Get(),
+				"Asset/Model/Zom_1.bin",
+				MeshType::Standard);
+			m_apPlayer[i]->LoadModelAndAnimation(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), pZombiePlayerModel);
+			m_vpShader[LOBBY_SATANDARD_SHADER]->AddGameObject(m_apPlayer[i]);
+
+			float fxScale = float(FRAME_BUFFER_HEIGHT) / FRAME_BUFFER_WIDTH;
+			XMFLOAT3 xmf3Position = XMFLOAT3(-fxScale * 1.2f + fxScale * 0.6f * i, -0.1f, 0.5f);
+			XMFLOAT3 xmf3Scale = XMFLOAT3(0.3f, 0.5f, 0.3f);
+			m_apPlayer[i]->SetWorldPostion(xmf3Position);
+			m_apPlayer[i]->SetScale(xmf3Scale);
+			m_apPlayer[i]->Rotate(0.0f, 135.0f, 0.0f);
+			m_apPlayer[i]->OnUpdateToParent();
+		}
+		else
+		{
+			m_apPlayer[i] = std::make_shared<CBlueSuitPlayer>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), nullptr);
+			shared_ptr<CLoadedModelInfo> pBlueSuitPlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(
+				pd3dDevice,
+				pd3dCommandList,
+				m_pd3dGraphicsRootSignature.Get(),
+				"Asset/Model/BlueSuitFree01.bin",
+				MeshType::Standard
+			);
+			m_apPlayer[i]->LoadModelAndAnimation(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), pBlueSuitPlayerModel);
+			m_vpShader[LOBBY_SATANDARD_SHADER]->AddGameObject(m_apPlayer[i]);
+
+			float fxScale = float(FRAME_BUFFER_HEIGHT) / FRAME_BUFFER_WIDTH;
+			XMFLOAT3 xmf3Position = XMFLOAT3(-fxScale * 1.2f + fxScale * 0.6f * i, -0.1f, 0.5f);
+			XMFLOAT3 xmf3Scale = XMFLOAT3(0.35f, 0.35f, 0.35f);
+			m_apPlayer[i]->SetWorldPostion(xmf3Position);
+			m_apPlayer[i]->SetScale(xmf3Scale);
+			m_apPlayer[i]->Rotate(0.0f, -165.0f, .0f);
+			m_apPlayer[i]->OnUpdateToParent();
+		}
+	}
+
+	m_vpShader[LOBBY_UI_SHADER]->BuildObjects(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
+
+	m_vFullScreenProcessingShader = make_unique<CFullScreenProcessingShader>();
+	m_vFullScreenProcessingShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
+	m_vFullScreenProcessingShader->BuildObjects(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), L"Lobby", m_apPlayer[mainPlayerId]);
+
+	m_pCamera->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+}
+
+void CLobbyScene::AnimateObjects(float fElapsedTime, float fCurTime)
+{
+	for (auto& pShader : m_vpShader)
+	{
+		pShader->AnimateObjects(fElapsedTime);
+	}
+}
+
+void CLobbyScene::PrepareRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera)
+{
+	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
+	pCamera->UpdateShaderVariables(pd3dCommandList);
+}
+
+void CLobbyScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState)
+{
+	PrepareRender(pd3dCommandList, pCamera);
+
+	for (auto& pShader : m_vpShader)
+	{
+		pShader->Render(pd3dCommandList, pCamera, m_pMainPlayer, 0);
+	}
+}
+
+void CLobbyScene::RenderLoading(ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	PrepareRender(pd3dCommandList, m_pCamera);
+
+	m_vFullScreenProcessingShader->Render(pd3dCommandList, m_pCamera, m_pMainPlayer);
+}
+
+void CLobbyScene::UpdateShaderMainPlayer(int nMainClientId)
+{
+	shared_ptr<CLobbyUserInterfaceShader> pLobbyUIShader = dynamic_pointer_cast<CLobbyUserInterfaceShader>(m_vpShader[LOBBY_UI_SHADER]);
+	pLobbyUIShader->UpdateShaderMainPlayer(nMainClientId);
+
 }
 
 void CLobbyScene::ProcessButtonDown(const POINT& ptCursorPos, std::shared_ptr<CLobbyUserInterfaceShader>& pLobbyUIShader)
@@ -537,211 +724,17 @@ void CLobbyScene::ProcessClickBorder(const POINT& ptCursorPos, std::shared_ptr<C
 	}
 }
 
-bool CLobbyScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
-{
-	//switch (nMessageID)
-	//{
-	//case WM_KEYDOWN:
-	//	switch (wParam)
-	//	{
-	//	case VK_PRIOR:
-	//	{
-	//		XMFLOAT3 xmf3Up = XMFLOAT3(0.0f, 0.1f, 0.0f);
-	//		m_apPlayer[0]->Move(xmf3Up, false);
-	//	}
-	//		break;
-	//	case VK_NEXT:
-	//	{
-	//		XMFLOAT3 xmf3Down = XMFLOAT3(0.0f, -0.1f, 0.0f);
-	//		m_apPlayer[0]->Move(xmf3Down, false);
-	//	}
-	//		break;
-	//	case VK_UP:
-	//	{
-	//		XMFLOAT3 xmf3Back = XMFLOAT3(0.0f, 0.0f, 0.1f);
-	//		m_apPlayer[0]->Move(xmf3Back, false);
-	//	}
-	//		break;
-	//	case VK_DOWN:
-	//	{
-	//		XMFLOAT3 xmf3Forward = XMFLOAT3(0.0f, 0.0f, -0.1f);
-	//		m_apPlayer[0]->Move(xmf3Forward, false);
-	//	}
-	//		break;
-	//	case VK_RIGHT:
-	//	{	
-	//		XMFLOAT3 xmf3Right = XMFLOAT3(0.1f, 0.0f, 0.0f);
-	//		m_apPlayer[0]->Move(xmf3Right, false); 
-	//	}
-	//		break;
-	//	case VK_LEFT:
-	//	{
-	//		XMFLOAT3 xmf3Left = XMFLOAT3(-0.1f, 0.0f, 0.0f);
-	//		m_apPlayer[0]->Move(xmf3Left, false); 
-	//	}
-	//		break;
-	//	}
-	//	break;
-	//}
-
-	return true;
-}
-
-void CLobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, int mainPlayerId)
-{
-	CreateGraphicsRootSignature(pd3dDevice);
-
-	int nCntCbv = 3000;
-	int nCntSrv = 1000;
-	int nCntUav = 5; // Emissive bloom 3 + SSAO bilateral blur 2
-
-	CreateCbvSrvUavDescriptorHeaps(pd3dDevice, nCntCbv, nCntSrv, nCntUav);
-
-	// 쉐이더 vector에 삽입한 순서대로 인덱스 define한 값으로 접근
-	m_vpShader.push_back(make_shared<CLobbyStandardShader>());
-	m_vpShader[LOBBY_SATANDARD_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
-
-	m_vpShader.push_back(make_shared<CLobbyUserInterfaceShader>(mainPlayerId));
-	m_vpShader[LOBBY_UI_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
-
-	//Player 생성 + 아이템
-	for (int i = 0; i < MAX_CLIENT; ++i)
-	{
-		if (i == ZOMBIEPLAYER)
-		{
-			m_apPlayer[i] = std::make_shared<CZombiePlayer>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), nullptr);
-			shared_ptr<CLoadedModelInfo> pZombiePlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), "Asset/Model/Zom_1.bin", MeshType::Standard);
-			m_apPlayer[i]->LoadModelAndAnimation(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), pZombiePlayerModel);
-			m_vpShader[LOBBY_SATANDARD_SHADER]->AddGameObject(m_apPlayer[i]);
-
-			float fxScale = float(FRAME_BUFFER_HEIGHT) / FRAME_BUFFER_WIDTH;
-			XMFLOAT3 xmf3Position = XMFLOAT3(-fxScale * 1.2f + fxScale * 0.6f * i, -0.1f, 0.5f);
-			XMFLOAT3 xmf3Scale = XMFLOAT3(0.3f, 0.5f, 0.3f);
-			m_apPlayer[i]->SetWorldPostion(xmf3Position);
-			m_apPlayer[i]->SetScale(xmf3Scale);
-			m_apPlayer[i]->Rotate(0.0f, 135.0f, 0.0f);
-			m_apPlayer[i]->OnUpdateToParent();
-		}
-		else
-		{
-			m_apPlayer[i] = std::make_shared<CBlueSuitPlayer>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), nullptr);
-			shared_ptr<CLoadedModelInfo> pBlueSuitPlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), "Asset/Model/BlueSuitFree01.bin", MeshType::Standard);
-			m_apPlayer[i]->LoadModelAndAnimation(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), pBlueSuitPlayerModel);
-			m_vpShader[LOBBY_SATANDARD_SHADER]->AddGameObject(m_apPlayer[i]);
-
-			float fxScale = float(FRAME_BUFFER_HEIGHT) / FRAME_BUFFER_WIDTH;
-			XMFLOAT3 xmf3Position = XMFLOAT3(-fxScale * 1.2f + fxScale * 0.6f * i, -0.1f, 0.5f);
-			XMFLOAT3 xmf3Scale = XMFLOAT3(0.35f, 0.35f, 0.35f);
-			m_apPlayer[i]->SetWorldPostion(xmf3Position);
-			m_apPlayer[i]->SetScale(xmf3Scale);
-			m_apPlayer[i]->Rotate(0.0f, -165.0f, .0f);
-			m_apPlayer[i]->OnUpdateToParent();
-		}
-	}
-
-	m_vpShader[LOBBY_UI_SHADER]->BuildObjects(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
-
-	m_vFullScreenProcessingShader = make_unique<CFullScreenProcessingShader>();
-	m_vFullScreenProcessingShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get());
-	m_vFullScreenProcessingShader->BuildObjects(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), L"Lobby", m_apPlayer[mainPlayerId]);
-}
-
-void CLobbyScene::AnimateObjects(float fElapsedTime, float fCurTime)
-{
-	for (auto& pShader : m_vpShader)
-	{
-		pShader->AnimateObjects(fElapsedTime);
-	}
-}
-
-bool CLobbyScene::ProcessInput(UCHAR* pKeysBuffer)
-{
-	shared_ptr<CLobbyUserInterfaceShader> pLobbyUIShader = dynamic_pointer_cast<CLobbyUserInterfaceShader>(m_vpShader[LOBBY_UI_SHADER]);
-
-	POINT ptCursorPos = m_ptCursor;
-	ptCursorPos.y = FRAME_BUFFER_HEIGHT - ptCursorPos.y;
-
-	// START BUTTON
-	float fWidth, fHeight;
-	float fCenterX, fCenterY;
-	fCenterX = FRAME_BUFFER_WIDTH * 0.75f;
-	fCenterY = FRAME_BUFFER_HEIGHT * 0.2f;
-	fWidth = FRAME_BUFFER_WIDTH / 2.0f * 0.5f;
-
-	float fButtonScale = 160.0f / 680.0f;
-	fHeight = FRAME_BUFFER_HEIGHT / 2.0f * fButtonScale;
-
-
-	if (CheckCursor(ptCursorPos, fCenterX, fCenterY, fWidth, fHeight))
-	{
-		pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::START_BUTTON_SEL);
-	}
-	else
-	{
-		pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::START_BUTTON_NON);
-	}
-
-	fCenterX = FRAME_BUFFER_WIDTH * 0.25f;
-	if (CheckCursor(ptCursorPos, fCenterX, fCenterY, fWidth, fHeight))
-	{
-		pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::CHANGE_BUTTON_SEL);
-	}
-	else
-	{
-		pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::CHANGE_BUTTON_NON);
-	}
-
-	return false;
-}
-
-void CLobbyScene::PrepareRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera)
-{
-	if (m_pd3dGraphicsRootSignature)
-		pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());
-	if (m_pd3dCbvSrvUavDescriptorHeap)
-		pd3dCommandList->SetDescriptorHeaps(1, m_pd3dCbvSrvUavDescriptorHeap.GetAddressOf());
-
-	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
-	pCamera->UpdateShaderVariables(pd3dCommandList);
-}
-
-void CLobbyScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState)
-{
-	PrepareRender(pd3dCommandList, pCamera);
-
-	//m_vpShader[LOBBY_UI_SHADER]->Render(pd3dCommandList, pCamera, m_pMainPlayer, 0);
-	for (auto& pShader : m_vpShader)
-	{
-		pShader->Render(pd3dCommandList, pCamera, m_pMainPlayer, 0);
-	}
-}
-
-void CLobbyScene::LoadingRender(ID3D12GraphicsCommandList* pd3dCommandList)
-{
-	PrepareRender(pd3dCommandList, m_pCamera);
-
-	m_vFullScreenProcessingShader->Render(pd3dCommandList, m_pCamera, m_pMainPlayer);
-}
-
 bool CLobbyScene::CheckCursor(POINT ptCursor, float fCenterX, float fCenterY, float fWidth, float fHeight)
 {
-	if (ptCursor.x > fCenterX - fWidth / 2 && ptCursor.x < fCenterX + fWidth / 2 &&
-		ptCursor.y > fCenterY - fHeight / 2 && ptCursor.y < fCenterY + fHeight / 2)
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
+	bool isInside = (
+		ptCursor.x > fCenterX - fWidth / 2 &&
+		ptCursor.x < fCenterX + fWidth / 2 &&
+		ptCursor.y > fCenterY - fHeight / 2 &&
+		ptCursor.y < fCenterY + fHeight / 2);
+
+	return isInside;
 }
 
-void CLobbyScene::UpdateShaderMainPlayer(int nMainClientId)
-{
-	shared_ptr<CLobbyUserInterfaceShader> pLobbyUIShader = dynamic_pointer_cast<CLobbyUserInterfaceShader>(m_vpShader[LOBBY_UI_SHADER]);
-	pLobbyUIShader->UpdateShaderMainPlayer(nMainClientId);
-
-}
 
 /// <CScene - CLobbyScene>
 /////////////////////////////////////////////////////////////////////
@@ -751,9 +744,115 @@ CMainScene::CMainScene()
 {
 
 }
+
 CMainScene::~CMainScene()
 {
 
+}
+
+bool CMainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+{
+	switch (nMessageID)
+	{
+	case WM_RBUTTONDOWN:
+		m_pMainPlayer->SetRightClick(true);
+		m_pMainPlayer->RightClickProcess(gGameTimer.GetTotalTime());
+		break;
+	case WM_LBUTTONUP:
+	case WM_RBUTTONUP:
+		break;
+	case WM_MOUSEMOVE:
+		break;
+	default:
+		break;
+	}
+
+	return true;
+}
+
+bool CMainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+{
+	//m_pLights[0].m_xmf3Attenuation = XMFLOAT3(1.0f, 0.1f, 0.001f); //손전등  밝기 감도설정
+	switch (nMessageID)
+	{
+	case WM_KEYDOWN:
+		switch (wParam)
+		{
+		case 'P':
+			m_pcbMappedTime->gfScale += 0.01f;
+			break;
+		case 'O':
+			m_pcbMappedTime->gfScale -= 0.01f;
+			break;
+		case 'L':
+			m_pcbMappedTime->gfIntesity += 0.01f;
+			break;
+		case 'K':
+			m_pcbMappedTime->gfIntesity -= 0.01f;
+			break;
+		case 'Y':
+			m_pcbMappedTime->gfBias += 0.001f;
+			break;
+		case 'U':
+			m_pcbMappedTime->gfBias -= 0.001f;
+			break;
+		default:
+			break;
+		}
+		break;
+	case WM_KEYUP:
+		switch (wParam)
+		{
+		case 'M':
+			// SSAO 비용을 비교할 수 있도록 Off -> Raw -> Blurred 순서로 전환한다.
+			CycleSsaoMode();
+			break;
+		case 'N':
+			if (m_pBlurComputeShader->IsBlur())
+			{
+				m_pBlurComputeShader->SetBlur(false);
+			}
+			else
+			{
+				m_pBlurComputeShader->SetBlur(true);
+			}
+			break;
+		case VK_UP://		m_pcbMappedLights->bias	0.00119999994	float
+			//m_pcbMappedLights->bias += 0.0001f;
+			break;
+		case VK_DOWN:
+			//m_pcbMappedLights->bias -= 0.0001f;
+			break;
+		default:
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+	return false;
+}
+
+bool CMainScene::ProcessInput(UCHAR* pKeysBuffer)
+{
+	return(false);
+}
+
+void CMainScene::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	UINT ncbElementBytes = ((sizeof(LIGHTS) + 255) & ~255); //256의 배수
+	m_pd3dcbLights = ::CreateBufferResource(
+		pd3dDevice,
+		pd3dCommandList,
+		nullptr,
+		ncbElementBytes,
+		D3D12_HEAP_TYPE_UPLOAD,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		nullptr);
+
+	m_pd3dcbLights->Map(0, nullptr, (void**)&m_pcbMappedLights);
+	m_pcbMappedLights->bias = 0.0011f;
+	m_d3dLightCbvGPUDescriptorHandle = CreateConstantBufferViews(pd3dDevice, 1, m_pd3dcbLights.Get(), ncbElementBytes);
 }
 
 void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, int mainPlayerId)
@@ -762,9 +861,14 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 
 	// 쉐이더 vector에 삽입한 순서대로 인덱스 define한 값으로 접근
 	m_vShader.push_back(make_unique<StandardShader>());
-	//DXGI_FORMAT pdxgiRtvFormats[4] = { DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R32_FLOAT, DXGI_FORMAT_R32G32B32A32_FLOAT };
-	// Color, zDepth, Position, Emissive, Normal, HDR LOW, HDR High
-	DXGI_FORMAT pdxgiRtvFormats[ADD_RENDERTARGET_COUNT] = { DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R32_FLOAT, DXGI_FORMAT_R32G32B32A32_FLOAT, DXGI_FORMAT_R8G8B8A8_UNORM,  DXGI_FORMAT_R8G8B8A8_UNORM };
+
+	DXGI_FORMAT pdxgiRtvFormats[ADD_RENDERTARGET_COUNT] = {
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		DXGI_FORMAT_R32_FLOAT,
+		DXGI_FORMAT_R32G32B32A32_FLOAT,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		DXGI_FORMAT_R8G8B8A8_UNORM };
 
 	DXGI_FORMAT pdxgiRtvShadowFormat = DXGI_FORMAT_R32_FLOAT;
 	m_vShader[STANDARD_SHADER]->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), ADD_RENDERTARGET_COUNT, pdxgiRtvFormats, DXGI_FORMAT_D24_UNORM_S8_UINT);
@@ -1050,140 +1154,429 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	m_apPlayer[mainPlayerId]->SetPlayerVolume(1.0f);
 }
 
-
-void CMainScene::AddDefaultObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ObjectType type, XMFLOAT3 position, int shader, int mesh)
+void CMainScene::AnimateObjects(float fElapsedTime, float fCurTime)
 {
-	shared_ptr<CGameObject> pObject;
-	switch (type)
+	m_fElapsedTime = fElapsedTime;
+	m_pcbMappedTime->time += fElapsedTime;
+
+	for (auto& shader : m_vShader)
 	{
-	case ObjectType::DEFAULT:
-		pObject = make_shared<CGameObject>(pd3dDevice, pd3dCommandList, 1);
-		break;
-	case ObjectType::HEXAHERON:
-		pObject = make_shared<CHexahedronObject>(pd3dDevice, pd3dCommandList, 1);
-		break;
-	default:
-		break;
-	}
-	pObject->SetMesh(m_vMesh[mesh]);
-	pObject->SetPosition(position);
-
-	m_vShader[shader]->AddGameObject(pObject);
-}
-
-void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
-{
-	m_nLights = ReadLightObjectInfo(m_xmf3lightPositions, m_xmf3lightLooks) + MAX_SURVIVOR/*플레이어 조명*/;
-	if (m_nLights > MAX_LIGHTS)
-	{
-		//m_nLights = MAX_LIGHTS;
-	}
-	m_pLights = new LIGHT[MAX_LIGHTS];
-	::ZeroMemory(m_pLights, sizeof(LIGHT) * MAX_LIGHTS);
-
-	m_xmf4GlobalAmbient = XMFLOAT4(0.15f, 0.15f, 0.15f, 1.0f);
-
-	for (int i = 0; i < MAX_SURVIVOR; ++i)
-	{
-		m_pLightCamera.push_back(make_shared<CLightCamera>());
-		m_pLightCamera[i]->m_pLight = make_shared<LIGHT>();
-
-		m_xmf3lightPositions.insert(m_xmf3lightPositions.begin(), XMFLOAT3(0.0f, -100.0f, 0.0f)); // m_xmf3lightPositions을 가지고 카메라를 만들것임
-		m_xmf3lightLooks.insert(m_xmf3lightLooks.begin(), XMFLOAT3(0.0f, -1.0f, 0.0f));
-
-		m_pLightCamera[i]->m_pLight->m_bEnable = true;
-		m_pLightCamera[i]->m_pLight->m_nType = SPOT_LIGHT;
-		m_pLightCamera[i]->m_pLight->m_fRange = 30.0f;
-		m_pLightCamera[i]->m_pLight->m_xmf4Ambient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-		m_pLightCamera[i]->m_pLight->m_xmf4Diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-		m_pLightCamera[i]->m_pLight->m_xmf4Specular = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-		m_pLightCamera[i]->m_pLight->m_xmf3Position = XMFLOAT3(0.0f, 0.0f, 0.0f);
-		m_pLightCamera[i]->m_pLight->m_xmf3Direction = XMFLOAT3(0.0f, -1.0f, 0.0f);
-		m_pLightCamera[i]->m_pLight->m_xmf3Attenuation = XMFLOAT3(1.0f, -0.1f, 0.01f);
-		m_pLightCamera[i]->m_pLight->m_fFalloff = 1.0f;
-		m_pLightCamera[i]->m_pLight->m_fPhi = (float)cos(XMConvertToRadians(35.0f));
-		m_pLightCamera[i]->m_pLight->m_fTheta = (float)cos(XMConvertToRadians(25.0f));
+		shader->AnimateObjects(fElapsedTime);
 	}
 
-	for (int i = MAX_SURVIVOR; i < m_nLights; ++i)
+	for (auto& shader : m_vForwardRenderShader)
 	{
-		m_pLightCamera.push_back(make_shared<CLightCamera>());
-		m_pLightCamera[i]->m_pLight = make_shared<LIGHT>();
-
-		m_pLightCamera[i]->m_pLight->m_bEnable = true;
-		m_pLightCamera[i]->m_pLight->m_nType = SPOT_LIGHT;
-		m_pLightCamera[i]->m_pLight->m_fRange = 30.0f;
-		m_pLightCamera[i]->m_pLight->m_xmf4Ambient = XMFLOAT4(0.6f, 0.0f, 0.0f, 0.0f);
-		m_pLightCamera[i]->m_pLight->m_xmf4Diffuse = XMFLOAT4(0.6f, 0.0f, 0.0f, 0.0f);
-		m_pLightCamera[i]->m_pLight->m_xmf4Specular = XMFLOAT4(1.0f, 0.0f, 0.0f, 0.0f);
-		m_pLightCamera[i]->m_pLight->m_xmf3Position = m_xmf3lightPositions[i];
-		m_pLightCamera[i]->m_pLight->m_xmf3Direction = m_xmf3lightLooks[i];
-		m_pLightCamera[i]->m_pLight->m_xmf3Attenuation = XMFLOAT3(1.0f, -0.1f, 0.01f);
-
-		m_pLightCamera[i]->m_pLight->m_fFalloff = 1.0f;
-		m_pLightCamera[i]->m_pLight->m_fPhi = (float)cos(XMConvertToRadians(45.0f));
-		m_pLightCamera[i]->m_pLight->m_fTheta = (float)cos(XMConvertToRadians(35.0f));
+		shader->AnimateObjects(fElapsedTime);
 	}
 
+	m_vForwardRenderShader[PARTICLE_SHADER]->ParticleUpdate(fCurTime);
 
-
-	vector<XMFLOAT3> positions = GetLightPositions();
-	vector<XMFLOAT3> looks = GetLightLooks();
-
-	XMFLOAT3 xmf3Right = XMFLOAT3(1.0f, 0.0f, 0.0f);
-
-	XMFLOAT4X4 xmf4x4ToTexture = {
-		0.5f, 0.0f, 0.0f, 0.0f,
-		0.0f, -0.5f, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f,
-		0.5f, 0.5f, 0.0f, 1.0f };
-
-	XMMATRIX xmProjectionToTexture = XMLoadFloat4x4(&xmf4x4ToTexture);
-	XMMATRIX xmmtxViewProjection;
-
-	for (int i = 0; i < m_nLights; ++i) {
-
-		XMFLOAT3 xmf3Up = Vector3::CrossProduct(looks[i], xmf3Right);
-		XMFLOAT3 lookAtPosition = Vector3::Add(positions[i], looks[i]);
-		m_pLightCamera[i]->GenerateViewMatrix(positions[i], lookAtPosition, xmf3Up);
-		if (i >= MAX_SURVIVOR)
+	int light_Id{};
+	for (int i = 0; i < MAX_CLIENT; ++i)
+	{
+		if (m_apPlayer[i]->GetClientId() == -1)
 		{
-			m_pLightCamera[i]->GenerateProjectionMatrix(1.01f, 5.0f, ASPECT_RATIO, 90.0f);	//[0513] 근평면이 있어야  그림자를 그림
-		}/*
-		else {
-			m_pLightCamera[i]->GenerateProjectionMatrix(0.01f, 5.0f, ASPECT_RATIO, 90.0f);
-		}*/
-		m_pLightCamera[i]->GenerateFrustum();
-		m_pLightCamera[i]->MultiplyViewProjection();
+			continue;
+		}
 
-		XMFLOAT4X4 viewProjection = m_pLightCamera[i]->GetViewProjection();
-		xmmtxViewProjection = XMLoadFloat4x4(&viewProjection);
-		XMStoreFloat4x4(&m_pLightCamera[i]->m_pLight->m_xmf4x4ViewProjection, XMMatrixTranspose(xmmtxViewProjection * xmProjectionToTexture));
-		m_pLightCamera[i]->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+		auto player = dynamic_pointer_cast<CBlueSuitPlayer>(m_apPlayer[i]);
+		if (player)
+		{
+			XMFLOAT4X4* xmf4x4playerLight = player->GetFlashLigthWorldTransform();
+			m_pLightCamera[i - 1]->m_pLight->m_xmf3Position = XMFLOAT3(xmf4x4playerLight->_41, xmf4x4playerLight->_42, xmf4x4playerLight->_43);//m_pPlayer->GetCamera()->GetPosition();
+			m_pLightCamera[i - 1]->m_pLight->m_xmf3Direction = XMFLOAT3(xmf4x4playerLight->_21, xmf4x4playerLight->_22, xmf4x4playerLight->_23);/*XMFLOAT3(xmf4x4playerLight._31, xmf4x4playerLight._32, xmf4x4playerLight._33);*/ //m_pPlayer->GetCamera()->GetLookVector();
+
+			light_Id++;
+		}
 	}
 
-	// 빛의 카메라 파티션 설정
-	// 파티션의 월드변환행렬은 0,0,0임을 유의하라.
-	// 바운딩 박스의 위치만 변경한것이다.
-	unique_ptr<PartitionInsStandardShader> PtShader(static_cast<PartitionInsStandardShader*>(m_vPreRenderShader[PARTITION_SHADER].release()));
-	auto vBB = PtShader->GetPartitionBB();
+	XMFLOAT3 clientCameraPos = m_pMainPlayer->GetCamera()->GetPosition();
+	sort(m_pLightCamera.begin() + 4, m_pLightCamera.end(), [clientCameraPos](const shared_ptr<CLightCamera>& A, const shared_ptr<CLightCamera>& B) {
+		//const float epsilon = 1e-5f; // 허용 오차
+		XMFLOAT3 clToA = Vector3::Subtract(clientCameraPos, A->GetPosition());
+		XMFLOAT3 clToB = Vector3::Subtract(clientCameraPos, B->GetPosition());
+		return Vector3::Length(clToA) < Vector3::Length(clToB);
+		});
 
-	for (int i = 0; i < m_nLights; ++i) {
-		BoundingBox camerabb;
-		camerabb.Center = m_pLightCamera[i]->GetPosition();
-		camerabb.Extents = XMFLOAT3(0.1f, 0.1f, 0.1f);
-		int curFloor = static_cast<int>(std::floor(camerabb.Center.y / 4.5f));
-
-		m_pLightCamera[i]->SetFloor(curFloor);
-		for (int bbIdx = 0; bbIdx < vBB.size(); ++bbIdx) {
-			if (vBB[bbIdx]->Intersects(camerabb)) {
-				m_pLightCamera[i]->SetPartition(bbIdx);
-				break;
+	for (auto& cm : m_pLightCamera) {
+		cm->Update(cm->GetLookAtPosition(), fElapsedTime);
+		if (auto player = cm->GetPlayer().lock()) {
+			if (player->GetClientId() == -1) {
+				cm->m_pLight->m_bEnable = false;
 			}
 		}
 	}
 
-	m_vPreRenderShader[PARTITION_SHADER].reset(PtShader.release());
+	// 플레이어간 사운드 조정
+	for (auto& pPlayer : m_apPlayer)
+	{
+		if (pPlayer->GetClientId() == m_pMainPlayer->GetClientId())
+		{
+			continue;
+		}
+
+		XMFLOAT3 xmf3MainPos = m_pMainPlayer->GetPosition();
+		XMFLOAT3 xmf3OtherPos = pPlayer->GetPosition();
+
+		if (abs(xmf3MainPos.y - xmf3OtherPos.y) > 4.0f) // 층이 다르면 안들림
+		{
+			pPlayer->SetPlayerVolume(0.0f);
+			continue;
+		}
+
+		float fWeight = (4.0f - abs(xmf3MainPos.y - xmf3OtherPos.y)) / 4.0f;
+
+		xmf3MainPos.y = 0.0f;
+		xmf3OtherPos.y = 0.0f;
+		float fDistance = Vector3::Distance(xmf3MainPos, xmf3OtherPos);
+		if (fDistance > WALK_SOUND_DISTANCE)
+		{
+			pPlayer->SetPlayerVolume(0.0f);
+		}
+		else
+		{
+			float fVolume = ((WALK_SOUND_DISTANCE - fDistance) / WALK_SOUND_DISTANCE) * fWeight;
+			pPlayer->SetPlayerVolume(fVolume);
+		}
+	}
+}
+
+void CMainScene::PrevRenderTask(ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	// 그림자맵에 해당하는 텍스처를 렌더타겟으로 변환
+	m_pPostProcessingShader->OnShadowPrepareRenderTarget(pd3dCommandList);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
+
+	for (int i = 0; i < m_pPostProcessingShader->GetShadowTexture()->GetTextures(); ++i) {
+		D3D12_CPU_DESCRIPTOR_HANDLE shadowRTVDescriptorHandle = m_pPostProcessingShader->GetShadowRtvCPUDescriptorHandle(i);
+		{
+			pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+
+			pd3dCommandList->OMSetRenderTargets(1, &shadowRTVDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
+
+			PrepareRender(pd3dCommandList, m_pLightCamera[i]);
+			if (i < MAX_SURVIVOR)
+			{
+				Render(pd3dCommandList, m_pLightCamera[i], 1); // 카메라만 빛의 위치대로 설정해서 렌더링함.
+			}
+			else
+			{
+				ShadowPreRender(pd3dCommandList, m_pLightCamera[i], 1);
+			}
+		}
+	}
+
+	// 그림자맵에 해당하는 렌더타겟을 텍스처로 변환
+	m_pPostProcessingShader->TransitionShadowMapRenderTargetToCommon(pd3dCommandList);
+}
+
+void CMainScene::PrepareCommandListState(ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	CScene::PrepareCommandListState(pd3dCommandList);
+
+	if (m_pd3dGraphicsRootSignature)
+	{
+		pd3dCommandList->SetComputeRootSignature(m_pd3dGraphicsRootSignature.Get());
+	}
+}
+
+void CMainScene::PrepareRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera)
+{
+	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
+	pCamera->UpdateShaderVariablesWithCompute(pd3dCommandList);
+
+	for (int i = 0; i < m_nLights; ++i)
+	{
+		memcpy(&m_pLights[i], m_pLightCamera[i]->m_pLight.get(), sizeof(LIGHT));
+	}
+
+	::memcpy(m_pcbMappedLights->m_pLights, m_pLights, sizeof(LIGHT) * m_nLights);
+	::memcpy(&m_pcbMappedLights->m_xmf4GlobalAmbient, &m_xmf4GlobalAmbient, sizeof(XMFLOAT4));
+	::memcpy(&m_pcbMappedLights->m_nLights, &m_nLights, sizeof(int));
+
+	pd3dCommandList->SetGraphicsRootDescriptorTable(2, m_d3dLightCbvGPUDescriptorHandle); //Lights
+}
+
+void CMainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState)
+{
+	// PrepareRender(pd3dCommandList, pCamera);
+
+	for (auto& shader : m_vShader)
+	{
+		shader->Render(pd3dCommandList, pCamera, m_pMainPlayer, nPipelineState);
+	}
+}
+
+void CMainScene::ShadowRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState)
+{
+	// 그림자맵에 해당하는 텍스처를 렌더타겟으로 변환
+	m_pPostProcessingShader->OnShadowPrepareRenderTarget(pd3dCommandList, m_nLights); //플레이어의 손전등 1개 -> [0] 번째 요소에 들어있음.
+
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
+
+	//그림자맵에는 플레이어의 메쉬도 그림.
+	for (auto& pl : m_apPlayer)
+	{
+		if (pl->GetClientId() == -1)
+		{
+			continue;
+		}
+
+		pl->SetShadowRender(true);
+	}
+
+	int lightId = 0;
+	shared_ptr<CZombiePlayer> zombie = dynamic_pointer_cast<CZombiePlayer>(m_pMainPlayer);
+	if (zombie)
+	{
+		for (; lightId < MAX_CLIENT - 1; ++lightId)
+		{
+			m_pLightCamera[lightId]->m_pLight->m_bEnable = false; // 항상 모든 빛을 꺼버림. 그림자맵을 생성하는 빛만 켤것.
+		}
+	}
+	else
+	{
+		for (int i = 0; i < MAX_CLIENT; ++i)
+		{
+			if (m_apPlayer[i]->GetClientId() == -1)
+			{
+				continue;
+			}
+			auto survivor = dynamic_pointer_cast<CBlueSuitPlayer>(m_apPlayer[i]);
+			if (!survivor)
+			{
+				continue;
+			}
+
+			//lightId 는 좀비를 제외하므로 생존자를 4명으로 생성했기에 항상 0~3 의 인덱스틑 생존자의 빛 카메라
+			XMFLOAT4X4* xmf4x4playerLight = survivor->GetFlashLigthWorldTransform();
+			XMFLOAT3 xmf3LightPosition = XMFLOAT3(xmf4x4playerLight->_41, xmf4x4playerLight->_42, xmf4x4playerLight->_43);
+			XMFLOAT3 xmf3LightLook = XMFLOAT3(xmf4x4playerLight->_21, xmf4x4playerLight->_22, xmf4x4playerLight->_23);
+			xmf3LightLook = Vector3::ScalarProduct(xmf3LightLook, -1.0f, false);
+			xmf3LightPosition = Vector3::Add(xmf3LightPosition, xmf3LightLook);
+			m_pLightCamera[i - 1]->SetPosition(xmf3LightPosition);
+			m_pLightCamera[i - 1]->SetLookVector(XMFLOAT3(xmf4x4playerLight->_21, xmf4x4playerLight->_22, xmf4x4playerLight->_23));
+			m_pLightCamera[i - 1]->RegenerateViewMatrix();
+			m_pLightCamera[i - 1]->MultiplyViewProjection();
+
+			static XMFLOAT4X4 xmf4x4ToTexture = {
+				0.5f, 0.0f, 0.0f, 0.0f,
+				0.0f, -0.5f, 0.0f, 0.0f,
+				0.0f, 0.0f, 1.0f, 0.0f,
+				0.5f, 0.5f, 0.0f, 1.0f
+			};
+			static XMMATRIX xmProjectionToTexture = XMLoadFloat4x4(&xmf4x4ToTexture);
+
+			XMFLOAT4X4 viewProjection = m_pLightCamera[i - 1]->GetViewProjection();
+			XMMATRIX xmmtxViewProjection = XMLoadFloat4x4(&viewProjection);
+			XMStoreFloat4x4(&m_pLightCamera[i - 1]->m_pLight->m_xmf4x4ViewProjection, XMMatrixTranspose(xmmtxViewProjection * xmProjectionToTexture));
+			m_pLightCamera[i - 1]->SetFloor(static_cast<int>(floor(survivor->GetPosition().y / 4.5f)));
+
+			lightId++;
+		}
+	}
+
+	for (int i = 0; i < m_nLights; ++i)
+	{
+		m_pLightCamera[i]->m_pLight->m_bEnable = false; // 항상 모든 빛을 꺼버림. 그림자맵을 생성하는 빛만 켤것.
+		if (pCamera->GetFloor() != m_pLightCamera[i]->GetFloor())
+		{
+			continue;
+		}
+
+		XMFLOAT3 playerToLight = Vector3::Subtract(pCamera->GetPosition(), m_pLightCamera[i]->GetPosition());
+
+		// 안개가 가린 위치의 빛에 대해서는 렌더링 하지 않는다.
+		if (Vector3::Length(playerToLight) > 25.0f)
+		{
+			continue;
+		}
+
+		if (pCamera)
+		{
+			if (!pCamera->IsInFrustum(m_pLightCamera[i]->GetBoundingFrustum()))
+			{
+				continue;
+			}
+		}
+
+		m_pLightCamera[i]->m_pLight->m_bEnable = true;
+		D3D12_CPU_DESCRIPTOR_HANDLE shadowRTVDescriptorHandle = m_pPostProcessingShader->GetShadowRtvCPUDescriptorHandle(i);
+		pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+
+		pd3dCommandList->OMSetRenderTargets(1, &shadowRTVDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
+
+		PrepareRender(pd3dCommandList, m_pLightCamera[i]);
+		//1차 렌더링
+		if (i < MAX_SURVIVOR)
+		{
+			int pl_id = m_pLightCamera[i]->GetPlayer().lock()->GetClientId();
+			if (pl_id == -1) continue;
+			m_apPlayer[pl_id]->SetSelfShadowRender(true); //자신의 손전등에 대해서 자신을 그리지 않음.
+			Render(pd3dCommandList, m_pLightCamera[i], 1); // 카메라만 빛의 위치대로 설정해서 렌더링함.
+			m_apPlayer[pl_id]->SetSelfShadowRender(false);
+		}
+		else
+		{
+			ShadowPreRender(pd3dCommandList, m_pLightCamera[i], 1);
+		}
+	}
+	// 그림자맵에 해당하는 렌더타겟을 텍스처로 변환
+	m_pPostProcessingShader->TransitionShadowMapRenderTargetToCommon(pd3dCommandList, m_nLights); //플레이어의 손전등 1개 -> [0] 번째 요소에 들어있음.
+
+}
+
+void CMainScene::AmbientOcclusionRender(
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	const shared_ptr<CCamera>& pCamera,
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle)
+{
+	// 조명 합성과 SSAO 생성 모두 G-buffer를 SRV로 읽으므로 먼저 COMMON 상태로 전환한다.
+	m_pPostProcessingShader->TransitionRenderTargetToCommon(pd3dCommandList);
+	m_pPostProcessingShader->GetTexture()->UpdateShaderVariables(pd3dCommandList);
+
+	if (!IsSsaoEnabled())
+	{
+		// SSAO 비활성 시에는 G-buffer 상태 전환만 수행하고 AO pass를 기록하지 않는다.
+		return;
+	}
+
+	// Raw와 Blurred 모드는 동일한 raw ambient visibility를 먼저 생성한다.
+	pd3dCommandList->SetGraphicsRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
+	m_pGenerateSSAOShader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
+
+	if (IsSsaoBlurEnabled())
+	{
+		// Blurred 모드에서만 horizontal/vertical bilateral blur compute pass를 실행한다.
+		m_pBlurSSAOComputeShader->Blur(pd3dCommandList, pCamera);
+	}
+}
+
+void CMainScene::PostProcessingRender(
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	const shared_ptr<CCamera>& pCamera,
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle)
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
+
+	const FLOAT clearValue[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, clearValue, 0, nullptr);
+
+	m_pPostProcessingShader->OnPrepareRenderTargetForLight(pd3dCommandList, 0, nullptr, &d3dDsvCPUDescriptorHandle);
+
+	BindAmbientOcclusionForComposite(pd3dCommandList);
+
+	m_pPostProcessingShader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
+
+	RestoreRawAmbientOcclusionResourceState(pd3dCommandList);
+
+	m_pPostProcessingShader->TransitionRenderTargetToCommonForLight(pd3dCommandList);
+
+	pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
+}
+
+void CMainScene::ForwardRender(int nGameState, ID3D12GraphicsCommandList* pd3dCommandList, const std::shared_ptr<CCamera>& pCamera)
+{
+	// 투명 객체 렌더링
+	if (nGameState == GAME_STATE::IN_GAME)
+	{
+		for (auto& shader : m_vForwardRenderShader)
+		{
+			shader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
+		}
+	}
+	else if ((nGameState == GAME_STATE::BLUE_SUIT_WIN || nGameState == GAME_STATE::ZOMBIE_WIN))
+	{
+		m_vForwardRenderShader[USER_INTERFACE_SHADER]->Render(pd3dCommandList, pCamera, m_pMainPlayer);
+	}
+}
+
+void CMainScene::BlurDispatch(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle)
+{
+	if (!m_pBlurComputeShader->IsBlur())
+	{
+		m_pBlurComputeShader->Dispatch(pd3dCommandList, 0);
+	}
+	else
+	{
+		m_pBlurComputeShader->PassFirst(pd3dCommandList, 1);
+		m_pBlurComputeShader->PassSecond(pd3dCommandList, 2);
+		m_pBlurComputeShader->PassComposite(pd3dCommandList, 3);
+	}
+
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
+	pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
+
+	m_pTextureToScreenShaderShader->Render(pd3dCommandList, pCamera, nullptr);
+}
+
+void CMainScene::FullScreenProcessingRender(ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	m_vFullScreenProcessingShader->Render(pd3dCommandList, m_pMainPlayer->GetCamera(), m_pMainPlayer);
+}
+
+void CMainScene::ReleaseObjects()
+{
+
+}
+
+void CMainScene::ReleaseShaderVariables()
+{
+	if (m_pd3dcbLights)
+	{
+		m_pd3dcbLights->Unmap(0, NULL);
+	}
+}
+
+void CMainScene::ReleaseUploadBuffers()
+{
+	for (auto& m : m_vMesh)
+	{
+		m->ReleaseUploadBuffers();
+	}
+
+	for (auto& s : m_vShader)
+	{
+		s->ReleaseUploadBuffers();
+	}
+}
+
+void CMainScene::SetParticleTest(float fCurTime)
+{
+	auto particleshader = dynamic_cast<ParticleShader*>(m_vForwardRenderShader[PARTICLE_SHADER].get());
+	particleshader->SetParticleTest(fCurTime);
+}
+
+void CMainScene::ParticleReadByteTask()
+{
+	for (auto& ob : sharedobject.m_vParticleObjects)
+	{
+		ob->ReadByteTask();
+	}
+}
+
+void CMainScene::ClampLightCount(int maximumLightCount)
+{
+	if (m_nLights > maximumLightCount)
+	{
+		m_nLights = maximumLightCount;
+	}
+}
+
+CShader* CMainScene::GetForwardRenderShader(int shaderIndex) const
+{
+	if (shaderIndex < 0 || shaderIndex >= static_cast<int>(m_vForwardRenderShader.size()))
+	{
+		return nullptr;
+	}
+
+	return m_vForwardRenderShader[shaderIndex].get();
+}
+
+bool CMainScene::IsSsaoEnabled() const
+{
+	return m_ssaoMode != SsaoMode::Disabled;
 }
 
 void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
@@ -1231,7 +1624,13 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 				else if (!strcmp(pstrToken, "<Hierarchy>:"))
 				{
 					count++;
-					pLoadedModel->m_pModelRootObject = CGameObject::LoadInstanceFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), NULL, pSceneFile, &pLoadedModel->m_nSkinnedMeshes);
+					pLoadedModel->m_pModelRootObject = CGameObject::LoadInstanceFrameHierarchyFromFile(
+						pd3dDevice,
+						pd3dCommandList,
+						m_pd3dGraphicsRootSignature.Get(),
+						nullptr,
+						pSceneFile,
+						&pLoadedModel->m_nSkinnedMeshes);
 					::ReadStringFromFile(pSceneFile, pstrToken); //"</Hierarchy>"
 					pLoadedModel->m_pModelRootObject->Rotate(0.0f, 0.0f, 0.0f);
 
@@ -1242,7 +1641,7 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 						pLoadedModel->m_pModelRootObject->SetTransparentObjectInfo(transparentObjects[pLoadedModel->m_pModelRootObject->m_pstrFrameName]);
 						InsStShader->m_vFloorObjects[n_curfloor].push_back(pLoadedModel->m_pModelRootObject);
 						m_vForwardRenderShader[TRANSPARENT_SHADER]->AddGameObject((pLoadedModel->m_pModelRootObject));
-						// 첫번째 쉐이더는 불투명한 재질들만 렌더링, 두번째 쉐이더는 투명한 재질들만 렌더링 분류를 위함이고 마지막에 렌더링해야하기 떄문에 두 쉐이더에 모두 포함한다. 
+						// 첫번째 쉐이더는 불투명한 재질들만 렌더링, 두번째 쉐이더는 투명한 재질들만 렌더링 분류를 위함이고 마지막에 렌더링해야하기 떄문에 두 쉐이더에 모두 포함한다.
 					}
 					else
 					{
@@ -1347,7 +1746,7 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 					{
 						//pLoadedModel->m_pModelRootObject->SetTransparentObjectInfo(transparentObjects[pLoadedModel->m_pModelRootObject->m_pstrFrameName]);
 						//PtShader->AddPartitionGameObject((pLoadedModel->m_pModelRootObject), nPartition);
-						// 첫번째 쉐이더는 불투명한 재질들만 렌더링, 두번째 쉐이더는 투명한 재질들만 렌더링 분류를 위함이고 마지막에 렌더링해야하기 떄문에 두 쉐이더에 모두 포함한다. 
+						// 첫번째 쉐이더는 불투명한 재질들만 렌더링, 두번째 쉐이더는 투명한 재질들만 렌더링 분류를 위함이고 마지막에 렌더링해야하기 떄문에 두 쉐이더에 모두 포함한다.
 
 					}
 					else
@@ -1403,7 +1802,7 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 				mStr_GameObejcts[ob->m_pstrFrameName] = make_shared<CInstanceObject>(pd3dDevice, pd3dCommandList);
 			}
 			mStr_GameObejcts[ob->m_pstrFrameName]->m_vInstanceObjectInfo.push_back(ob);
-			//인스턴싱된 오브젝트의 메쉬의 이름을 복사했기때문에 str 정보는 mesh의 이름을 의미함. 
+			//인스턴싱된 오브젝트의 메쉬의 이름을 복사했기때문에 str 정보는 mesh의 이름을 의미함.
 		}
 		if (mStr_GameObejcts.size() == 0) continue;
 
@@ -1467,492 +1866,148 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 	m_vPreRenderShader[PARTITION_SHADER].reset(PtShader.release());
 }
 
-void PartisionShaderCollision(unique_ptr<PartitionInsStandardShader>& PtShader, shared_ptr<CGameObject>& pObject)
+void CMainScene::AddDefaultObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ObjectType type, XMFLOAT3 position, int shader, int mesh)
 {
-	if (!strcmp(pObject->m_pstrFrameName, "Wall_BoundingBox") /*|| Ins_Bounding_Stair_Start*/) {
-		return;
+	shared_ptr<CGameObject> pObject;
+	switch (type)
+	{
+	case ObjectType::DEFAULT:
+		pObject = make_shared<CGameObject>(pd3dDevice, pd3dCommandList, 1);
+		break;
+	case ObjectType::HEXAHERON:
+		pObject = make_shared<CHexahedronObject>(pd3dDevice, pd3dCommandList, 1);
+		break;
+	default:
+		break;
+	}
+	pObject->SetMesh(m_vMesh[mesh]);
+	pObject->SetPosition(position);
+
+	m_vShader[shader]->AddGameObject(pObject);
+}
+
+void CMainScene::BuildLights(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	m_nLights = ReadLightObjectInfo(m_xmf3lightPositions, m_xmf3lightLooks) + MAX_SURVIVOR/*플레이어 조명*/;
+	if (m_nLights > MAX_LIGHTS)
+	{
+		//m_nLights = MAX_LIGHTS;
+	}
+	m_pLights = new LIGHT[MAX_LIGHTS];
+	::ZeroMemory(m_pLights, sizeof(LIGHT) * MAX_LIGHTS);
+
+	m_xmf4GlobalAmbient = XMFLOAT4(0.15f, 0.15f, 0.15f, 1.0f);
+
+	for (int i = 0; i < MAX_SURVIVOR; ++i)
+	{
+		m_pLightCamera.push_back(make_shared<CLightCamera>());
+		m_pLightCamera[i]->m_pLight = make_shared<LIGHT>();
+
+		m_xmf3lightPositions.insert(m_xmf3lightPositions.begin(), XMFLOAT3(0.0f, -100.0f, 0.0f)); // m_xmf3lightPositions을 가지고 카메라를 만들것임
+		m_xmf3lightLooks.insert(m_xmf3lightLooks.begin(), XMFLOAT3(0.0f, -1.0f, 0.0f));
+
+		m_pLightCamera[i]->m_pLight->m_bEnable = true;
+		m_pLightCamera[i]->m_pLight->m_nType = SPOT_LIGHT;
+		m_pLightCamera[i]->m_pLight->m_fRange = 30.0f;
+		m_pLightCamera[i]->m_pLight->m_xmf4Ambient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+		m_pLightCamera[i]->m_pLight->m_xmf4Diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+		m_pLightCamera[i]->m_pLight->m_xmf4Specular = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+		m_pLightCamera[i]->m_pLight->m_xmf3Position = XMFLOAT3(0.0f, 0.0f, 0.0f);
+		m_pLightCamera[i]->m_pLight->m_xmf3Direction = XMFLOAT3(0.0f, -1.0f, 0.0f);
+		m_pLightCamera[i]->m_pLight->m_xmf3Attenuation = XMFLOAT3(1.0f, -0.1f, 0.01f);
+		m_pLightCamera[i]->m_pLight->m_fFalloff = 1.0f;
+		m_pLightCamera[i]->m_pLight->m_fPhi = (float)cos(XMConvertToRadians(35.0f));
+		m_pLightCamera[i]->m_pLight->m_fTheta = (float)cos(XMConvertToRadians(25.0f));
 	}
 
-	//객체와 충돌체크를 하여 현재 파티션에 바운딩박스에 있으면 넣음
-	for (auto& srcobb : pObject->GetVectorOOBB()) {
-		BoundingOrientedBox dstobb;
-		srcobb.Transform(dstobb, XMLoadFloat4x4(&pObject->m_xmf4x4World));
-		XMStoreFloat4(&dstobb.Orientation, XMQuaternionNormalize(XMLoadFloat4(&dstobb.Orientation)));
-		int nPt = 0;
-		bool inPart = false;
-		for (auto& ptobb : PtShader->GetPartitionBB()) {
-			if (dstobb.Intersects(*ptobb)) {
-				PtShader->AddPartitionGameObject(pObject, nPt);
-				inPart = true;
-			}
-			nPt += 1;
-			if (nPt >= PtShader->GetPartitionBB().size()) break;
-		}
+	for (int i = MAX_SURVIVOR; i < m_nLights; ++i)
+	{
+		m_pLightCamera.push_back(make_shared<CLightCamera>());
+		m_pLightCamera[i]->m_pLight = make_shared<LIGHT>();
 
-		if (inPart) {
-			break;
-		}
+		m_pLightCamera[i]->m_pLight->m_bEnable = true;
+		m_pLightCamera[i]->m_pLight->m_nType = SPOT_LIGHT;
+		m_pLightCamera[i]->m_pLight->m_fRange = 30.0f;
+		m_pLightCamera[i]->m_pLight->m_xmf4Ambient = XMFLOAT4(0.6f, 0.0f, 0.0f, 0.0f);
+		m_pLightCamera[i]->m_pLight->m_xmf4Diffuse = XMFLOAT4(0.6f, 0.0f, 0.0f, 0.0f);
+		m_pLightCamera[i]->m_pLight->m_xmf4Specular = XMFLOAT4(1.0f, 0.0f, 0.0f, 0.0f);
+		m_pLightCamera[i]->m_pLight->m_xmf3Position = m_xmf3lightPositions[i];
+		m_pLightCamera[i]->m_pLight->m_xmf3Direction = m_xmf3lightLooks[i];
+		m_pLightCamera[i]->m_pLight->m_xmf3Attenuation = XMFLOAT3(1.0f, -0.1f, 0.01f);
+
+		m_pLightCamera[i]->m_pLight->m_fFalloff = 1.0f;
+		m_pLightCamera[i]->m_pLight->m_fPhi = (float)cos(XMConvertToRadians(45.0f));
+		m_pLightCamera[i]->m_pLight->m_fTheta = (float)cos(XMConvertToRadians(35.0f));
 	}
-}
 
-bool StreamReadString(ifstream& in, string& str)
-{
-	// 문자열의 길이 읽기
-	char strLength;
-	in.read(reinterpret_cast<char*>(&strLength), sizeof(char));
 
-	// 파일 끝에 도달하면 종료
-	if (in.eof()) return false;
 
-	// 문자열 읽기
-	char* buffer = new char[strLength + 1]; // 문자열 끝에 NULL 문자('\0')를 추가하기 위해 +1
-	in.read(buffer, strLength);
-	buffer[strLength] = '\0'; // NULL 문자 추가
-	str = buffer;
-	delete[] buffer;
+	vector<XMFLOAT3> positions = m_xmf3lightPositions;
+	vector<XMFLOAT3> looks = m_xmf3lightLooks;
 
-	//cout << str << endl;
-	return true;
-}
+	XMFLOAT3 xmf3Right = XMFLOAT3(1.0f, 0.0f, 0.0f);
 
-template<class T>
-void StreamReadVariable(ifstream& in, T& data)
-{
-	in.read(reinterpret_cast<char*>(&data), sizeof(T));
-}
+	XMFLOAT4X4 xmf4x4ToTexture = {
+		0.5f, 0.0f, 0.0f, 0.0f,
+		0.0f, -0.5f, 0.0f, 0.0f,
+		0.0f, 0.0f, 1.0f, 0.0f,
+		0.5f, 0.5f, 0.0f, 1.0f };
 
-int ReadLightObjectInfo(vector<XMFLOAT3>& positions, vector<XMFLOAT3>& looks)
-{
-	ifstream in("Asset/Data/LightObject.bin", ios::binary);
-	if (!in.is_open()) {
-		assert(0);
-	}
-	// 문자열을 저장할 변수
-	string str;
-	XMFLOAT3 xmfloat3;
-	int objCount{};
+	XMMATRIX xmProjectionToTexture = XMLoadFloat4x4(&xmf4x4ToTexture);
+	XMMATRIX xmmtxViewProjection;
 
-	// 파일로부터 문자열 읽기
-	while (true) {
-		if (!StreamReadString(in, str)) {
-			break;
-		}
-		if (str == "<TotalObject>: ") {
-			StreamReadVariable(in, objCount);
-		}
-		else if ("<GameObjects>:" == str) {
-			if (!StreamReadString(in, str)) break;
+	for (int i = 0; i < m_nLights; ++i) {
 
-			if ("<Position>:" == str) {
-				StreamReadVariable(in, xmfloat3);
-				positions.push_back(xmfloat3);
-			}
-
-			if (!StreamReadString(in, str)) break;
-			if ("<Look>:" == str) {
-				StreamReadVariable(in, xmfloat3);
-				looks.push_back(xmfloat3);
-			}
-		}
-	}
-	return objCount;
-}
-
-void CMainScene::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
-{
-	UINT ncbElementBytes = ((sizeof(LIGHTS) + 255) & ~255); //256의 배수
-	m_pd3dcbLights = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
-
-	m_pd3dcbLights->Map(0, NULL, (void**)&m_pcbMappedLights);
-	m_pcbMappedLights->bias = 0.0011f;
-	m_d3dLightCbvGPUDescriptorHandle = CreateConstantBufferViews(pd3dDevice, 1, m_pd3dcbLights.Get(), ncbElementBytes);
-}
-
-void CMainScene::PrevRenderTask(ID3D12GraphicsCommandList* pd3dCommandList)
-{
-	// 그림자맵에 해당하는 텍스처를 렌더타겟으로 변환
-	m_pPostProcessingShader->OnShadowPrepareRenderTarget(pd3dCommandList);
-
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
-
-	for (int i = 0; i < m_pPostProcessingShader->GetShadowTexture()->GetTextures(); ++i) {
-		D3D12_CPU_DESCRIPTOR_HANDLE shadowRTVDescriptorHandle = m_pPostProcessingShader->GetShadowRtvCPUDescriptorHandle(i);
+		XMFLOAT3 xmf3Up = Vector3::CrossProduct(looks[i], xmf3Right);
+		XMFLOAT3 lookAtPosition = Vector3::Add(positions[i], looks[i]);
+		m_pLightCamera[i]->GenerateViewMatrix(positions[i], lookAtPosition, xmf3Up);
+		if (i >= MAX_SURVIVOR)
 		{
-			pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+			m_pLightCamera[i]->GenerateProjectionMatrix(1.01f, 5.0f, ASPECT_RATIO, 90.0f);	//[0513] 근평면이 있어야  그림자를 그림
+		}/*
+		else {
+			m_pLightCamera[i]->GenerateProjectionMatrix(0.01f, 5.0f, ASPECT_RATIO, 90.0f);
+		}*/
+		m_pLightCamera[i]->GenerateFrustum();
+		m_pLightCamera[i]->MultiplyViewProjection();
 
-			pd3dCommandList->OMSetRenderTargets(1, &shadowRTVDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
+		XMFLOAT4X4 viewProjection = m_pLightCamera[i]->GetViewProjection();
+		xmmtxViewProjection = XMLoadFloat4x4(&viewProjection);
+		XMStoreFloat4x4(&m_pLightCamera[i]->m_pLight->m_xmf4x4ViewProjection, XMMatrixTranspose(xmmtxViewProjection * xmProjectionToTexture));
+		m_pLightCamera[i]->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	}
 
-			if (i < MAX_SURVIVOR) {
-				PrepareRender(pd3dCommandList, m_pLightCamera[i]);
-				Render(pd3dCommandList, m_pLightCamera[i], 1/*nPipelinestate*/); // 카메라만 빛의 위치대로 설정해서 렌더링함.
-			}
-			else {
-				ShadowPreRender(pd3dCommandList, m_pLightCamera[i], 1/*nPipelinestate*/);
+	// 빛의 카메라 파티션 설정
+	// 파티션의 월드변환행렬은 0,0,0임을 유의하라.
+	// 바운딩 박스의 위치만 변경한것이다.
+	unique_ptr<PartitionInsStandardShader> PtShader(static_cast<PartitionInsStandardShader*>(m_vPreRenderShader[PARTITION_SHADER].release()));
+	auto vBB = PtShader->GetPartitionBB();
+
+	for (int i = 0; i < m_nLights; ++i) {
+		BoundingBox camerabb;
+		camerabb.Center = m_pLightCamera[i]->GetPosition();
+		camerabb.Extents = XMFLOAT3(0.1f, 0.1f, 0.1f);
+		int curFloor = static_cast<int>(std::floor(camerabb.Center.y / 4.5f));
+
+		m_pLightCamera[i]->SetFloor(curFloor);
+		for (int bbIdx = 0; bbIdx < vBB.size(); ++bbIdx) {
+			if (vBB[bbIdx]->Intersects(camerabb)) {
+				m_pLightCamera[i]->SetPartition(bbIdx);
+				break;
 			}
 		}
 	}
 
-	// 그림자맵에 해당하는 렌더타겟을 텍스처로 변환
-	m_pPostProcessingShader->TransitionShadowMapRenderTargetToCommon(pd3dCommandList);
+	m_vPreRenderShader[PARTITION_SHADER].reset(PtShader.release());
 }
 
 void CMainScene::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	for (int i = 0; i < m_nLights; ++i) {
-		memcpy(&m_pLights[i], m_pLightCamera[i]->m_pLight.get(), sizeof(LIGHT));
-	}
-
-	::memcpy(m_pcbMappedLights->m_pLights, m_pLights, sizeof(LIGHT) * m_nLights);
-	::memcpy(&m_pcbMappedLights->m_xmf4GlobalAmbient, &m_xmf4GlobalAmbient, sizeof(XMFLOAT4));
-	::memcpy(&m_pcbMappedLights->m_nLights, &m_nLights, sizeof(int));
-
-	pd3dCommandList->SetGraphicsRootDescriptorTable(2, m_d3dLightCbvGPUDescriptorHandle); //Lights
-}
-
-void CMainScene::ReleaseShaderVariables()
-{
-	if (m_pd3dcbLights)
-	{
-		m_pd3dcbLights->Unmap(0, NULL);
-	}
-}
-
-void CMainScene::ReleaseUploadBuffers()
-{
-	for (auto& m : m_vMesh)
-	{
-		m->ReleaseUploadBuffers();
-	}
-
-	for (auto& s : m_vShader)
-	{
-		s->ReleaseUploadBuffers();
-	}
-}
-
-void CMainScene::ReleaseObjects()
-{
-
-}
-
-bool CMainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
-{
-	switch (nMessageID)
-	{
-	case WM_RBUTTONDOWN:
-		m_pMainPlayer->SetRightClick(true);
-		m_pMainPlayer->RightClickProcess(gGameTimer.GetTotalTime());
-		break;
-	case WM_LBUTTONUP:
-	case WM_RBUTTONUP:
-		break;
-	case WM_MOUSEMOVE:
-		break;
-	default:
-		break;
-	}
-
-	return true;
-}
-
-bool CMainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
-{
-	//m_pLights[0].m_xmf3Attenuation = XMFLOAT3(1.0f, 0.1f, 0.001f); //손전등  밝기 감도설정
-	switch (nMessageID)
-	{
-	case WM_KEYDOWN:
-		switch (wParam)
-		{
-		case 'P':
-			m_pcbMappedTime->gfScale += 0.01f;
-			break;
-		case 'O':
-			m_pcbMappedTime->gfScale -= 0.01f;
-			break;
-		case 'L':
-			m_pcbMappedTime->gfIntesity += 0.01f;
-			break;
-		case 'K':
-			m_pcbMappedTime->gfIntesity -= 0.01f;
-			break;
-		case 'Y':
-			m_pcbMappedTime->gfBias += 0.001f;
-			break;
-		case 'U':
-			m_pcbMappedTime->gfBias -= 0.001f;
-			break;
-		default:
-			break;
-		}
-		break;
-	case WM_KEYUP:
-		switch (wParam)
-		{
-		case 'M':
-			if (m_pPostProcessingShader->GetPipelineIndex() == 0)
-			{
-				m_pPostProcessingShader->SetPipelineIndex(1);
-			}
-			else
-			{
-				m_pPostProcessingShader->SetPipelineIndex(0);
-			}
-			break;
-		case 'N':
-			if (m_pBlurComputeShader->IsBlur())
-			{
-				m_pBlurComputeShader->SetBlur(false);
-			}
-			else
-			{
-				m_pBlurComputeShader->SetBlur(true);
-			}
-			break;
-		case VK_UP://		m_pcbMappedLights->bias	0.00119999994	float
-			//m_pcbMappedLights->bias += 0.0001f;
-			break;
-		case VK_DOWN:
-			//m_pcbMappedLights->bias -= 0.0001f;
-			break;
-		default:
-			break;
-		}
-		break;
-	default:
-		break;
-	}
-	return false;
-}
-
-bool CMainScene::ProcessInput(UCHAR* pKeysBuffer)
-{
-	return(false);
-}
-
-void CMainScene::AnimateObjects(float fElapsedTime, float fCurTime)
-{
-	m_fElapsedTime = fElapsedTime;
-	m_pcbMappedTime->time += fElapsedTime;
-
-	for (auto& shader : m_vShader)
-	{
-		shader->AnimateObjects(fElapsedTime);
-	}
-
-	for (auto& shader : m_vForwardRenderShader)
-	{
-		shader->AnimateObjects(fElapsedTime);
-	}
-
-	m_vForwardRenderShader[PARTICLE_SHADER]->ParticleUpdate(fCurTime);
-
-	int light_Id{};
-	for (int i = 0; i < MAX_CLIENT; ++i) {
-		if (m_apPlayer[i]->GetClientId() == -1) {
-			continue;
-		}
-		auto player = dynamic_pointer_cast<CBlueSuitPlayer>(m_apPlayer[i]);
-		if (player) {
-			XMFLOAT4X4* xmf4x4playerLight = player->GetFlashLigthWorldTransform();
-			m_pLightCamera[i - 1]->m_pLight->m_xmf3Position = XMFLOAT3(xmf4x4playerLight->_41, xmf4x4playerLight->_42, xmf4x4playerLight->_43);//m_pPlayer->GetCamera()->GetPosition();
-			m_pLightCamera[i - 1]->m_pLight->m_xmf3Direction = XMFLOAT3(xmf4x4playerLight->_21, xmf4x4playerLight->_22, xmf4x4playerLight->_23);/*XMFLOAT3(xmf4x4playerLight._31, xmf4x4playerLight._32, xmf4x4playerLight._33);*/ //m_pPlayer->GetCamera()->GetLookVector();
-
-			light_Id++;
-		}
-	}
-
-	XMFLOAT3 clientCameraPos = m_pMainPlayer->GetCamera()->GetPosition();
-	sort(m_pLightCamera.begin() + 4, m_pLightCamera.end(), [clientCameraPos](const shared_ptr<CLightCamera>& A, const shared_ptr<CLightCamera>& B) {
-		//const float epsilon = 1e-5f; // 허용 오차
-		XMFLOAT3 clToA = Vector3::Subtract(clientCameraPos, A->GetPosition());
-		XMFLOAT3 clToB = Vector3::Subtract(clientCameraPos, B->GetPosition());
-		return Vector3::Length(clToA) < Vector3::Length(clToB);
-		});
-
-	for (auto& cm : m_pLightCamera) {
-		cm->Update(cm->GetLookAtPosition(), fElapsedTime);
-		if (auto player = cm->GetPlayer().lock()) {
-			if (player->GetClientId() == -1) {
-				cm->m_pLight->m_bEnable = false;
-			}
-		}
-	}
-
-	// 플레이어간 사운드 조정
-	for (auto& pPlayer : m_apPlayer)
-	{
-		if (pPlayer->GetClientId() == m_pMainPlayer->GetClientId())
-		{
-			continue;
-		}
-
-		XMFLOAT3 xmf3MainPos = m_pMainPlayer->GetPosition();
-		XMFLOAT3 xmf3OtherPos = pPlayer->GetPosition();
-
-		if (abs(xmf3MainPos.y - xmf3OtherPos.y) > 4.0f) // 층이 다르면 안들림
-		{
-			pPlayer->SetPlayerVolume(0.0f);
-			continue;
-		}
-
-		float fWeight = (4.0f - abs(xmf3MainPos.y - xmf3OtherPos.y)) / 4.0f;
-
-		xmf3MainPos.y = 0.0f;
-		xmf3OtherPos.y = 0.0f;
-		float fDistance = Vector3::Distance(xmf3MainPos, xmf3OtherPos);
-		if (fDistance > WALK_SOUND_DISTANCE)
-		{
-			pPlayer->SetPlayerVolume(0.0f);
-		}
-		else
-		{
-			float fVolume = ((WALK_SOUND_DISTANCE - fDistance) / WALK_SOUND_DISTANCE) * fWeight;
-			pPlayer->SetPlayerVolume(fVolume);
-		}
-	}
-}
-
-
-void CMainScene::PrepareRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera)
-{
-	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());
-	if (m_pd3dCbvSrvUavDescriptorHeap) pd3dCommandList->SetDescriptorHeaps(1, m_pd3dCbvSrvUavDescriptorHeap.GetAddressOf());
-
-	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
-	pCamera->UpdateShaderVariables(pd3dCommandList);
-
-	UpdateShaderVariables(pd3dCommandList);
-}
-
-void CMainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState)
-{
-	// PrepareRender(pd3dCommandList, pCamera);
-
-	for (auto& shader : m_vShader)
-	{
-		shader->Render(pd3dCommandList, pCamera, m_pMainPlayer, nPipelineState);
-	}
-}
-
-void CMainScene::ShadowRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState)
-{
-
-	// 그림자맵에 해당하는 텍스처를 렌더타겟으로 변환
-	m_pPostProcessingShader->OnShadowPrepareRenderTarget(pd3dCommandList, m_nLights); //플레이어의 손전등 1개 -> [0] 번째 요소에 들어있음.
-
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
-
-	//그림자맵에는 플레이어의 메쉬도 그림.
-	for (auto& pl : m_apPlayer) {
-		if (pl->GetClientId() == -1) continue;
-		pl->SetShadowRender(true);
-	}
-
-	int lightId{};
-	auto zombie = dynamic_pointer_cast<CZombiePlayer>(m_pMainPlayer);
-	if (zombie)
-	{
-		for (; lightId < MAX_CLIENT - 1; ++lightId)
-		{
-			m_pLightCamera[lightId]->m_pLight->m_bEnable = false; // 항상 모든 빛을 꺼버림. 그림자맵을 생성하는 빛만 켤것.
-		}
-	}
-	else
-	{
-		for (int i = 0; i < MAX_CLIENT; ++i)
-		{
-			if (m_apPlayer[i]->GetClientId() == -1)
-			{
-				continue;
-			}
-			auto survivor = dynamic_pointer_cast<CBlueSuitPlayer>(m_apPlayer[i]);
-			if (!survivor)
-			{
-				continue;
-			}
-
-			//lightId 는 좀비를 제외하므로 생존자를 4명으로 생성했기에 항상 0~3 의 인덱스틑 생존자의 빛 카메라
-			XMFLOAT4X4* xmf4x4playerLight = survivor->GetFlashLigthWorldTransform();
-			XMFLOAT3 xmf3LightPosition = XMFLOAT3(xmf4x4playerLight->_41, xmf4x4playerLight->_42, xmf4x4playerLight->_43);
-			XMFLOAT3 xmf3LightLook = XMFLOAT3(xmf4x4playerLight->_21, xmf4x4playerLight->_22, xmf4x4playerLight->_23);
-			xmf3LightLook = Vector3::ScalarProduct(xmf3LightLook, -1.0f, false);
-			xmf3LightPosition = Vector3::Add(xmf3LightPosition, xmf3LightLook);
-			m_pLightCamera[i - 1]->SetPosition(xmf3LightPosition);
-			m_pLightCamera[i - 1]->SetLookVector(XMFLOAT3(xmf4x4playerLight->_21, xmf4x4playerLight->_22, xmf4x4playerLight->_23));
-			m_pLightCamera[i - 1]->RegenerateViewMatrix();
-			m_pLightCamera[i - 1]->MultiplyViewProjection();
-
-			static XMFLOAT4X4 xmf4x4ToTexture = {
-				0.5f, 0.0f, 0.0f, 0.0f,
-				0.0f, -0.5f, 0.0f, 0.0f,
-				0.0f, 0.0f, 1.0f, 0.0f,
-				0.5f, 0.5f, 0.0f, 1.0f
-			};
-			static XMMATRIX xmProjectionToTexture = XMLoadFloat4x4(&xmf4x4ToTexture);
-
-			XMFLOAT4X4 viewProjection = m_pLightCamera[i - 1]->GetViewProjection();
-			XMMATRIX xmmtxViewProjection = XMLoadFloat4x4(&viewProjection);
-			XMStoreFloat4x4(&m_pLightCamera[i - 1]->m_pLight->m_xmf4x4ViewProjection, XMMatrixTranspose(xmmtxViewProjection * xmProjectionToTexture));
-			m_pLightCamera[i - 1]->SetFloor(static_cast<int>(floor(survivor->GetPosition().y / 4.5f)));
-
-			lightId++;
-		}
-	}
-
-	for (int i = 0; i < m_nLights; ++i)
-	{
-		m_pLightCamera[i]->m_pLight->m_bEnable = false; // 항상 모든 빛을 꺼버림. 그림자맵을 생성하는 빛만 켤것.
-		if (pCamera->GetFloor() != m_pLightCamera[i]->GetFloor())
-		{
-			continue;
-		}
-
-		XMFLOAT3 playerToLight = Vector3::Subtract(pCamera->GetPosition(), m_pLightCamera[i]->GetPosition());
-
-		// 안개가 가린 위치의 빛에 대해서는 렌더링 하지 않는다.
-		if (Vector3::Length(playerToLight) > 25.0f)
-		{
-			continue;
-		}
-
-		if (pCamera)
-		{
-			if (!pCamera->IsInFrustum(m_pLightCamera[i]->GetBoundingFrustum()))
-			{
-				continue;
-			}
-		}
-
-		m_pLightCamera[i]->m_pLight->m_bEnable = true;
-		D3D12_CPU_DESCRIPTOR_HANDLE shadowRTVDescriptorHandle = m_pPostProcessingShader->GetShadowRtvCPUDescriptorHandle(i);
-		pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
-
-		pd3dCommandList->OMSetRenderTargets(1, &shadowRTVDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
-
-		//1차 렌더링
-		if (i < MAX_SURVIVOR)
-		{
-			int pl_id = m_pLightCamera[i]->GetPlayer().lock()->GetClientId();
-			if (pl_id == -1) continue;
-			m_apPlayer[pl_id]->SetSelfShadowRender(true); //자신의 손전등에 대해서 자신을 그리지 않음.
-			PrepareRender(pd3dCommandList, m_pLightCamera[i]);
-			Render(pd3dCommandList, m_pLightCamera[i], 1); // 카메라만 빛의 위치대로 설정해서 렌더링함.
-			m_apPlayer[pl_id]->SetSelfShadowRender(false);
-		}
-		else
-		{
-			ShadowPreRender(pd3dCommandList, m_pLightCamera[i], 1);
-		}
-	}
-	// 그림자맵에 해당하는 렌더타겟을 텍스처로 변환
-	m_pPostProcessingShader->TransitionShadowMapRenderTargetToCommon(pd3dCommandList, m_nLights); //플레이어의 손전등 1개 -> [0] 번째 요소에 들어있음.
 
 }
 
 void CMainScene::ShadowPreRender(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, int nPipelineState)
 {
-	PrepareRender(pd3dCommandList, pCamera);
-
 	for (auto& shader : m_vPreRenderShader)
 	{
 		shader->PartitionRender(pd3dCommandList, pCamera, nPipelineState);
@@ -1960,100 +2015,186 @@ void CMainScene::ShadowPreRender(ID3D12GraphicsCommandList* pd3dCommandList, con
 	m_vShader[SKINNEDANIMATION_STANDARD_SHADER]->Render(pd3dCommandList, pCamera, m_pMainPlayer, nPipelineState);
 }
 
-void CMainScene::AmbientOcclusionRender(
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	const shared_ptr<CCamera>& pCamera,
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle)
+void CMainScene::CycleSsaoMode()
 {
-	// Generate raw ambient visibility from the completed G-buffer.
-	m_pPostProcessingShader->TransitionRenderTargetToCommon(pd3dCommandList);
-	m_pPostProcessingShader->GetTexture()->UpdateShaderVariables(pd3dCommandList);
-	pd3dCommandList->SetGraphicsRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
-	m_pGenerateSSAOShader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
-
-	pd3dCommandList->SetComputeRootSignature(m_pd3dGraphicsRootSignature.Get());
-	m_pBlurSSAOComputeShader->Blur(pd3dCommandList, pCamera);
-}
-
-void CMainScene::PostProcessingRender(
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	const shared_ptr<CCamera>& pCamera,
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle)
-{
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
-
-	const FLOAT clearValue[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-	pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, clearValue, 0, nullptr);
-
-	m_pPostProcessingShader->OnPrepareRenderTargetForLight(pd3dCommandList, 0, nullptr, &d3dDsvCPUDescriptorHandle);
-
-	// Apply the generated ambient visibility during the lighting composite pass.
-	m_pBlurSSAOComputeShader->GetBlurredAmbientOcclusionTexture()->UpdateShaderVariables(pd3dCommandList);
-	m_pPostProcessingShader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
-
-	m_pPostProcessingShader->TransitionRenderTargetToCommonForLight(pd3dCommandList);
-
-	pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
-}
-
-void CMainScene::ForwardRender(int nGameState, ID3D12GraphicsCommandList* pd3dCommandList, const std::shared_ptr<CCamera>& pCamera)
-{
-	// 투명 객체 렌더링
-	if (nGameState == GAME_STATE::IN_GAME)
+	switch (m_ssaoMode)
 	{
-		for (auto& shader : m_vForwardRenderShader)
+	case SsaoMode::Disabled:
+		m_ssaoMode = SsaoMode::Raw;
+		break;
+	case SsaoMode::Raw:
+		m_ssaoMode = SsaoMode::Blurred;
+		break;
+	case SsaoMode::Blurred:
+		m_ssaoMode = SsaoMode::Disabled;
+		break;
+	}
+
+	UpdatePostProcessingPipelineForSsaoMode();
+}
+
+void CMainScene::UpdatePostProcessingPipelineForSsaoMode()
+{
+	const UINT pipelineIndex = IsSsaoEnabled()
+		? SSAO_COMPOSITE_PIPELINE_INDEX
+		: DEFAULT_COMPOSITE_PIPELINE_INDEX;
+	m_pPostProcessingShader->SetPipelineIndex(pipelineIndex);
+}
+
+void CMainScene::BindAmbientOcclusionForComposite(ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	if (m_ssaoMode == SsaoMode::Raw)
+	{
+		auto& pRawAmbientOcclusionTexture = m_pGenerateSSAOShader->GetAmbientOcclusionTexture();
+
+		// Raw AO는 생성 pass 후 COMMON 상태다. 조명 합성 pixel shader가 t0으로 읽을 수 있게 전환한다.
+		::SynchronizeResourceTransition(
+			pd3dCommandList,
+			pRawAmbientOcclusionTexture->GetResource(0),
+			D3D12_RESOURCE_STATE_COMMON,
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		pRawAmbientOcclusionTexture->UpdateShaderVariables(pd3dCommandList);
+	}
+	else if (m_ssaoMode == SsaoMode::Blurred)
+	{
+		// Blurred AO는 vertical blur 종료 시 pixel shader resource 상태로 복귀되어 있다.
+		m_pBlurSSAOComputeShader->GetBlurredAmbientOcclusionTexture()->UpdateShaderVariables(pd3dCommandList);
+	}
+}
+
+void CMainScene::RestoreRawAmbientOcclusionResourceState(ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	if (m_ssaoMode == SsaoMode::Raw)
+	{
+		// 다음 프레임의 raw AO 생성 pass는 COMMON -> RENDER_TARGET 전환을 전제로 한다.
+		::SynchronizeResourceTransition(
+			pd3dCommandList,
+			m_pGenerateSSAOShader->GetAmbientOcclusionTexture()->GetResource(0),
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+			D3D12_RESOURCE_STATE_COMMON);
+	}
+}
+
+
+namespace
+{
+	bool StreamReadString(ifstream & in, string & str)
+	{
+		// 문자열의 길이 읽기
+		char strLength;
+		in.read(reinterpret_cast<char*>(&strLength), sizeof(char));
+
+		// 파일 끝에 도달하면 종료
+		if (in.eof())
 		{
-			shader->Render(pd3dCommandList, pCamera, m_pMainPlayer);
+			return false;
+		}
+
+		// 문자열 읽기
+		char* buffer = new char[strLength + 1]; // 문자열 끝에 NULL 문자('\0')를 추가하기 위해 +1
+		in.read(buffer, strLength);
+		buffer[strLength] = '\0'; // NULL 문자 추가
+		str = buffer;
+		delete[] buffer;
+
+		//cout << str << endl;
+		return true;
+	}
+
+	template<class T>
+	void StreamReadVariable(ifstream & in, T & data)
+	{
+		in.read(reinterpret_cast<char*>(&data), sizeof(T));
+	}
+
+	int ReadLightObjectInfo(vector<XMFLOAT3>& positions, vector<XMFLOAT3>& looks)
+	{
+		ifstream in("Asset/Data/LightObject.bin", ios::binary);
+		if (!in.is_open())
+		{
+			assert(false && "Failed to open light object file");
+		}
+
+		// 문자열을 저장할 변수
+		string str;
+		XMFLOAT3 xmfloat3;
+		int objCount{};
+
+		// 파일로부터 문자열 읽기
+		while (true)
+		{
+			if (!StreamReadString(in, str))
+			{
+				break;
+			}
+
+			if (str == "<TotalObject>: ")
+			{
+				StreamReadVariable(in, objCount);
+			}
+			else if ("<GameObjects>:" == str)
+			{
+				if (!StreamReadString(in, str))
+				{
+					break;
+				}
+
+				if ("<Position>:" == str)
+				{
+					StreamReadVariable(in, xmfloat3);
+					positions.push_back(xmfloat3);
+				}
+
+				if (!StreamReadString(in, str))
+				{
+					break;
+				}
+
+				if ("<Look>:" == str)
+				{
+					StreamReadVariable(in, xmfloat3);
+					looks.push_back(xmfloat3);
+				}
+			}
+		}
+		return objCount;
+	}
+
+	void PartisionShaderCollision(
+		unique_ptr<PartitionInsStandardShader>& PtShader,
+		shared_ptr<CGameObject>& pObject)
+	{
+		if (!strcmp(pObject->m_pstrFrameName, "Wall_BoundingBox"))
+		{
+			return;
+		}
+
+		//객체와 충돌체크를 하여 현재 파티션에 바운딩박스에 있으면 넣음
+		for (auto& srcobb : pObject->GetVectorOOBB())
+		{
+			BoundingOrientedBox dstobb;
+			srcobb.Transform(dstobb, XMLoadFloat4x4(&pObject->m_xmf4x4World));
+			XMStoreFloat4(&dstobb.Orientation, XMQuaternionNormalize(XMLoadFloat4(&dstobb.Orientation)));
+			int nPt = 0;
+			bool inPart = false;
+			for (auto& ptobb : PtShader->GetPartitionBB())
+			{
+				if (dstobb.Intersects(*ptobb))
+				{
+					PtShader->AddPartitionGameObject(pObject, nPt);
+					inPart = true;
+				}
+				nPt += 1;
+				if (nPt >= PtShader->GetPartitionBB().size())
+				{
+					break;
+				}
+			}
+
+			if (inPart)
+			{
+				break;
+			}
 		}
 	}
-	else if ((nGameState == GAME_STATE::BLUE_SUIT_WIN || nGameState == GAME_STATE::ZOMBIE_WIN))
-	{
-		m_vForwardRenderShader[USER_INTERFACE_SHADER]->Render(pd3dCommandList, pCamera, m_pMainPlayer);
-	}
-}
-
-void CMainScene::BlurDispatch(ID3D12GraphicsCommandList* pd3dCommandList, const shared_ptr<CCamera>& pCamera, D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle)
-{
-	// Already set Compute Root Signature
-	// pd3dCommandList->SetComputeRootSignature(m_pd3dGraphicsRootSignature.Get());
-	// pd3dCommandList->SetComputeRootDescriptorTable(12, m_d3dTimeCbvGPUDescriptorHandle);
-	// pCamera->UpdateComputeShaderVariables(pd3dCommandList);
-
-	if (!m_pBlurComputeShader->IsBlur())
-	{
-		m_pBlurComputeShader->Dispatch(pd3dCommandList, 0);
-	}
-	else
-	{
-		m_pBlurComputeShader->PassFirst(pd3dCommandList, 1);
-		m_pBlurComputeShader->PassSecond(pd3dCommandList, 2);
-		m_pBlurComputeShader->PassComposite(pd3dCommandList, 3);
-	}
-
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
-	// pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());
-	pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
-
-	m_pTextureToScreenShaderShader->Render(pd3dCommandList, pCamera, nullptr);
-}
-
-void CMainScene::SetParticleTest(float fCurTime)
-{
-	auto particleshader = dynamic_cast<ParticleShader*>(m_vForwardRenderShader[PARTICLE_SHADER].get());
-	particleshader->SetParticleTest(fCurTime);
-}
-
-void CMainScene::ParticleReadByteTask()
-{
-	for (auto& ob : sharedobject.m_vParticleObjects)
-	{
-		ob->ReadByteTask();
-	}
-}
-
-void CMainScene::FullScreenProcessingRender(ID3D12GraphicsCommandList* pd3dCommandList)
-{
-	PrepareRender(pd3dCommandList, m_pMainPlayer->GetCamera());
-
-	m_vFullScreenProcessingShader->Render(pd3dCommandList, m_pMainPlayer->GetCamera(), m_pMainPlayer);
 }

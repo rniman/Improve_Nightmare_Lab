@@ -55,7 +55,8 @@ public:
 	void AnimateEnding();
 	void PreRenderTasks(shared_ptr<CMainScene>& pMainScene);
 	void FrameAdvance();
-	void LoadingRender();
+	void RenderLobby();
+	void RenderLoading();
 	void ExecuteCommandListAndWaitForGpu();
 	void WaitForGpuComplete();
 	void MoveToNextFrame();

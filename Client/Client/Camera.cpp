@@ -160,7 +160,7 @@ void CCamera::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
 	pd3dCommandList->SetGraphicsRootDescriptorTable(0, GetDescriptorHandle());
 }
 
-void CCamera::UpdateComputeShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
+void CCamera::UpdateShaderVariablesWithCompute(ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	XMFLOAT4X4 xmf4x4View;
 	XMStoreFloat4x4(&xmf4x4View, XMMatrixTranspose(XMLoadFloat4x4(&m_xmf4x4View)));
@@ -186,6 +186,7 @@ void CCamera::UpdateComputeShaderVariables(ID3D12GraphicsCommandList* pd3dComman
 	::memcpy(&m_pcbMappedCamera->m_xmf4FogColor, &m_xmf4FogColor, sizeof(XMFLOAT4));
 	::memcpy(&m_pcbMappedCamera->m_xmf4FogInfo, &m_xmf4FogInfo, sizeof(XMFLOAT4));
 
+	pd3dCommandList->SetGraphicsRootDescriptorTable(0, GetDescriptorHandle());
 	pd3dCommandList->SetComputeRootDescriptorTable(0, GetDescriptorHandle());
 }
 

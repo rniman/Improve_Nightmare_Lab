@@ -635,28 +635,28 @@ void CGameFramework::PreRenderTasks(shared_ptr<CMainScene>& pMainScene)
 	if (nClientId != -1)
 	{
 		SetPlayerObjectOfClient(nClientId);
-		//m_bPrevRender = true;
 	}
-	else	// 에러임
+	else // 에러임
 	{
 		assert("FAIL CLIENT ID");
 	}
 
-	if (pMainScene->m_nLights >= MAX_LIGHTS)
-	{
-		pMainScene->m_nLights = MAX_LIGHTS;
-	}
-	m_pMainPlayer->Update(/*gGameTimer.GetTimeElapsed()*/0.01f);
+	pMainScene->ClampLightCount(MAX_LIGHTS);
+	m_pMainPlayer->Update(0.01f);
 
 	AnimateObjects();
 	// 이곳에서 렌더링 하기전에 준비작업을 시행하도록한다. ex) 쉐도우맵 베이킹
 	// buildobject함수 호출 이후 처리되어야할 작업이다. -> 모든 객체들이 렌더링되어야 그림자맵을 생성함.
 
-	//HRESULT hResult = m_d3dCommandAllocator->Reset();
 	HRESULT hResult = m_d3dCommandAllocator[m_nSwapChainBufferIndex]->Reset();
-	hResult = m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), NULL);
+	hResult = m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), nullptr);
+	pMainScene->PrepareCommandListState(m_d3dCommandList.Get());
 
-	SynchronizeResourceTransition(m_d3dCommandList.Get(), m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	SynchronizeResourceTransition(
+		m_d3dCommandList.Get(),
+		m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
+		D3D12_RESOURCE_STATE_PRESENT,
+		D3D12_RESOURCE_STATE_RENDER_TARGET);
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_d3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
 
@@ -665,7 +665,11 @@ void CGameFramework::PreRenderTasks(shared_ptr<CMainScene>& pMainScene)
 
 	pMainScene->PrevRenderTask(m_d3dCommandList.Get());
 
-	SynchronizeResourceTransition(m_d3dCommandList.Get(), m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	SynchronizeResourceTransition(
+		m_d3dCommandList.Get(),
+		m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
+		D3D12_RESOURCE_STATE_RENDER_TARGET,
+		D3D12_RESOURCE_STATE_PRESENT);
 
 	hResult = m_d3dCommandList->Close();
 
@@ -696,19 +700,17 @@ void CGameFramework::FrameAdvance()
 	{
 		ProcessInput();
 		AnimateObjects();
-
 		//soundManager.SetVolume(sound::MAIN_SCENE, m_fBGMVolume);
 	}
 	else if (m_nGameState == GAME_STATE::IN_LOADING)
 	{
-		//LoadingRender();
 		if (m_pTcpClient->GetRecvLoadComplete())
 		{
 			m_nGameState = GAME_STATE::IN_GAME;
 		}
 		return;
 	}
-	else
+	else // GAME_STATE::BLUE_SUIT_WIN, GAME_STATE::ZOMBIE_WIN
 	{
 		AnimateEnding();
 		m_fEndingElapsedTime += gGameTimer.GetTimeElapsed();
@@ -717,27 +719,15 @@ void CGameFramework::FrameAdvance()
 	}
 
 	HRESULT hResult = m_d3dCommandAllocator[m_nSwapChainBufferIndex]->Reset();
-	hResult = m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), NULL);
+	hResult = m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), nullptr);
+	m_pScene->PrepareCommandListState(m_d3dCommandList.Get());
 
 	// 렌더링
 	switch (m_nGameState)
 	{
 	case GAME_STATE::IN_LOBBY:
 	{
-		SynchronizeResourceTransition(m_d3dCommandList.Get(), m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-		D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_d3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-		D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_d3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-		d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
-
-		FLOAT ClearValue[4] = { 0.8f, 0.8f, 0.8f, 1.0f };
-		m_d3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
-		m_d3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, ClearValue, 0, NULL);
-		m_d3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
-
-		m_pScene->Render(m_d3dCommandList.Get(), m_pCamera.lock(), 0);
-
-		SynchronizeResourceTransition(m_d3dCommandList.Get(), m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+		RenderLobby();
 		break;
 	}
 	case GAME_STATE::IN_GAME:
@@ -758,14 +748,29 @@ void CGameFramework::FrameAdvance()
 			pl->SetShadowRender(false);
 		}
 
-		SynchronizeResourceTransition(m_d3dCommandList.Get(), m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		SynchronizeResourceTransition(
+			m_d3dCommandList.Get(),
+			m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
+			D3D12_RESOURCE_STATE_PRESENT,
+			D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_d3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 		d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
 
-		D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = pMainScene->m_pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
-		m_d3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
-		pMainScene->m_pPostProcessingShader->OnPrepareRenderTarget(m_d3dCommandList.Get(), 0, &m_pd3dSwapChainBackBufferRTVCPUHandles[m_nSwapChainBufferIndex], &d3dDsvCPUDescriptorHandle);
+		CPostProcessingShader* pPostProcessingShader = pMainScene->GetPostProcessingShader();
+		D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = pPostProcessingShader->GetDsvCPUDesctriptorHandle(0);
+		m_d3dCommandList->ClearDepthStencilView(
+			d3dDsvCPUDescriptorHandle,
+			D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+			1.0f,
+			0,
+			0,
+			nullptr);
+		pPostProcessingShader->OnPrepareRenderTarget(
+			m_d3dCommandList.Get(),
+			0,
+			&m_pd3dSwapChainBackBufferRTVCPUHandles[m_nSwapChainBufferIndex],
+			&d3dDsvCPUDescriptorHandle);
 
 		pMainScene->PrepareRender(m_d3dCommandList.Get(), m_pCamera.lock());
 		UpdateFrameworkShaderVariable();
@@ -781,8 +786,6 @@ void CGameFramework::FrameAdvance()
 	default:
 		break;
 	}
-	//SynchronizeResourceTransition(m_d3dCommandList.Get(), m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-	//[CJI 0411] -> RenderUI에서 렌더타겟 사용이 끝나면 m_wrappedBackBuffers가 자원을 해제할때 자동적으로 상태를 D3D12_RESOURCE_STATE_PRESENT으로 되돌리기 때문에 불필요
 
 	hResult = m_d3dCommandList->Close();
 
@@ -813,14 +816,13 @@ void CGameFramework::FrameAdvance()
 		return;
 	}
 
-	if (pMainScene->m_pPostProcessingShader->GetPipelineIndex() == 1)
+	if (!pMainScene->IsSsaoEnabled())
 	{
 		_stprintf_s(
 			m_pszFrameRate + nLength, 200 - nLength, _T("ID:%d, NumOfClient: %d, (%.3f, %.3f, %.3f)"),
 			m_pTcpClient->GetMainClientId(),
 			m_pTcpClient->GetNumOfClient(),
-			xmf3Position.x, xmf3Position.y, xmf3Position.z
-		);
+			xmf3Position.x, xmf3Position.y, xmf3Position.z);
 	}
 	else
 	{
@@ -831,32 +833,66 @@ void CGameFramework::FrameAdvance()
 			xmf3Position.x, xmf3Position.y, xmf3Position.z,
 			pMainScene->GetScale(),
 			pMainScene->GetIntesity(),
-			pMainScene->GetBias()
-		);
+			pMainScene->GetBias());
 	}
 
 	::SetWindowText(m_hWnd, m_pszFrameRate);
 }
 
-void CGameFramework::LoadingRender()
+void CGameFramework::RenderLobby()
+{
+	SynchronizeResourceTransition(
+		m_d3dCommandList.Get(),
+		m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
+		D3D12_RESOURCE_STATE_PRESENT,
+		D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_d3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_d3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
+
+	FLOAT ClearValue[4] = { 0.8f, 0.8f, 0.8f, 1.0f };
+	m_d3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+	m_d3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, ClearValue, 0, nullptr);
+	m_d3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, true, &d3dDsvCPUDescriptorHandle);
+
+	m_pScene->Render(m_d3dCommandList.Get(), m_pCamera.lock(), 0);
+
+	SynchronizeResourceTransition(
+		m_d3dCommandList.Get(),
+		m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
+		D3D12_RESOURCE_STATE_RENDER_TARGET,
+		D3D12_RESOURCE_STATE_PRESENT);
+}
+
+void CGameFramework::RenderLoading()
 {
 	HRESULT hResult = m_d3dCommandAllocator[m_nSwapChainBufferIndex]->Reset();
-	hResult = m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), NULL);
+	hResult = m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), nullptr);
+	m_pScene->PrepareCommandListState(m_d3dCommandList.Get());
 
-	SynchronizeResourceTransition(m_d3dCommandList.Get(), m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	SynchronizeResourceTransition(
+		m_d3dCommandList.Get(),
+		m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
+		D3D12_RESOURCE_STATE_PRESENT,
+		D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_d3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_d3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
 
 	FLOAT ClearValue[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
-	m_d3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
-	m_d3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, ClearValue, 0, NULL);
+	m_d3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+	m_d3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, ClearValue, 0, nullptr);
 	m_d3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
 
-	m_pScene->LoadingRender(m_d3dCommandList.Get());
+	m_pScene->RenderLoading(m_d3dCommandList.Get());
 
-	SynchronizeResourceTransition(m_d3dCommandList.Get(), m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	SynchronizeResourceTransition(
+		m_d3dCommandList.Get(),
+		m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
+		D3D12_RESOURCE_STATE_RENDER_TARGET,
+		D3D12_RESOURCE_STATE_PRESENT);
 
 	hResult = m_d3dCommandList->Close();
 
@@ -961,19 +997,13 @@ void CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARA
 	{
 		m_nGameState = GAME_STATE::IN_LOADING;
 
-		//// 로딩화면
-		LoadingRender();
-		////
+		RenderLoading();
 		BuildObjects();
 
-		//::SetCursor(NULL);
-		//::SetCapture(hWnd);
-		//// 마우스를 화면 중앙으로 이동시킴 (윈도우 내부로만 이동하도록)
 		RECT rect;
 		GetClientRect(hWnd, &rect);
 		POINT center = { (rect.right - rect.left) / 2, (rect.bottom - rect.top) / 2 };
 		ClientToScreen(hWnd, &center);
-		//SetCursorPos(center.x, center.y);
 		SetMousePoint(center);
 
 		m_apPlayer[m_nMainClientId]->SetGameStart();
@@ -1207,11 +1237,11 @@ void CGameFramework::OnProcessingEndGameMessage(WPARAM& wParam)
 	shared_ptr<CMainScene> pMainScene = dynamic_pointer_cast<CMainScene>(m_pScene);
 	if (m_nMainClientId != ZOMBIEPLAYER)
 	{
-		dynamic_cast<CBlueSuitUserInterfaceShader*>(pMainScene->m_vForwardRenderShader[USER_INTERFACE_SHADER].get())->SetGameState(m_nGameState);
+		dynamic_cast<CBlueSuitUserInterfaceShader*>(pMainScene->GetForwardRenderShader(USER_INTERFACE_SHADER))->SetGameState(m_nGameState);
 	}
 	else if (m_nMainClientId == ZOMBIEPLAYER)
 	{
-		dynamic_cast<CZombieUserInterfaceShader*>(pMainScene->m_vForwardRenderShader[USER_INTERFACE_SHADER].get())->SetGameState(m_nGameState);
+		dynamic_cast<CZombieUserInterfaceShader*>(pMainScene->GetForwardRenderShader(USER_INTERFACE_SHADER))->SetGameState(m_nGameState);
 	}
 }
 
@@ -1407,7 +1437,7 @@ void CGameFramework::BuildLobbyObjects()
 
 	BindPlayersToTcpClient();
 
-	m_pCamera.lock()->CreateShaderVariables(m_d3d12Device.Get(), m_d3dCommandList.Get());
+	// m_pCamera.lock()->CreateShaderVariables(m_d3d12Device.Get(), m_d3dCommandList.Get());
 
 	ExecuteCommandListAndWaitForGpu();
 }
@@ -1430,11 +1460,17 @@ void CGameFramework::BuildMainObjects()
 	shared_ptr<CMainScene> pMainScene = dynamic_pointer_cast<CMainScene>(m_pScene);
 
 	BindPlayersToTcpClient();
-	// m_pMainPlayer->SetPlayerVolume(1.0f);
 
 	UINT ncbElementBytes = ((sizeof(CB_FRAMEWORK_INFO) + 255) & ~255); //256의 배수
-	m_d3dFramework_info_Resource = ::CreateBufferResource(m_d3d12Device.Get(), m_d3dCommandList.Get(), NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER | D3D12_RESOURCE_STATE_GENERIC_READ, NULL);
-	m_d3dFramework_info_Resource->Map(0, NULL, (void**)&m_cbFramework_info);
+	m_d3dFramework_info_Resource = ::CreateBufferResource(
+		m_d3d12Device.Get(),
+		m_d3dCommandList.Get(),
+		nullptr,
+		ncbElementBytes,
+		D3D12_HEAP_TYPE_UPLOAD,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER | D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr);
+	m_d3dFramework_info_Resource->Map(0, nullptr, (void**)&m_cbFramework_info);
 	m_d3dFramework_info_CbvGPUDescriptorHandle = CScene::CreateConstantBufferViews(m_d3d12Device.Get(), 1, m_d3dFramework_info_Resource.Get(), ncbElementBytes);
 
 	ExecuteCommandListAndWaitForGpu();
@@ -1472,8 +1508,8 @@ void CGameFramework::BindPlayersToTcpClient()
 
 	for (int i = 0; i < MAX_CLIENT; ++i)
 	{
-		m_apPlayer[i] = m_pScene->m_apPlayer[i];
-		m_pTcpClient->SetPlayer(m_pScene->m_apPlayer[i], i);
+		m_apPlayer[i] = m_pScene->GetPlayer(i);
+		m_pTcpClient->SetPlayer(m_pScene->GetPlayer(i), i);
 		int nClientId = m_pTcpClient->GetClientID(i);
 		m_apPlayer[i]->SetClientId(nClientId);
 	}

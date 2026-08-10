@@ -95,7 +95,6 @@ void CBlurSSAOComputeShader::Blur(ID3D12GraphicsCommandList* pd3dCommandList, co
 		return;
 	}
 
-	pCamera->UpdateComputeShaderVariables(pd3dCommandList);
 	m_pGBufferTexture->UpdateSrvShaderVariable(pd3dCommandList, kGBufferRootParameterIndex, 0);
 
 	DispatchHorizontal(pd3dCommandList);

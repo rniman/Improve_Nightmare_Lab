@@ -6,13 +6,13 @@ Texture2D<float> SSAOInputTexture : register(t14);
 // Final vertically blurred AO result. Bound through the existing u0 UAV slot.
 RWTexture2D<float> SSAOOutputTexture : register(u0);
 
-static const int kBlurRadius = 3;
+// 5x5 footprint keeps the filter from turning undersampling noise into broad blotches.
+static const int kBlurRadius = 2;
 static const float kGaussianWeights[kBlurRadius + 1] =
 {
-	0.227027f,
-	0.194594f,
-	0.121621f,
-	0.054054f
+	0.402620f,
+	0.244201f,
+	0.054489f
 };
 
 // These values control how strongly the blur preserves G-buffer boundaries.
@@ -35,7 +35,9 @@ float LoadViewSpaceDepth(uint2 pixelCoord)
 
 float CalculateBilateralWeight(float gaussianWeight, float centerDepth, float sampleDepth, float3 centerNormal, float3 sampleNormal)
 {
-	float depthWeight = exp(-abs(centerDepth - sampleDepth) * kDepthWeightScale);
+	// AO radius is expressed in view-space units, so scale the depth threshold with it.
+	// This avoids a fixed world-space blur range when gfScale changes.
+	float depthWeight = exp(-abs(centerDepth - sampleDepth) * kDepthWeightScale / max(abs(gfScale), 0.001f));
 	float normalWeight = pow(saturate(dot(centerNormal, sampleNormal)), kNormalWeightPower);
 	return gaussianWeight * depthWeight * normalWeight;
 }
@@ -83,5 +85,8 @@ void CSBlurSSAOVertical(uint3 dispatchThreadID : SV_DispatchThreadID)
 		}
 	}
 
-	SSAOOutputTexture[pixelCoord] = weightedAo / max(totalWeight, 0.0001f);
+	float filteredAo = weightedAo / max(totalWeight, 0.0001f);
+
+	// Retain half of the raw AO so bilateral filtering reduces noise without creating cloudy patches.
+	SSAOOutputTexture[pixelCoord] = lerp(centerAo, filteredAo, 0.5f);
 }
