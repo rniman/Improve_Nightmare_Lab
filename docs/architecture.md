@@ -19,10 +19,12 @@ Nightmare Lab은 Win32 기반 멀티플레이어 게임으로, 두 개의 실행
 - `CScene`은 기본 인터페이스이다.
 - `CLobbyScene`은 로비 UI 흐름을 처리한다.
 - `CMainScene`은 월드 오브젝트 설정, 프레임별 씬 애니메이션, 렌더 패스 오케스트레이션을 처리한다.
+- `CMainScene`의 렌더 리소스와 SSAO 모드 상태는 내부에서 소유하며, `CGameFramework`는 렌더 패스 API와 제한된 접근자를 통해 사용한다.
 
 ### 3) 렌더러
 - `CShader` 계층 구조가 파이프라인 상태와 드로우 동작을 캡슐화한다.
 - 렌더 단계는 섀도우 패스, 메인/디퍼드 패스, 후처리, 블러 컴퓨트, 포워드/UI 패스, 풀스크린 합성으로 구성된다.
+- command list 공통 상태인 graphics/compute root signature와 CBV/SRV/UAV descriptor heap은 각 `Reset()` 직후 한 번 설정한다.
 
 ### 4) 리소스 관리
 - `CTexture`, `CMaterial`, `CGameObject`가 런타임 리소스, 모델 로딩, 오브젝트별 셰이더 데이터를 관리한다.
