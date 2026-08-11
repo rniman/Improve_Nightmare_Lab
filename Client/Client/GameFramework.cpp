@@ -1058,14 +1058,22 @@ void CGameFramework::OnProcessingCommandMessage(HWND hWnd, UINT nMessageID, WPAR
 void CGameFramework::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	const int nSocketEvent = WSAGETSELECTEVENT(lParam);
-	const bool bCurrentSocket = (static_cast<SOCKET>(wParam) == m_pTcpClient->m_sock);
-	const bool bDisconnected = bCurrentSocket && (WSAGETSELECTERROR(lParam) != 0 || nSocketEvent == FD_CLOSE);
+	const int nSocketError = WSAGETSELECTERROR(lParam);
+	const SOCKET eventSocket = static_cast<SOCKET>(wParam);
+	const bool bCurrentSocket = (eventSocket == m_pTcpClient->m_sock);
+
 	switch (nSocketEvent)
 	{
 	case FD_WRITE:	// 소켓이 데이터를 전송할 준비가 되었다.
 	case FD_READ:	// 소켓이 데이터를 읽을 준비가 되었다.
 	case FD_CLOSE:
+	{
 		m_pTcpClient->OnProcessingSocketMessage(hWnd, nMessageID, wParam, lParam);
+
+		// CTcpClient가 recv()==0 또는 실제 소켓 오류로 내부에서 닫은 경우까지 프레임워크 상태에 반영한다.
+		const bool bDisconnected =
+			bCurrentSocket &&
+			(nSocketError != 0 || nSocketEvent == FD_CLOSE || m_pTcpClient->m_sock == INVALID_SOCKET);
 		if (bDisconnected && m_bTcpClient)
 		{
 			m_bTcpClient = false;
@@ -1073,6 +1081,7 @@ void CGameFramework::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARA
 			err_display("Fail Connect", "Client count exceeded or game already started");
 		}
 		break;
+	}
 	default:
 		break;
 	}

@@ -125,6 +125,9 @@ void TCPServer::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		break;
 	case FD_READ:
 		OnProcessingReadMessage(hWnd, nMessageID, wParam, lParam);
+		// 기존 요청-응답 흐름을 유지하되 암시적인 switch fall-through는 사용하지 않는다.
+		OnProcessingWriteMessage(hWnd, nMessageID, wParam, lParam);
+		break;
 	case FD_WRITE:
 		OnProcessingWriteMessage(hWnd, nMessageID, wParam, lParam);
 		break;
@@ -140,11 +143,9 @@ void TCPServer::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 
 void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-
-	SOCKET sockClient;
 	struct sockaddr_in addrClient;
 	int nAddrlen = sizeof(sockaddr_in);
-	sockClient = accept(wParam, (struct sockaddr*)&addrClient, &nAddrlen);
+	const SOCKET sockClient = accept(static_cast<SOCKET>(wParam), reinterpret_cast<struct sockaddr*>(&addrClient), &nAddrlen);
 
 	if (sockClient == INVALID_SOCKET)
 	{
@@ -159,8 +160,7 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		return;
 	}
 
-	// 추가된 클라이언트의 정보를 추가한다.
-	INT8 nSocketIndex = AddSocketInfo(sockClient, addrClient, nAddrlen);
+	const INT8 nSocketIndex = AddSocketInfo(sockClient, addrClient, nAddrlen);
 
 	// MAX_CLIENT보다 더 많은 접속 요구
 	if (nSocketIndex == -1)
@@ -170,9 +170,7 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		return;
 	}
 
-	//printf("\n[TCP 서버] 클라이언트 접속: IP 주소=%s, 포트 번호=%d\n", m_vSocketInfoList[nSocketIndex].m_pAddr, ntohs(m_vSocketInfoList[nSocketIndex].m_addrClient.sin_port));
-
-	int retval = WSAAsyncSelect(sockClient, hWnd, WM_SOCKET, FD_READ | FD_WRITE | FD_CLOSE);
+	const int retval = WSAAsyncSelect(sockClient, hWnd, WM_SOCKET, FD_READ | FD_WRITE | FD_CLOSE);
 	if (retval == SOCKET_ERROR)
 	{
 		err_display("WSAAsyncSelect()");
@@ -198,8 +196,6 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		++m_nBlueSuit;
 	}
 
-	//InitPlayerPosition(m_apPlayers[nSocketIndex], nSocketIndex);
-
 	m_pCollisionManager->AddCollisionPlayer(m_apPlayers[nSocketIndex], nSocketIndex);
 
 	for (auto& sockInfo : m_vSocketInfoList)
@@ -217,31 +213,37 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 
 void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	int nRetval = 1;
-	size_t nBufferSize;
-	int nSocketIndex = GetSocketIndex(wParam);
+	const SOCKET socket = static_cast<SOCKET>(wParam);
+	int nSocketIndex = GetSocketIndex(socket);
 	if (nSocketIndex < 0)
 	{
 		return;
 	}
 
+	auto handleReceiveResult = [this, socket](ReceiveResult result)
+		{
+			if (result == ReceiveResult::Complete)
+			{
+				return true;
+			}
+
+			if (result == ReceiveResult::Closed || result == ReceiveResult::Error)
+			{
+				DisconnectClient(socket);
+			}
+			return false;
+		};
+
 	std::shared_ptr<CServerPlayer> pPlayer = m_apPlayers[nSocketIndex];
 
 	if (!m_vSocketInfoList[nSocketIndex].m_bRecvHead)
 	{
-		nBufferSize = sizeof(INT8);
-
-		nRetval = RecvData(nSocketIndex, nBufferSize);
-		if (nRetval == SOCKET_ERROR)
+		const ReceiveResult result = RecvData(nSocketIndex, sizeof(INT8));
+		if (!handleReceiveResult(result))
 		{
-			if (WSAGetLastError() == WSAEWOULDBLOCK)
-			{
-				m_vSocketInfoList[nSocketIndex].m_bRecvHead = false;
-				m_vSocketInfoList[nSocketIndex].m_nHead = -1;
-				memset(m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, 0, BUFSIZE);
-			}
 			return;
 		}
+
 		m_vSocketInfoList[nSocketIndex].m_bRecvHead = true;
 		memcpy(&m_vSocketInfoList[nSocketIndex].m_nHead, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, sizeof(INT8));
 		memset(m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, 0, BUFSIZE);
@@ -250,6 +252,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 	switch (m_vSocketInfoList[nSocketIndex].m_nHead)
 	{
 	case HEAD_GAME_START:
+	{
 		m_nGameState = GAME_STATE::IN_GAME;
 		m_nZombie = 0;
 		m_nBlueSuit = 0;
@@ -281,13 +284,12 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 			PostMessage(m_hWnd, WM_SOCKET, (WPARAM)m_vSocketInfoList[i].m_sock, MAKELPARAM(FD_WRITE, 0));
 		}
 		break;
+	}
 	case HEAD_CHANGE_SLOT:
 	{
-		nBufferSize = sizeof(INT8);
-		nRetval = RecvData(nSocketIndex, nBufferSize);
-		if (nRetval != 0)
+		if (!handleReceiveResult(RecvData(nSocketIndex, sizeof(INT8))))
 		{
-			break;
+			return;
 		}
 
 		INT8 nSelectedSlot;
@@ -329,26 +331,20 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 	}
 	case HEAD_KEYS_BUFFER:
 	{
+		// Time, KeysBuffer(WORD), viewMatrix, vecLook, vecRight
+		const size_t bufferSize = sizeof(__int64) + sizeof(WORD) + sizeof(XMFLOAT4X4) + sizeof(XMFLOAT3) * 3 + sizeof(SC_ANIMATION_INFO) + sizeof(SC_PLAYER_INFO);
+		if (!handleReceiveResult(RecvData(nSocketIndex, bufferSize)))
+		{
+			return;
+		}
+		m_vSocketInfoList[nSocketIndex].RecvNum++;
+
 		if (!pPlayer->IsRecvData())
 		{
 			pPlayer->SetRecvData(true);
 		}
 
-		std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
-		std::chrono::time_point<std::chrono::steady_clock> client;
-
-		// Time, KeysBuffer(WORD), viewMatrix, vecLook, vecRight
-		nBufferSize = sizeof(__int64) + sizeof(WORD) + sizeof(XMFLOAT4X4) + sizeof(XMFLOAT3) * 3 + sizeof(SC_ANIMATION_INFO) + sizeof(SC_PLAYER_INFO);
-		m_vSocketInfoList[nSocketIndex].RecvNum++;
-		nRetval = RecvData(nSocketIndex, nBufferSize);
-		if (nRetval == SOCKET_ERROR)
-		{
-			break;
-		}
-
-		int sizeOffset = 0;
-		memcpy(&client, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer + sizeOffset, sizeof(std::chrono::time_point<std::chrono::steady_clock>));
-		std::chrono::duration<double> deltaTime = now - client;
+		size_t sizeOffset = 0;
 		sizeOffset += sizeof(__int64);
 
 		WORD wKeyBuffer = 0;
@@ -382,25 +378,30 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 		SC_PLAYER_INFO playerInfo;
 		memcpy(&playerInfo, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer + sizeOffset, sizeof(SC_PLAYER_INFO));
 		pPlayer->SetRightClick(playerInfo.m_bRightClick);
+
+		break;
 	}
-	break;
-	case HEAD_LOADING_COMPLETE: {
-		//cout << "[" << nSocketIndex << "] => LoadComplete!!\n";
+	case HEAD_LOADING_COMPLETE:
+	{
 		m_vSocketInfoList[nSocketIndex].m_bLoadComplete = true;
 		int connectCount = 0;
-		for (auto& sock_info : m_vSocketInfoList) {
-			if (!sock_info.m_bUsed) continue;
-			connectCount++;
-		}
 		int loadCompleteCount = 0;
-		for (auto& sock_info : m_vSocketInfoList) {
-			if (!sock_info.m_bUsed) continue;
-			if (!sock_info.m_bLoadComplete) continue;
+		for (const auto& socketInfo : m_vSocketInfoList)
+		{
+			if (!socketInfo.m_bUsed)
+			{
+				continue;
+			}
 
-			loadCompleteCount++;
+			++connectCount;
+			if (socketInfo.m_bLoadComplete)
+			{
+				++loadCompleteCount;
+			}
 		}
 
-		if (loadCompleteCount == connectCount) {
+		if (loadCompleteCount == connectCount)
+		{
 			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_LOADING_COMPLETE;
 			PostMessage(m_hWnd, WM_SOCKET, (WPARAM)m_vSocketInfoList[nSocketIndex].m_sock, MAKELPARAM(FD_WRITE, 0));
 		}
@@ -410,20 +411,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 		break;
 	}
 
-	if (nRetval != 0)
-	{
-		//if (WSAGetLastError() == WSAEWOULDBLOCK)
-		//{
-		//	m_vSocketInfoList[nSocketIndex].m_bRecvHead = true;
-		//	memset(m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, 0, BUFSIZE);
-		//}
-		return;
-	}
-	m_vSocketInfoList[nSocketIndex].m_nHead = -1;
-	m_vSocketInfoList[nSocketIndex].m_bRecvHead = false;
-	m_vSocketInfoList[nSocketIndex].m_bRecvDelayed = false;
-	memset(m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, 0, BUFSIZE);
-	return;
+	ResetReceiveState(m_vSocketInfoList[nSocketIndex]);
 }
 
 void TCPServer::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
@@ -828,11 +816,7 @@ INT8 TCPServer::AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, 
 	getpeername(sockInfo.m_sock, (struct sockaddr*)&sockInfo.m_addrClient, &sockInfo.m_nAddrlen);
 	inet_ntop(AF_INET, &sockInfo.m_addrClient.sin_addr, sockInfo.m_pAddr, sizeof(sockInfo.m_pAddr));
 
-	sockInfo.m_nCurrentRecvByte = 0;
-	sockInfo.m_bRecvDelayed = false;
-	sockInfo.m_bRecvHead = false;
 	sockInfo.m_socketState = SOCKET_STATE::SEND_ID;
-	//sockInfo.m_prevSocketState = SOCKET_STATE::SEND_ID;
 
 	// 배열에 정보 추가 
 	for (int i = 0; i < m_nClient + 1; ++i)
@@ -856,31 +840,18 @@ INT8 TCPServer::AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, 
 // 소켓 정보 얻기
 INT8 TCPServer::GetSocketIndex(SOCKET sock)
 {
-	for (const auto& sockInfo : m_vSocketInfoList)
+	for (size_t index = 0; index < m_vSocketInfoList.size(); ++index)
 	{
+		const SOCKETINFO& sockInfo = m_vSocketInfoList[index];
 		if (!sockInfo.m_bUsed)
 		{
 			continue;
 		}
 		if (sockInfo.m_sock == sock)
 		{
-			return static_cast<INT8>(&sockInfo - &m_vSocketInfoList[0]);
+			return static_cast<INT8>(index);
 		}
 	}
-
-	//for (INT8 nIndex = 0; nIndex < static_cast<INT8>(m_vSocketInfoList.size()); ++nIndex)
-	//{
-	//	const SOCKETINFO& sockInfo = m_vSocketInfoList[nIndex];
-	//	if (!sockInfo.m_bUsed)
-	//	{
-	//		continue;
-	//	}
-
-	//	if (sockInfo.m_sock == sock)
-	//	{
-	//		return nIndex;
-	//	}
-	//}
 	return -1;
 }
 
@@ -1478,30 +1449,59 @@ int TCPServer::SendBufferData(SOCKET socket, vector<BYTE>& buffer)
 	return 0;
 }
 
-int TCPServer::RecvData(int nSocketIndex, size_t nBufferSize)
+void TCPServer::ResetReceiveState(SOCKETINFO& socketInfo)
 {
-	int nRetval;
-	int nRemainRecvByte = nBufferSize - m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte;
+	socketInfo.m_nHead = -1;
+	socketInfo.m_bRecvHead = false;
+	socketInfo.m_nCurrentRecvByte = 0;
+	memset(socketInfo.m_pCurrentBuffer, 0, BUFSIZE);
+}
 
+TCPServer::ReceiveResult TCPServer::RecvData(int nSocketIndex, size_t nBufferSize)
+{
+	SOCKETINFO& socketInfo = m_vSocketInfoList[nSocketIndex];
 
-	nRetval = recv(m_vSocketInfoList[nSocketIndex].m_sock, (char*)&m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer + m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte, nRemainRecvByte, 0);
-
-	if (nRetval > 0)m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte += nRetval;
-	if (nRetval == SOCKET_ERROR || nRetval == 0) // error
+	bool isInvalidBufferSize =
+		nBufferSize > BUFSIZE ||
+		socketInfo.m_nCurrentRecvByte < 0 ||
+		static_cast<size_t>(socketInfo.m_nCurrentRecvByte) > nBufferSize;
+	if (isInvalidBufferSize)
 	{
-		return -1;
+		return ReceiveResult::Error;
 	}
-	else if (m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte < nBufferSize)
+
+	if (nBufferSize == 0)
 	{
-		m_vSocketInfoList[nSocketIndex].m_bRecvDelayed = true;
-		return 1;
+		return ReceiveResult::Complete;
+	}
+
+	const int remainRecvByte = static_cast<int>(nBufferSize) - socketInfo.m_nCurrentRecvByte;
+	const int retval = recv(socketInfo.m_sock, socketInfo.m_pCurrentBuffer + socketInfo.m_nCurrentRecvByte, remainRecvByte, 0);
+	if (retval > 0)
+	{
+		socketInfo.m_nCurrentRecvByte += retval;
+	}
+	else if (retval == 0)
+	{
+		return ReceiveResult::Closed;
 	}
 	else
 	{
-		m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte = 0;
-		m_vSocketInfoList[nSocketIndex].m_bRecvDelayed = false;
-		return 0;
+		const int errorCode = WSAGetLastError();
+		if (errorCode == WSAEWOULDBLOCK)
+		{
+			return ReceiveResult::Pending;
+		}
+		return ReceiveResult::Error;
 	}
+
+	if (static_cast<size_t>(socketInfo.m_nCurrentRecvByte) < nBufferSize)
+	{
+		return ReceiveResult::Pending;
+	}
+
+	socketInfo.m_nCurrentRecvByte = 0;
+	return ReceiveResult::Complete;
 }
 
 // 소켓 함수 오류 출력 후 종료

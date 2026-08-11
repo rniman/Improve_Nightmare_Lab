@@ -94,76 +94,77 @@ void ConvertCharToLPWSTR(const char* pstr, LPWSTR dest, int destSize);
 
 class CTcpClient
 {
-private:
-	// 생성 실패, 소켓 오류, FD_CLOSE 및 소멸 시 동일한 경로로 정리한다.
-	void CloseConnection();
-
-	INT8 m_nMainClientId = -1;
-	INT8 m_nClient = -1;				// 클라이언트 수
-
-	INT8 m_nSelectedSlot = -1;
-
-	bool m_bRecvDelayed = false;	// 오는 데이터를 전부 받지 못했다
-	bool m_bRecvHead = false;
-	INT8 m_nHead = -1;
-
-	int m_nCurrentRecvByte = 0;		// 현재까지 받은 데이터의 길이
-	char m_pCurrentBuffer[BUFSIZE];
-
-	SOCKET_STATE m_socketState = SOCKET_STATE::SEND_GAME_START;
-	SOCKET_STATE m_prevSocketState = SOCKET_STATE::SEND_GAME_START;
-
-	// 서버에 접속한 클라이언트의 정보 <아이디,정보>
-	std::array<CS_CLIENTS_INFO, MAX_CLIENT> m_aClientInfo;
-	std::array<shared_ptr<CPlayer>, MAX_CLIENT> m_apPlayers;
-
-	int m_nEscapeDoor = -1;
-
-	bool m_bRecvLoadComplete = false;
-	bool m_bWsaStarted = false;
 public:
-	SOCKET m_sock = INVALID_SOCKET;
-	bool m_bSend = true;
-
-	int SendNum = 0;
-	int RecvNum = 0;
 	CTcpClient();
 	~CTcpClient();
 
 	bool CreateSocket(HWND hWnd, TCHAR* pszIPAddress);
-	void SetPlayer(const shared_ptr<CPlayer>& pPlayer, int nIndex = 0) { m_apPlayers[nIndex] = pPlayer; };
-
-	// 이벤트를 처리한다.
 	void OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void UpdateDataFromServer();
-	void UpdatePickedObject(int i);
-	void OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void LoadCompleteSend();
 
-	template<class... Args>
-	void CreateSendDataBuffer(char* pBuffer, Args&&... args);
-	template<class... Args>
-	int SendData(SOCKET socket, size_t nBufferSize, Args&&... args);
-	int RecvData(SOCKET socket, size_t nBufferSize);
-
-	void UpdateKeyBitMask(UCHAR* pKeysBuffer, WORD& wKeyBuffer);
-
-	void UpdateZombiePlayer();
-	void UpdatePlayer(int nIndex);
-
-	//Interface
 	INT8 GetMainClientId() const { return m_nMainClientId; }
 	INT8 GetClientID(int nIndex) { return m_aClientInfo[nIndex].m_nClientId; }
 	INT8 GetNumOfClient() const { return m_nClient; }
 	XMFLOAT3 GetPostion(int id);
 	std::array<CS_CLIENTS_INFO, 5>& GetArrayClientsInfo();
-
 	int GetEscapeDoor() const { return m_nEscapeDoor; }
+	bool GetRecvLoadComplete() { return m_bRecvLoadComplete; }
 
+	void SetPlayer(const shared_ptr<CPlayer>& pPlayer, int nIndex = 0) { m_apPlayers[nIndex] = pPlayer; }
 	void SetSelectedSlot(INT8 nSelectedSlot) { m_nSelectedSlot = nSelectedSlot; }
 	void SetSocketState(SOCKET_STATE sockState) { m_socketState = sockState; }
 
-	void LoadCompleteSend();
-	bool GetRecvLoadComplete() { return m_bRecvLoadComplete; }
+	// 기존 프레임워크가 소켓 핸들을 직접 사용한다. 접근자 전환은 별도 작업으로 둔다.
+	SOCKET m_sock = INVALID_SOCKET;
+
+private:
+	// recv() 한 번이 요청한 크기를 모두 채운다는 가정 없이 수신 진행 상태를 구분한다.
+	enum class ReceiveResult
+	{
+		Complete,
+		Pending,
+		Closed,
+		Error
+	};
+
+	void OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+
+	// 생성 실패, 소켓 오류, FD_CLOSE 및 소멸 시 동일한 경로로 정리한다.
+	void CloseConnection();
+	void ResetReceiveState();
+	ReceiveResult RecvData(SOCKET socket, size_t nBufferSize);
+
+	template<class... Args>
+	void CreateSendDataBuffer(char* pBuffer, Args&&... args);
+	template<class... Args>
+	int SendData(SOCKET socket, size_t nBufferSize, Args&&... args);
+
+	void UpdateDataFromServer();
+	void UpdatePickedObject(int i);
+	void UpdateKeyBitMask(UCHAR* pKeysBuffer, WORD& wKeyBuffer);
+	void UpdateZombiePlayer();
+	void UpdatePlayer(int nIndex);
+
+	// HEAD와 DATA가 여러 FD_READ에 나뉘어 도착할 때 이어 받기 위한 상태다.
+	char m_pCurrentBuffer[BUFSIZE];
+	size_t m_nExpectedPayloadSize = 0;
+	int m_nCurrentRecvByte = 0;
+	INT8 m_nHead = -1;
+	bool m_bRecvHead = false;
+	bool m_bPayloadSizeReceived = false;
+
+	std::array<CS_CLIENTS_INFO, MAX_CLIENT> m_aClientInfo;
+	std::array<shared_ptr<CPlayer>, MAX_CLIENT> m_apPlayers;
+
+	SOCKET_STATE m_socketState = SOCKET_STATE::SEND_GAME_START;
+	INT8 m_nMainClientId = -1;
+	INT8 m_nClient = -1;
+	INT8 m_nSelectedSlot = -1;
+	int m_nEscapeDoor = -1;
+	int SendNum = 0;
+	int RecvNum = 0;
+	bool m_bRecvLoadComplete = false;
+	bool m_bWsaStarted = false;
 };
 

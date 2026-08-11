@@ -70,7 +70,10 @@ struct SC_UPDATE_INFO
 	XMFLOAT3 m_xmf3Look;
 	int m_nPickedObjectNum = -1;
 
-	int m_nSlotObjectNum[3] = { -1, -1, -1 };	// 각 슬롯에 포함된 오브젝트 번호(없으면 -1) /// 적 플레이어는 스킬 사용시 1로, 스킬 끝나거나 사용X시 0 (추적, 시야방해, 공격) 달리기의 경우 아직 정하지 않음(나중에 추가할꺼면 m_bShiftRun활용하면 될듯)
+	// 각 슬롯에 포함된 오브젝트 번호(없으면 -1)
+	// 적 플레이어는 스킬 사용시 1로, 스킬 끝나거나 사용X시 0 (추적, 시야방해, 공격)
+	// 달리기의 경우 아직 정하지 않음(나중에 추가할꺼면 m_bShiftRun활용하면 될듯)
+	int m_nSlotObjectNum[3] = { -1, -1, -1 };
 	int m_nFuseObjectNum[3] = { -1, -1, -1 };	// 퓨즈 오브젝트 번호(없으면 -1)
 
 	int m_nNumOfObject = -1;
@@ -120,8 +123,8 @@ struct SOCKETINFO
 
 	INT8 m_nHead = -1;
 
-	bool m_bRecvDelayed = false;	// 오는 데이터를 전부 받지 못했다
-	bool m_bRecvHead = false;	// 오는 데이터를 전부 받지 못했다
+	// 소켓마다 HEAD와 DATA의 partial recv 진행 상태를 함께 보존한다.
+	bool m_bRecvHead = false;
 	int m_nCurrentRecvByte = 0;		// 현재까지 받은 데이터의 길이
 	char m_pCurrentBuffer[BUFSIZE];
 
@@ -141,46 +144,13 @@ public:
 	TCPServer();
 	~TCPServer();
 
-	// 이벤트를 처리한다.
-	void OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingCloseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-
 	bool Init(HWND hWnd);
 	void SimulationLoop();
-	int CheckLobby();
-	int CheckEndGame();
-	void UpdateEndGame(int nEndGame);
 
-	// 소켓 정보 관리 함수
-	INT8 AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, int nAddrLen);
-	INT8 GetSocketIndex(SOCKET sockClient);
+	// Win32 진입점에서 전달되는 메시지만 외부에 공개한다.
+	void OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
-	void UpdateInformation();
-
-	template<class... Args>
-	void CreateSendDataBuffer(char* pBuffer, Args&&... args);
-	template<class... Args>
-	int SendData(SOCKET socket, size_t nBufferSize, Args&&... args);
-	int RecvData(int nSocketIndex, size_t nBufferSize);
-	int SendBufferData(SOCKET socket, vector<BYTE>& buffer);
-	void PushBufferData(vector<BYTE>& buffer, void* data, size_t size);
-
-	void LoadScene();
-	void CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4World, const vector<BoundingOrientedBox>& voobb);
-	void CreateItemObject();
-	void CreateSendObject();
-
-	//[0509] 플레이어 시작 위치 겹치지 않도록 초기화
-	void InitPlayerPosition(shared_ptr<CServerPlayer>& pServerPlayer, int nIndex);
-
-	int CheckAllClientsSentData(int cur_nPlayer);
-	void SetAllClientsSendStatus(int cur_nPlayer, bool val);
-
-	// Interface
 	void SetGameState(int nGameState) { m_nGameState = nGameState; }
 	void SetNumOfZombie(int nZombie) { m_nZombie = nZombie; }
 	void SetNumOfBlueSuit(int nBlueSuit) { m_nBlueSuit = nBlueSuit; }
@@ -192,15 +162,52 @@ public:
 
 	static default_random_engine m_mt19937Gen;
 	static HWND m_hWnd;
+
 private:
+	// recv() 결과를 호출부가 임의의 정수값으로 해석하지 않도록 의미를 고정한다.
+	enum class ReceiveResult
+	{
+		Complete,
+		Pending,
+		Closed,
+		Error
+	};
+
+	void OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void OnProcessingCloseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+
 	// 연결 종료 원인과 관계없이 소켓 및 플레이어 상태를 한 번만 정리한다.
 	bool DisconnectClient(SOCKET sockClient);
+	INT8 AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, int nAddrLen);
+	INT8 GetSocketIndex(SOCKET sockClient);
+	void ResetReceiveState(SOCKETINFO& socketInfo);
+	ReceiveResult RecvData(int nSocketIndex, size_t nBufferSize);
+
+	template<class... Args>
+	void CreateSendDataBuffer(char* pBuffer, Args&&... args);
+	template<class... Args>
+	int SendData(SOCKET socket, size_t nBufferSize, Args&&... args);
+	int SendBufferData(SOCKET socket, vector<BYTE>& buffer);
+	void PushBufferData(vector<BYTE>& buffer, void* data, size_t size);
+
+	int CheckLobby();
+	int CheckEndGame();
+	void UpdateEndGame(int nEndGame);
+	void UpdateInformation();
+	int CheckAllClientsSentData(int cur_nPlayer);
+	void SetAllClientsSendStatus(int cur_nPlayer, bool val);
+
+	void LoadScene();
+	void CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4World, const vector<BoundingOrientedBox>& voobb);
+	void CreateItemObject();
+	void CreateSendObject();
+	void InitPlayerPosition(shared_ptr<CServerPlayer>& pServerPlayer, int nIndex);
 
 	int m_nGameState;
 	CTimer m_timer;
 	static INT8 m_nClient;
-
-	bool m_bSend = true;
 
 	// 접속한 클라이언트들의 정보를 저장.
 	std::array<SOCKETINFO, MAX_CLIENT> m_vSocketInfoList;	// 소켓 인덱스는 순차적으로 배정받는다

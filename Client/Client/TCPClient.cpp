@@ -28,10 +28,16 @@ void CTcpClient::CloseConnection()
 		m_bWsaStarted = false;
 	}
 
+	ResetReceiveState();
+}
+
+void CTcpClient::ResetReceiveState()
+{
 	m_nCurrentRecvByte = 0;
-	m_bRecvDelayed = false;
 	m_bRecvHead = false;
+	m_bPayloadSizeReceived = false;
 	m_nHead = -1;
+	m_nExpectedPayloadSize = 0;
 	memset(m_pCurrentBuffer, 0, BUFSIZE);
 }
 
@@ -131,23 +137,29 @@ void CTcpClient::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wP
 
 void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	int nRetval = 1;
-	size_t nBufferSize;
+	const SOCKET socket = static_cast<SOCKET>(wParam);
+	auto handleReceiveResult = [this](ReceiveResult result)
+		{
+			if (result == ReceiveResult::Complete)
+			{
+				return true;
+			}
+
+			if (result == ReceiveResult::Closed || result == ReceiveResult::Error)
+			{
+				CloseConnection();
+			}
+			return false;
+		};
 
 	if (!m_bRecvHead)
 	{
-		nBufferSize = sizeof(INT8);
-		nRetval = RecvData(wParam, nBufferSize);
-		if (nRetval != 0)
+		const ReceiveResult result = RecvData(socket, sizeof(INT8));
+		if (!handleReceiveResult(result))
 		{
-			if (nRetval == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
-			{
-				m_bRecvHead = false;
-				m_nHead = -1;
-				memset(m_pCurrentBuffer, 0, BUFSIZE);
-			}
 			return;
 		}
+
 		m_bRecvHead = true;
 		memcpy(&m_nHead, m_pCurrentBuffer, sizeof(INT8));
 		memset(m_pCurrentBuffer, 0, BUFSIZE);
@@ -160,15 +172,13 @@ void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		m_socketState = SOCKET_STATE::SEND_KEY_BUFFER;
 		break;
 	case HEAD_CHANGE_SLOT:
-	{	//클라 id 바꾸기,
-		nBufferSize = sizeof(INT8) + sizeof(m_aClientInfo);
-		RecvNum++;
-		nRetval = RecvData(wParam, nBufferSize);
-		if (nRetval != 0)
+	{
+		if (!handleReceiveResult(RecvData(socket, sizeof(INT8) + sizeof(m_aClientInfo))))
 		{
-			break;
+			return;
 		}
-		INT8 nPrevMainClientId = m_nMainClientId;
+		RecvNum++;
+		const INT8 nPrevMainClientId = m_nMainClientId;
 		memcpy(&m_nMainClientId, m_pCurrentBuffer, sizeof(INT8));
 		memcpy(&m_aClientInfo, m_pCurrentBuffer + sizeof(INT8), sizeof(m_aClientInfo));
 		for (int i = 0; i < MAX_CLIENT; ++i)
@@ -186,43 +196,40 @@ void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	}
 	break;
 	case HEAD_INIT:
-		//nBufferSize = sizeof(INT8) * 2;
-		nBufferSize = sizeof(INT8) * 2 + sizeof(m_aClientInfo);
-		RecvNum++;
-		nRetval = RecvData(wParam, nBufferSize);
-		if (nRetval != 0)
+	{
+		if (!handleReceiveResult(RecvData(socket, sizeof(INT8) * 2 + sizeof(m_aClientInfo))))
 		{
-			break;
+			return;
 		}
+		RecvNum++;
 
 		memcpy(&m_nMainClientId, m_pCurrentBuffer, sizeof(INT8));
 		memcpy(&m_nClient, m_pCurrentBuffer + sizeof(INT8), sizeof(INT8));
 		memcpy(&m_aClientInfo, m_pCurrentBuffer + sizeof(INT8) * 2, sizeof(m_aClientInfo));
 
 		break;
+	}
 	case HEAD_UPDATE_DATA:
 	{
-		nBufferSize = sizeof(m_aClientInfo);
-		RecvNum++;
-		nRetval = RecvData(wParam, nBufferSize);
-		if (nRetval != 0)
+		if (!handleReceiveResult(RecvData(socket, sizeof(m_aClientInfo))))
 		{
-			break;
+			return;
 		}
+		RecvNum++;
 
 		memcpy(m_aClientInfo.data(), m_pCurrentBuffer, sizeof(m_aClientInfo));
 
 		UpdateDataFromServer();
+
+		break;
 	}
-	break;
 	case HEAD_NUM_OF_CLIENT:
-		nBufferSize = sizeof(INT8) + sizeof(m_aClientInfo);
-		RecvNum++;
-		nRetval = RecvData(wParam, nBufferSize);
-		if (nRetval != 0)
+	{
+		if (!handleReceiveResult(RecvData(socket, sizeof(INT8) + sizeof(m_aClientInfo))))
 		{
-			break;
+			return;
 		}
+		RecvNum++;
 
 		memcpy(&m_nClient, m_pCurrentBuffer, sizeof(INT8));
 		memcpy(&m_aClientInfo, m_pCurrentBuffer + sizeof(INT8), sizeof(m_aClientInfo));
@@ -234,8 +241,8 @@ void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			}
 		}
 		break;
+	}
 	case HEAD_BLUE_SUIT_WIN:
-		// 메시지?
 		PostMessage(hWnd, WM_END_GAME, 0, 0);
 		break;
 	case HEAD_ZOMBIE_WIN:
@@ -245,62 +252,82 @@ void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	{
 		SoundManager& soundManager = soundManager.GetInstance();
 		soundManager.PlaySoundWithName(sound::OPEN_DRAWER);
+		break;
 	}
-	break;
 	case HEAD_CLOSE_DRAWER_SOUND:
 	{
 		SoundManager& soundManager = soundManager.GetInstance();
 		soundManager.PlaySoundWithName(sound::CLOSE_DRAWER);
+		break;
 	}
-	break;
 	case HEAD_OPEN_DOOR_SOUND:
 	{
 		SoundManager& soundManager = soundManager.GetInstance();
 		soundManager.PlaySoundWithName(sound::OPEN_DOOR);
+		break;
 	}
-	break;
 	case HEAD_CLOSE_DOOR_SOUND:
 	{
 		SoundManager& soundManager = soundManager.GetInstance();
 		soundManager.PlaySoundWithName(sound::CLOSE_DOOR);
+		break;
 	}
-	break;
 	case HEAD_BLUE_SUIT_DEAD:
 	{
-		nRetval = RecvData(wParam, sizeof(char)); // 1바이트 deaduser_id
-		if (nRetval != 0)
+		if (!handleReceiveResult(RecvData(socket, sizeof(char))))
 		{
-			break;
+			return;
 		}
-		char deadUser_id;
-		memcpy(&deadUser_id, m_pCurrentBuffer, sizeof(char));
+
+		char deadUserId = -1;
+		memcpy(&deadUserId, m_pCurrentBuffer, sizeof(deadUserId));
+		if (deadUserId < 0 || deadUserId >= static_cast<char>(MAX_CLIENT) || !m_apPlayers[deadUserId])
+		{
+			CloseConnection();
+			return;
+		}
 
 		SoundManager& soundManager = soundManager.GetInstance();
 		soundManager.PlaySoundWithName(sound::DEAD_BLUESUIT);
-		soundManager.SetVolume(sound::DEAD_BLUESUIT, m_apPlayers[(int)deadUser_id]->GetPlayerVolume());
+		soundManager.SetVolume(sound::DEAD_BLUESUIT, m_apPlayers[deadUserId]->GetPlayerVolume());
+		break;
 	}
-	break;
 	case SEND_SPACEOUT_OBJECTS:
 	{
-		nRetval = RecvData(wParam, sizeof(unsigned short));
-		if (nRetval != 0)
+		if (!m_bPayloadSizeReceived)
 		{
-			break;
-		}
-		unsigned short usBufferSize;
-		memcpy(&usBufferSize, m_pCurrentBuffer, sizeof(unsigned short));
-		int objCount = usBufferSize / sizeof(SC_SPACEOUT_OBJECT);
-		vector<SC_SPACEOUT_OBJECT> vSO_obejcts;
-		vSO_obejcts.reserve(objCount);
-		vSO_obejcts.resize(objCount);
+			if (!handleReceiveResult(RecvData(socket, sizeof(unsigned short))))
+			{
+				return;
+			}
 
-		nRetval = RecvData(wParam, usBufferSize);
-		if (nRetval != 0)
-		{
-			break;
+			unsigned short bufferSize = 0;
+			memcpy(&bufferSize, m_pCurrentBuffer, sizeof(bufferSize));
+			m_nExpectedPayloadSize = bufferSize;
+			m_bPayloadSizeReceived = true;
+			memset(m_pCurrentBuffer, 0, BUFSIZE);
+
+			if (m_nExpectedPayloadSize > BUFSIZE ||
+				m_nExpectedPayloadSize % sizeof(SC_SPACEOUT_OBJECT) != 0)
+			{
+				CloseConnection();
+				return;
+			}
 		}
-		memcpy(vSO_obejcts.data(), m_pCurrentBuffer, usBufferSize);
-		for (const auto& obj : vSO_obejcts)
+
+		if (!handleReceiveResult(RecvData(socket, m_nExpectedPayloadSize)))
+		{
+			return;
+		}
+
+		const size_t objectCount = m_nExpectedPayloadSize / sizeof(SC_SPACEOUT_OBJECT);
+		vector<SC_SPACEOUT_OBJECT> spaceOutObjects(objectCount);
+
+		if (m_nExpectedPayloadSize > 0)
+		{
+			memcpy(spaceOutObjects.data(), m_pCurrentBuffer, m_nExpectedPayloadSize);
+		}
+		for (const auto& obj : spaceOutObjects)
 		{
 			shared_ptr<CGameObject> pGameObject = g_collisionManager.GetCollisionObjectWithNumber(obj.m_iObjectId).lock();
 			if (pGameObject)
@@ -321,21 +348,7 @@ void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		break;
 	}
 
-	if (nRetval != 0)
-	{
-		/*if (nRetval == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
-		{
-			m_bRecvHead = true;
-			memset(m_pCurrentBuffer, 0, BUFSIZE);
-		}*/
-		return;
-	}
-	m_nHead = -1;
-	m_bRecvHead = false;
-	m_bRecvDelayed = false;
-	memset(m_pCurrentBuffer, 0, BUFSIZE);
-
-	return;
+	ResetReceiveState();
 }
 
 void CTcpClient::UpdateDataFromServer()
@@ -445,7 +458,8 @@ void CTcpClient::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 	size_t nBufferSize = sizeof(INT8);
 	INT8 nHead;
 	int nRetval;
-	if (m_nMainClientId == -1 || m_bRecvDelayed == true || !m_apPlayers[m_nMainClientId])	// 아직 ID를 넘겨 받지 못했거나 딜레이 되었다.
+	// TCP 송수신은 독립적이므로 partial recv 대기 중에도 클라이언트 입력은 계속 전송한다.
+	if (m_nMainClientId == -1 || !m_apPlayers[m_nMainClientId])
 	{
 		return;
 	}
@@ -561,36 +575,50 @@ int CTcpClient::SendData(SOCKET socket, size_t nBufferSize, Args&&... args)
 	return 0;
 }
 
-int CTcpClient::RecvData(SOCKET socket, size_t nBufferSize)
+CTcpClient::ReceiveResult CTcpClient::RecvData(SOCKET socket, size_t nBufferSize)
 {
-	int nRetval;
-	int nRemainRecvByte = nBufferSize - m_nCurrentRecvByte;
+	bool isInvalidBuffer =
+		nBufferSize > BUFSIZE ||
+		m_nCurrentRecvByte < 0 ||
+		static_cast<size_t>(m_nCurrentRecvByte) > nBufferSize;
 
-	nRetval = recv(socket, (char*)&m_pCurrentBuffer + m_nCurrentRecvByte, nRemainRecvByte, 0);
-	if (nRetval > 0)
+	if (isInvalidBuffer)
 	{
-		m_nCurrentRecvByte += nRetval;
+		return ReceiveResult::Error;
 	}
 
-	if (nRetval == SOCKET_ERROR)
+	if (nBufferSize == 0)
 	{
-		return SOCKET_ERROR;
+		return ReceiveResult::Complete;
 	}
-	else if (nRetval == 0)
+
+	const int remainRecvByte = static_cast<int>(nBufferSize) - m_nCurrentRecvByte;
+	const int retval = recv(socket, m_pCurrentBuffer + m_nCurrentRecvByte, remainRecvByte, 0);
+	if (retval > 0)
 	{
-		return -2;
+		m_nCurrentRecvByte += retval;
 	}
-	else if (m_nCurrentRecvByte < nBufferSize)
+	else if (retval == 0)
 	{
-		m_bRecvDelayed = true;
-		return 1;
+		return ReceiveResult::Closed;
 	}
 	else
 	{
-		m_nCurrentRecvByte = 0;
-		m_bRecvDelayed = false;
-		return 0;
+		const int errorCode = WSAGetLastError();
+		if (errorCode == WSAEWOULDBLOCK)
+		{
+			return ReceiveResult::Pending;
+		}
+		return ReceiveResult::Error;
 	}
+
+	if (static_cast<size_t>(m_nCurrentRecvByte) < nBufferSize)
+	{
+		return ReceiveResult::Pending;
+	}
+
+	m_nCurrentRecvByte = 0;
+	return ReceiveResult::Complete;
 }
 
 void CTcpClient::UpdateKeyBitMask(UCHAR* pKeysBuffer, WORD& wKeyBuffer)	// 보낼 키 버퍼를 업데이트
