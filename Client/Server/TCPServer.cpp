@@ -106,7 +106,19 @@ void TCPServer::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 
 void TCPServer::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	switch (WSAGETSELECTEVENT(lParam))
+	const int nSocketEvent = WSAGETSELECTEVENT(lParam);
+	const int nSocketError = WSAGETSELECTERROR(lParam);
+	if (nSocketError != 0)
+	{
+		err_display(nSocketError);
+		if (nSocketEvent != FD_ACCEPT)
+		{
+			DisconnectClient(static_cast<SOCKET>(wParam));
+		}
+		return;
+	}
+
+	switch (nSocketEvent)
 	{
 	case FD_ACCEPT:
 		OnProcessingAcceptMessage(hWnd, nMessageID, wParam, lParam);
@@ -140,6 +152,13 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		return;
 	}
 
+	if (m_nGameState == GAME_STATE::IN_GAME)
+	{
+		closesocket(sockClient);
+		err_display("Game that has already started.");
+		return;
+	}
+
 	// 추가된 클라이언트의 정보를 추가한다.
 	INT8 nSocketIndex = AddSocketInfo(sockClient, addrClient, nAddrlen);
 
@@ -151,20 +170,14 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		return;
 	}
 
-	if (m_nGameState == GAME_STATE::IN_GAME)
-	{
-		closesocket(sockClient); // 클라이언트 소켓 종료
-		err_display("Game that has already started."); // 연결 거부 메시지 표시
-		return;
-	}
-
 	//printf("\n[TCP 서버] 클라이언트 접속: IP 주소=%s, 포트 번호=%d\n", m_vSocketInfoList[nSocketIndex].m_pAddr, ntohs(m_vSocketInfoList[nSocketIndex].m_addrClient.sin_port));
 
 	int retval = WSAAsyncSelect(sockClient, hWnd, WM_SOCKET, FD_READ | FD_WRITE | FD_CLOSE);
 	if (retval == SOCKET_ERROR)
 	{
 		err_display("WSAAsyncSelect()");
-		RemoveSocketInfo(sockClient);
+		DisconnectClient(sockClient);
+		return;
 	}
 	WCHAR pszList[256];
 	WCHAR pszIP[16];
@@ -172,8 +185,7 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 	wsprintf(pszList, L"CLIENT[%d], IP: %s, 포트 번호: %d\n", nSocketIndex, pszIP, ntohs(m_vSocketInfoList[nSocketIndex].m_addrClient.sin_port));
 	SendMessage(m_hClientListBox, LB_ADDSTRING, 0, (LPARAM)pszList);
 
-	// 임시로 CBlueSuitPlayer만 생성
-	if (nSocketIndex == ZOMBIEPLAYER)	// Socket Index가 0이면 Zombie
+	if (nSocketIndex == ZOMBIEPLAYER) // ZombiePlayer는 0번 소켓에만 생성
 	{
 		m_apPlayers[nSocketIndex] = make_shared<CServerZombiePlayer>();
 		m_apPlayers[nSocketIndex]->SetPlayerId(nSocketIndex);
@@ -208,11 +220,11 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 	int nRetval = 1;
 	size_t nBufferSize;
 	int nSocketIndex = GetSocketIndex(wParam);
-	if (!m_vSocketInfoList[nSocketIndex].m_bUsed)
+	if (nSocketIndex < 0)
 	{
-		//error
-		assert("error");
+		return;
 	}
+
 	std::shared_ptr<CServerPlayer> pPlayer = m_apPlayers[nSocketIndex];
 
 	if (!m_vSocketInfoList[nSocketIndex].m_bRecvHead)
@@ -238,7 +250,6 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 	switch (m_vSocketInfoList[nSocketIndex].m_nHead)
 	{
 	case HEAD_GAME_START:
-		//cout << "GAME START" << endl;
 		m_nGameState = GAME_STATE::IN_GAME;
 		m_nZombie = 0;
 		m_nBlueSuit = 0;
@@ -250,9 +261,13 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 			}
 
 			if (i == 0)
+			{
 				m_nZombie++;
+			}
 			else
+			{
 				m_nBlueSuit++;
+			}
 
 			InitPlayerPosition(m_apPlayers[i], i);
 			m_pCollisionManager->AddCollisionPlayer(m_apPlayers[i], i);
@@ -265,104 +280,45 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 			}
 			PostMessage(m_hWnd, WM_SOCKET, (WPARAM)m_vSocketInfoList[i].m_sock, MAKELPARAM(FD_WRITE, 0));
 		}
-		//m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_GAME_START;
 		break;
 	case HEAD_CHANGE_SLOT:
+	{
 		nBufferSize = sizeof(INT8);
 		nRetval = RecvData(nSocketIndex, nBufferSize);
+		if (nRetval != 0)
+		{
+			break;
+		}
 
 		INT8 nSelectedSlot;
 		memcpy(&nSelectedSlot, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, sizeof(INT8));
-		// 뭘 바꿔야할까
+		if (nSelectedSlot < 0 || nSelectedSlot >= static_cast<INT8>(MAX_CLIENT))
+		{
+			break;
+		}
+
 		if (!m_apPlayers[nSelectedSlot]) // 없으면 만들어서
 		{
 			m_apPlayers[nSelectedSlot] = make_shared<CServerBlueSuitPlayer>();
 		}
-		//	m_apPlayers[nSelectedSlot]->SetPlayerId(nSelectedSlot);
-		//	m_vSocketInfoList[nSelectedSlot].m_bUsed = m_vSocketInfoList[nSocketIndex].m_bUsed;
-		//	m_vSocketInfoList[nSelectedSlot].m_sock = m_vSocketInfoList[nSocketIndex].m_sock;
-		//	m_vSocketInfoList[nSelectedSlot].m_addrClient = m_vSocketInfoList[nSocketIndex].m_addrClient;
-		//	m_vSocketInfoList[nSelectedSlot].m_nAddrlen = m_vSocketInfoList[nSocketIndex].m_nAddrlen;
-		//	memcpy(m_vSocketInfoList[nSelectedSlot].m_pAddr, m_vSocketInfoList[nSocketIndex].m_pAddr, INET_ADDRSTRLEN);
-		//	m_vSocketInfoList[nSelectedSlot].m_bRecvDelayed = m_vSocketInfoList[nSocketIndex].m_bRecvDelayed;
-		//	m_vSocketInfoList[nSelectedSlot].m_bRecvHead = m_vSocketInfoList[nSocketIndex].m_bRecvHead;
-		//	m_vSocketInfoList[nSelectedSlot].m_nCurrentRecvByte = m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte;
-		//	memcpy(m_vSocketInfoList[nSelectedSlot].m_pCurrentBuffer, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, BUFSIZE);
-		//	m_vSocketInfoList[nSelectedSlot].m_socketState = m_vSocketInfoList[nSocketIndex].m_socketState;
-		//	m_vSocketInfoList[nSelectedSlot].SendNum = m_vSocketInfoList[nSocketIndex].SendNum;
-		//	m_vSocketInfoList[nSelectedSlot].RecvNum = m_vSocketInfoList[nSocketIndex].RecvNum;
-
-		//	m_aUpdateInfo[nSelectedSlot].m_nClientId = nSelectedSlot;
-
-		//	m_vSocketInfoList[nSocketIndex].m_bUsed = false;
-		//	m_aUpdateInfo[nSocketIndex].m_nClientId = -1;
-		//	m_apPlayers[nSocketIndex]->SetPlayerId(-1);
-		//}
 
 		if (m_apPlayers[nSelectedSlot]->GetPlayerId() == -1)
 		{
 			m_apPlayers[nSelectedSlot]->SetPlayerId(nSelectedSlot);
 
-			m_vSocketInfoList[nSelectedSlot].m_bUsed = m_vSocketInfoList[nSocketIndex].m_bUsed;
-			m_vSocketInfoList[nSelectedSlot].m_sock = m_vSocketInfoList[nSocketIndex].m_sock;
-			m_vSocketInfoList[nSelectedSlot].m_addrClient = m_vSocketInfoList[nSocketIndex].m_addrClient;
-			m_vSocketInfoList[nSelectedSlot].m_nAddrlen = m_vSocketInfoList[nSocketIndex].m_nAddrlen;
-			memcpy(m_vSocketInfoList[nSelectedSlot].m_pAddr, m_vSocketInfoList[nSocketIndex].m_pAddr, INET_ADDRSTRLEN);
-			m_vSocketInfoList[nSelectedSlot].m_bRecvDelayed = m_vSocketInfoList[nSocketIndex].m_bRecvDelayed;
-			m_vSocketInfoList[nSelectedSlot].m_bRecvHead = m_vSocketInfoList[nSocketIndex].m_bRecvHead;
-			m_vSocketInfoList[nSelectedSlot].m_nCurrentRecvByte = m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte;
-			memcpy(m_vSocketInfoList[nSelectedSlot].m_pCurrentBuffer, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, BUFSIZE);
-			m_vSocketInfoList[nSelectedSlot].m_socketState = m_vSocketInfoList[nSocketIndex].m_socketState;
-			m_vSocketInfoList[nSelectedSlot].SendNum = m_vSocketInfoList[nSocketIndex].SendNum;
-			m_vSocketInfoList[nSelectedSlot].RecvNum = m_vSocketInfoList[nSocketIndex].RecvNum;
+			// 소켓과 수신 진행 상태는 하나의 단위이므로 전체를 함께 이동한다.
+			m_vSocketInfoList[nSelectedSlot] = m_vSocketInfoList[nSocketIndex];
+			m_vSocketInfoList[nSocketIndex] = SOCKETINFO{};
 
 			m_aUpdateInfo[nSelectedSlot].m_nClientId = nSelectedSlot;
 
-			m_vSocketInfoList[nSocketIndex].m_bUsed = false;
 			m_aUpdateInfo[nSocketIndex].m_nClientId = -1;
 			m_apPlayers[nSocketIndex]->SetPlayerId(-1);
 		}
 		else // 교환해야함
 		{
-			SOCKETINFO sockInfoTemp;
-			sockInfoTemp.m_bUsed = m_vSocketInfoList[nSocketIndex].m_bUsed;
-			sockInfoTemp.m_sock = m_vSocketInfoList[nSocketIndex].m_sock;
-			sockInfoTemp.m_addrClient = m_vSocketInfoList[nSocketIndex].m_addrClient;
-			sockInfoTemp.m_nAddrlen = m_vSocketInfoList[nSocketIndex].m_nAddrlen;
-			memcpy(sockInfoTemp.m_pAddr, m_vSocketInfoList[nSocketIndex].m_pAddr, INET_ADDRSTRLEN);
-			sockInfoTemp.m_bRecvDelayed = m_vSocketInfoList[nSocketIndex].m_bRecvDelayed;
-			sockInfoTemp.m_bRecvHead = m_vSocketInfoList[nSocketIndex].m_bRecvHead;
-			sockInfoTemp.m_nCurrentRecvByte = m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte;
-			memcpy(sockInfoTemp.m_pCurrentBuffer, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, BUFSIZE);
-			sockInfoTemp.m_socketState = m_vSocketInfoList[nSocketIndex].m_socketState;
-			sockInfoTemp.SendNum = m_vSocketInfoList[nSocketIndex].SendNum;
-			sockInfoTemp.RecvNum = m_vSocketInfoList[nSocketIndex].RecvNum;
-
-			m_vSocketInfoList[nSocketIndex].m_bUsed = m_vSocketInfoList[nSelectedSlot].m_bUsed;
-			m_vSocketInfoList[nSocketIndex].m_sock = m_vSocketInfoList[nSelectedSlot].m_sock;
-			m_vSocketInfoList[nSocketIndex].m_addrClient = m_vSocketInfoList[nSelectedSlot].m_addrClient;
-			m_vSocketInfoList[nSocketIndex].m_nAddrlen = m_vSocketInfoList[nSelectedSlot].m_nAddrlen;
-			memcpy(m_vSocketInfoList[nSocketIndex].m_pAddr, m_vSocketInfoList[nSelectedSlot].m_pAddr, INET_ADDRSTRLEN);
-			m_vSocketInfoList[nSocketIndex].m_bRecvDelayed = m_vSocketInfoList[nSelectedSlot].m_bRecvDelayed;
-			m_vSocketInfoList[nSocketIndex].m_bRecvHead = m_vSocketInfoList[nSelectedSlot].m_bRecvHead;
-			m_vSocketInfoList[nSocketIndex].m_nCurrentRecvByte = m_vSocketInfoList[nSelectedSlot].m_nCurrentRecvByte;
-			memcpy(m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, m_vSocketInfoList[nSelectedSlot].m_pCurrentBuffer, BUFSIZE);
-			m_vSocketInfoList[nSocketIndex].m_socketState = m_vSocketInfoList[nSelectedSlot].m_socketState;
-			m_vSocketInfoList[nSocketIndex].SendNum = m_vSocketInfoList[nSelectedSlot].SendNum;
-			m_vSocketInfoList[nSocketIndex].RecvNum = m_vSocketInfoList[nSelectedSlot].RecvNum;
-
-			m_vSocketInfoList[nSelectedSlot].m_bUsed = sockInfoTemp.m_bUsed;
-			m_vSocketInfoList[nSelectedSlot].m_sock = sockInfoTemp.m_sock;
-			m_vSocketInfoList[nSelectedSlot].m_addrClient = sockInfoTemp.m_addrClient;
-			m_vSocketInfoList[nSelectedSlot].m_nAddrlen = sockInfoTemp.m_nAddrlen;
-			memcpy(m_vSocketInfoList[nSelectedSlot].m_pAddr, sockInfoTemp.m_pAddr, INET_ADDRSTRLEN);
-			m_vSocketInfoList[nSelectedSlot].m_bRecvDelayed = sockInfoTemp.m_bRecvDelayed;
-			m_vSocketInfoList[nSelectedSlot].m_bRecvHead = sockInfoTemp.m_bRecvHead;
-			m_vSocketInfoList[nSelectedSlot].m_nCurrentRecvByte = sockInfoTemp.m_nCurrentRecvByte;
-			memcpy(m_vSocketInfoList[nSelectedSlot].m_pCurrentBuffer, sockInfoTemp.m_pCurrentBuffer, BUFSIZE);
-			m_vSocketInfoList[nSelectedSlot].m_socketState = sockInfoTemp.m_socketState;
-			m_vSocketInfoList[nSelectedSlot].SendNum = sockInfoTemp.SendNum;
-			m_vSocketInfoList[nSelectedSlot].RecvNum = sockInfoTemp.RecvNum;
+			// 역할 슬롯을 교환해도 각 소켓의 수신 상태는 해당 소켓과 함께 이동해야 한다.
+			std::swap(m_vSocketInfoList[nSocketIndex], m_vSocketInfoList[nSelectedSlot]);
 
 			m_aUpdateInfo[nSelectedSlot].m_nClientId = nSelectedSlot;
 		}
@@ -370,6 +326,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 		m_vSocketInfoList[nSelectedSlot].m_socketState = SOCKET_STATE::SEND_CHANGE_SLOT;
 		nSocketIndex = nSelectedSlot;
 		break;
+	}
 	case HEAD_KEYS_BUFFER:
 	{
 		if (!pPlayer->IsRecvData())
@@ -475,10 +432,11 @@ void TCPServer::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	INT8 nHead;
 	int nRetval;
 	int nSocketIndex = GetSocketIndex(wParam);
-	if (!m_vSocketInfoList[nSocketIndex].m_bUsed)
+	if (nSocketIndex < 0)
 	{
-		//error
+		return;
 	}
+
 	std::shared_ptr<CServerPlayer> pPlayer = m_apPlayers[nSocketIndex];
 
 	switch (m_vSocketInfoList[nSocketIndex].m_socketState)
@@ -641,18 +599,7 @@ void TCPServer::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 void TCPServer::OnProcessingCloseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	INT8 nIndex = RemoveSocketInfo((SOCKET)wParam);
-	m_apPlayers[nIndex].reset();
-	m_anPlayerStartPosNum[nIndex] = -1;
-	if (nIndex == ZOMBIEPLAYER)
-	{
-		--m_nZombie;
-	}
-	else
-	{
-		--m_nBlueSuit;
-	}
-	//m_apPlayers[nIndex]->SetPlayerId(-1);
+	DisconnectClient(static_cast<SOCKET>(wParam));
 }
 
 bool TCPServer::Init(HWND hWnd)
@@ -909,68 +856,91 @@ INT8 TCPServer::AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, 
 // 소켓 정보 얻기
 INT8 TCPServer::GetSocketIndex(SOCKET sock)
 {
-	INT8 nIndex = -1;
-	for (auto& sockInfo : m_vSocketInfoList)
+	for (const auto& sockInfo : m_vSocketInfoList)
 	{
-		nIndex++;
 		if (!sockInfo.m_bUsed)
 		{
 			continue;
 		}
-
 		if (sockInfo.m_sock == sock)
 		{
-			return nIndex;
+			return static_cast<INT8>(&sockInfo - &m_vSocketInfoList[0]);
 		}
 	}
-	return nIndex;
+
+	//for (INT8 nIndex = 0; nIndex < static_cast<INT8>(m_vSocketInfoList.size()); ++nIndex)
+	//{
+	//	const SOCKETINFO& sockInfo = m_vSocketInfoList[nIndex];
+	//	if (!sockInfo.m_bUsed)
+	//	{
+	//		continue;
+	//	}
+
+	//	if (sockInfo.m_sock == sock)
+	//	{
+	//		return nIndex;
+	//	}
+	//}
+	return -1;
 }
 
-// 소켓 정보 제거
-INT8 TCPServer::RemoveSocketInfo(SOCKET sock)
+bool TCPServer::DisconnectClient(SOCKET sockClient)
 {
-	INT8 nIndex = -1;
-	INT8 nListBoxIndex = -1;
-	// 리스트에서 정보 제거
-	for (auto& sockInfo : m_vSocketInfoList)
+	const INT8 nSocketIndex = GetSocketIndex(sockClient);
+	if (nSocketIndex < 0)
 	{
-		nIndex++;
-		if (!sockInfo.m_bUsed)
+		return false;
+	}
+
+	INT8 nListBoxIndex = -1;
+	for (INT8 i = 0; i <= nSocketIndex; ++i)
+	{
+		if (m_vSocketInfoList[i].m_bUsed)
 		{
-			continue;
+			++nListBoxIndex;
+		}
+	}
+
+	const bool bHadPlayer = (m_apPlayers[nSocketIndex] != nullptr);
+	if (bHadPlayer)
+	{
+		SendMessage(m_hClientListBox, LB_DELETESTRING, static_cast<WPARAM>(nListBoxIndex), 0);
+		if (nSocketIndex == ZOMBIEPLAYER)
+		{
+			m_nZombie = max(0, m_nZombie - 1);
 		}
 		else
 		{
-			nListBoxIndex++;
-		}
-
-		if (sockInfo.m_sock == sock)
-		{
-			//printf("[TCP 서버] 클라이언트 종료: IP 주소=%s, 포트 번호=%d\n", sockInfo.m_pAddr, ntohs(sockInfo.m_addrClient.sin_port));
-
-			SendMessage(m_hClientListBox, LB_DELETESTRING, (WPARAM)nListBoxIndex, 0);
-
-			closesocket(sockInfo.m_sock); // 소켓 닫기
-			sockInfo.m_bUsed = false;
-
-			m_aUpdateInfo[nIndex].m_nClientId = -1;
-			m_nClient--;
-			for (auto& otherSocketInfo : m_vSocketInfoList)
-			{
-				if (!otherSocketInfo.m_bUsed)
-				{
-					continue;
-				}
-
-				//otherSocketInfo.m_prevSocketState = otherSocketInfo.m_socketState;
-				otherSocketInfo.m_socketState = SOCKET_STATE::SEND_NUM_OF_CLIENT;
-				PostMessage(m_hWnd, WM_SOCKET, (WPARAM)otherSocketInfo.m_sock, MAKELPARAM(FD_WRITE, 0));
-			}
-
-			return nIndex;
+			m_nBlueSuit = max(0, m_nBlueSuit - 1);
 		}
 	}
-	return -1;
+
+	WSAAsyncSelect(sockClient, m_hWnd, 0, 0);
+	shutdown(sockClient, SD_BOTH);
+	closesocket(sockClient);
+
+	m_apPlayers[nSocketIndex].reset();
+	m_anPlayerStartPosNum[nSocketIndex] = -1;
+	m_aUpdateInfo[nSocketIndex] = SC_UPDATE_INFO{};
+	m_bDataSend[nSocketIndex] = false;
+	m_vSocketInfoList[nSocketIndex] = SOCKETINFO{};
+	m_nClient = max<INT8>(0, m_nClient - 1);
+
+	if (bHadPlayer)
+	{
+		for (auto& otherSocketInfo : m_vSocketInfoList)
+		{
+			if (!otherSocketInfo.m_bUsed)
+			{
+				continue;
+			}
+
+			otherSocketInfo.m_socketState = SOCKET_STATE::SEND_NUM_OF_CLIENT;
+			PostMessage(m_hWnd, WM_SOCKET, static_cast<WPARAM>(otherSocketInfo.m_sock), MAKELPARAM(FD_WRITE, 0));
+		}
+	}
+
+	return true;
 }
 
 int TCPServer::CheckAllClientsSentData(int cur_nPlayer)
@@ -1540,9 +1510,13 @@ void err_quit(const char* msg)
 	LPVOID lpMsgBuf;
 	FormatMessageA(
 		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-		NULL, WSAGetLastError(),
+		NULL,
+		WSAGetLastError(),
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(char*)&lpMsgBuf, 0, NULL);
+		(char*)&lpMsgBuf,
+		0,
+		NULL);
+
 	MessageBoxA(NULL, (const char*)lpMsgBuf, msg, MB_ICONERROR);
 	LocalFree(lpMsgBuf);
 	exit(1);
@@ -1553,10 +1527,11 @@ void err_display(const char* msg)
 	LPVOID lpMsgBuf;
 	FormatMessageA(
 		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-		NULL, WSAGetLastError(),
+		NULL,
+		WSAGetLastError(),
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		(char*)&lpMsgBuf, 0, NULL);
-	//printf("[%s] %s\n", msg, (char*)lpMsgBuf);
+
 	LocalFree(lpMsgBuf);
 }
 // 소켓 함수 오류 출력
@@ -1565,9 +1540,12 @@ void err_display(int errcode)
 	LPVOID lpMsgBuf;
 	FormatMessageA(
 		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-		NULL, errcode,
+		NULL,
+		errcode,
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(char*)&lpMsgBuf, 0, NULL);
-	//printf("[오류] %s\n", (char*)lpMsgBuf);
+		(char*)&lpMsgBuf,
+		0,
+		NULL);
+
 	LocalFree(lpMsgBuf);
 }

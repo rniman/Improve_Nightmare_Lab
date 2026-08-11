@@ -95,6 +95,9 @@ void ConvertCharToLPWSTR(const char* pstr, LPWSTR dest, int destSize);
 class CTcpClient
 {
 private:
+	// 생성 실패, 소켓 오류, FD_CLOSE 및 소멸 시 동일한 경로로 정리한다.
+	void CloseConnection();
+
 	INT8 m_nMainClientId = -1;
 	INT8 m_nClient = -1;				// 클라이언트 수
 
@@ -102,14 +105,13 @@ private:
 
 	bool m_bRecvDelayed = false;	// 오는 데이터를 전부 받지 못했다
 	bool m_bRecvHead = false;
+	INT8 m_nHead = -1;
 
 	int m_nCurrentRecvByte = 0;		// 현재까지 받은 데이터의 길이
 	char m_pCurrentBuffer[BUFSIZE];
 
 	SOCKET_STATE m_socketState = SOCKET_STATE::SEND_GAME_START;
 	SOCKET_STATE m_prevSocketState = SOCKET_STATE::SEND_GAME_START;
-
-	// 서버 접속 소켓
 
 	// 서버에 접속한 클라이언트의 정보 <아이디,정보>
 	std::array<CS_CLIENTS_INFO, MAX_CLIENT> m_aClientInfo;
@@ -129,7 +131,6 @@ public:
 	~CTcpClient();
 
 	bool CreateSocket(HWND hWnd, TCHAR* pszIPAddress);
-	void OnDestroy();
 	void SetPlayer(const shared_ptr<CPlayer>& pPlayer, int nIndex = 0) { m_apPlayers[nIndex] = pPlayer; };
 
 	// 이벤트를 처리한다.
@@ -156,7 +157,6 @@ public:
 	INT8 GetNumOfClient() const { return m_nClient; }
 	XMFLOAT3 GetPostion(int id);
 	std::array<CS_CLIENTS_INFO, 5>& GetArrayClientsInfo();
-	//SOCKET GetSocket() { return m_sock; }
 
 	int GetEscapeDoor() const { return m_nEscapeDoor; }
 

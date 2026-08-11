@@ -112,7 +112,7 @@ enum RECV_HEAD
 struct SOCKETINFO
 {
 	bool m_bUsed = false;
-	SOCKET m_sock;
+	SOCKET m_sock = INVALID_SOCKET;
 
 	struct sockaddr_in m_addrClient;
 	int m_nAddrlen;
@@ -158,7 +158,6 @@ public:
 	// 소켓 정보 관리 함수
 	INT8 AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, int nAddrLen);
 	INT8 GetSocketIndex(SOCKET sockClient);
-	INT8 RemoveSocketInfo(SOCKET sock);
 
 	void UpdateInformation();
 
@@ -194,6 +193,9 @@ public:
 	static default_random_engine m_mt19937Gen;
 	static HWND m_hWnd;
 private:
+	// 연결 종료 원인과 관계없이 소켓 및 플레이어 상태를 한 번만 정리한다.
+	bool DisconnectClient(SOCKET sockClient);
+
 	int m_nGameState;
 	CTimer m_timer;
 	static INT8 m_nClient;

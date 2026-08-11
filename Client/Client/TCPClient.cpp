@@ -10,6 +10,11 @@ CTcpClient::CTcpClient()
 
 CTcpClient::~CTcpClient()
 {
+	CloseConnection();
+}
+
+void CTcpClient::CloseConnection()
+{
 	if (m_sock != INVALID_SOCKET)
 	{
 		shutdown(m_sock, SD_BOTH);
@@ -22,11 +27,18 @@ CTcpClient::~CTcpClient()
 		WSACleanup();
 		m_bWsaStarted = false;
 	}
+
+	m_nCurrentRecvByte = 0;
+	m_bRecvDelayed = false;
+	m_bRecvHead = false;
+	m_nHead = -1;
+	memset(m_pCurrentBuffer, 0, BUFSIZE);
 }
 
 bool CTcpClient::CreateSocket(HWND hWnd, TCHAR* pszIPAddress)
 {
 	int nRetval;
+	CloseConnection();
 
 	// 윈속 초기화
 	WSADATA wsa;
@@ -44,6 +56,7 @@ bool CTcpClient::CreateSocket(HWND hWnd, TCHAR* pszIPAddress)
 	if (s == INVALID_SOCKET)
 	{
 		err_quit("socket()");
+		CloseConnection();
 		return false;
 	}
 
@@ -63,6 +76,7 @@ bool CTcpClient::CreateSocket(HWND hWnd, TCHAR* pszIPAddress)
 	if (nRetval == SOCKET_ERROR)
 	{
 		err_display("connect()");
+		CloseConnection();
 		return false;
 	}
 
@@ -70,23 +84,12 @@ bool CTcpClient::CreateSocket(HWND hWnd, TCHAR* pszIPAddress)
 	nRetval = WSAAsyncSelect(s, hWnd, WM_SOCKET, FD_CLOSE | FD_READ | FD_WRITE);	// FD_WRITE가 발생할것이다.
 	if (nRetval == SOCKET_ERROR)
 	{
+		err_display("WSAAsyncSelect()");
+		CloseConnection();
 		return false;
 	}
 
 	return true;
-}
-
-void CTcpClient::OnDestroy()
-{
-
-}
-
-
-XMFLOAT3 CTcpClient::GetPostion(int id)
-{
-	XMFLOAT3 position = { 0.0f,0.0f, 0.0f };
-
-	return position;
 }
 
 std::array<CS_CLIENTS_INFO, 5>& CTcpClient::GetArrayClientsInfo()
@@ -96,6 +99,17 @@ std::array<CS_CLIENTS_INFO, 5>& CTcpClient::GetArrayClientsInfo()
 
 void CTcpClient::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	const int nSocketError = WSAGETSELECTERROR(lParam);
+	if (nSocketError != 0)
+	{
+		err_display(nSocketError);
+		if (static_cast<SOCKET>(wParam) == m_sock)
+		{
+			CloseConnection();
+		}
+		return;
+	}
+
 	switch (WSAGETSELECTEVENT(lParam))
 	{
 	case FD_READ:	// 소켓이 데이터를 읽을 준비가 되었다.
@@ -105,15 +119,9 @@ void CTcpClient::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wP
 		OnProcessingWriteMessage(hWnd, nMessageID, wParam, lParam);
 		break;
 	case FD_CLOSE:
-		closesocket(wParam);
 		if ((SOCKET)wParam == m_sock)
 		{
-			m_sock = INVALID_SOCKET;
-		}
-		if (m_bWsaStarted)
-		{
-			WSACleanup();
-			m_bWsaStarted = false;
+			CloseConnection();
 		}
 		break;
 	default:
@@ -123,7 +131,6 @@ void CTcpClient::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wP
 
 void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	static INT8 nHead;
 	int nRetval = 1;
 	size_t nBufferSize;
 
@@ -136,17 +143,17 @@ void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			if (nRetval == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
 			{
 				m_bRecvHead = false;
-				nHead = -1;
+				m_nHead = -1;
 				memset(m_pCurrentBuffer, 0, BUFSIZE);
 			}
 			return;
 		}
 		m_bRecvHead = true;
-		memcpy(&nHead, m_pCurrentBuffer, sizeof(INT8));
+		memcpy(&m_nHead, m_pCurrentBuffer, sizeof(INT8));
 		memset(m_pCurrentBuffer, 0, BUFSIZE);
 	}
 
-	switch (nHead)
+	switch (m_nHead)
 	{
 	case HEAD_GAME_START:
 		PostMessage(hWnd, WM_START_GAME, 0, 0);
@@ -157,12 +164,12 @@ void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		nBufferSize = sizeof(INT8) + sizeof(m_aClientInfo);
 		RecvNum++;
 		nRetval = RecvData(wParam, nBufferSize);
-		INT8 nPrevMainClientId = m_nMainClientId;
-		memcpy(&m_nMainClientId, m_pCurrentBuffer, sizeof(INT8));
 		if (nRetval != 0)
 		{
 			break;
 		}
+		INT8 nPrevMainClientId = m_nMainClientId;
+		memcpy(&m_nMainClientId, m_pCurrentBuffer, sizeof(INT8));
 		memcpy(&m_aClientInfo, m_pCurrentBuffer + sizeof(INT8), sizeof(m_aClientInfo));
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
@@ -323,7 +330,7 @@ void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		}*/
 		return;
 	}
-	nHead = -1;
+	m_nHead = -1;
 	m_bRecvHead = false;
 	m_bRecvDelayed = false;
 	memset(m_pCurrentBuffer, 0, BUFSIZE);

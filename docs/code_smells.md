@@ -21,7 +21,6 @@
 | ID | 영역 | 항목 | 근거 및 최소 수정 방향 |
 |---|---|---|---|
 | B-001 | Network I/O | 미완료 TCP 송수신 처리 | 서버 송신은 한 번의 `send()` 후 버퍼를 해제하며, 일부 수신 경로는 페이로드가 완성되기 전에 해석할 수 있다. 소켓별 진행 바이트와 남은 데이터를 유지해야 한다. |
-| B-002 | Server State | 잘못된 인덱스 및 접속 실패 정리 | `GetSocketIndex()`의 검색 실패 결과, 클라이언트가 보낸 slot 범위, 인게임 중 접속 거부 및 등록 실패의 rollback 경로를 우선 수정한다. |
 
 ### Risk
 
@@ -62,6 +61,8 @@
 | RS-002 | SSAO | SSAO 비교 경로 부재 | `Disabled`, `Raw`, `Blurred` 세 상태를 M 키로 전환할 수 있게 했다. |
 | RS-003 | Scene | Scene 클래스의 과도한 public 노출 | 접근 범위, 멤버 순서, 제한된 접근자를 정리했다. |
 | RS-004 | Rendering | command list 공통 상태의 반복 설정 | `Reset()` 직후 공통 root signature와 descriptor heap을 설정하도록 정리했다. |
+| RS-005 | Network | 연결 종료 및 접속 실패 정리 분산 | 소켓 오류, `FD_CLOSE`, 접속 등록 실패를 중복 호출에 안전한 단일 정리 경로로 통합하고 Client/Server x64 Debug 빌드를 확인했다. |
+| RS-006 | Network | 슬롯 변경 시 수신 상태 누락 및 입력 인덱스 미검증 | `SOCKETINFO` 전체 이동·교환으로 수신 상태를 보존하고 slot 범위를 검증했다. 클라이언트 수신 헤더도 객체 멤버로 이동하고 Client/Server x64 Debug 빌드를 확인했다. |
 
 ## 항목 작성 규칙
 

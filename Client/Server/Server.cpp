@@ -9,7 +9,7 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK OnProcessingWindowMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK OnProcessingSocketMessage(HWND, UINT, WPARAM, LPARAM);
 
-INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 
 int main()
 {
@@ -106,25 +106,6 @@ LRESULT CALLBACK OnProcessingWindowMessage(HWND hWnd, UINT uMsg, WPARAM wParam, 
 // 소켓 관련 메시지 처리
 LRESULT CALLBACK OnProcessingSocketMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	// 오류 발생 여부 확인
-	if (WSAGETSELECTERROR(lParam) && WSAGETSELECTEVENT(lParam) != FD_CLOSE)
-	{
-		err_display(WSAGETSELECTERROR(lParam));
-		int nIndex = g_tcpServer.RemoveSocketInfo(wParam);
-		g_tcpServer.GetPlayer(nIndex).reset();
-		if (nIndex == ZOMBIEPLAYER)
-		{
-			int nZombie = g_tcpServer.GetNumOfZombie();
-			g_tcpServer.SetNumOfZombie(nZombie - 1);
-		}
-		else
-		{
-			int nBlueSuit = g_tcpServer.GetNumOfBlueSuit();
-			g_tcpServer.SetNumOfBlueSuit(nBlueSuit - 1);
-		}
-		return -1;
-	}
-
 	// 메시지 처리
 	switch (WSAGETSELECTEVENT(lParam))
 	{
