@@ -18,15 +18,12 @@
 
 ### Bug
 
-| ID | 영역 | 항목 | 근거 및 최소 수정 방향 |
-|---|---|---|---|
-| B-001 | Network I/O | 미완료 TCP 송신 처리 | 서버 송신은 한 번의 `send()` 후 버퍼를 해제한다. partial send 또는 `WSAEWOULDBLOCK`이면 남은 데이터를 보존하고 이후 `FD_WRITE`에서 재개해야 한다. |
+현재 추적 중인 재현 가능한 버그는 없다.
 
 ### Risk
 
 | ID | 영역 | 항목 | 근거 및 확인 방법 |
 |---|---|---|---|
-| R-001 | Network | 단일 소켓 상태에 여러 송신 요청 저장 | 새 이벤트가 대기 중인 상태를 덮을 수 있는지 패킷 연속 발생 조건에서 확인한다. |
 | R-002 | Protocol | 패킷 및 버퍼 범위 검증 | 패킷 헤더의 크기값과 실제 수신 버퍼 접근 범위를 비교하고 내부 상태 enum의 wire 사용을 분리할지 검토한다. |
 | R-003 | Lifetime | 씬 전환 및 연결 종료 수명 | 로비에서 인게임 전환, 연결 종료, 게임 종료 경로의 null 접근과 소유 관계를 확인한다. |
 | R-004 | Rendering | 렌더 상태 및 리소스 수명 결합 | 씬 전환이나 command list 재설정 시 root signature, descriptor heap, GPU 리소스 수명이 유효한지 변경 범위마다 확인한다. |
@@ -64,6 +61,7 @@
 | RS-005 | Network | 연결 종료 및 접속 실패 정리 분산 | 소켓 오류, `FD_CLOSE`, 접속 등록 실패를 중복 호출에 안전한 단일 정리 경로로 통합하고 Client/Server x64 Debug 빌드를 확인했다. |
 | RS-006 | Network | 슬롯 변경 시 수신 상태 누락 및 입력 인덱스 미검증 | `SOCKETINFO` 전체 이동·교환으로 수신 상태를 보존하고 slot 범위를 검증했다. 클라이언트 수신 헤더도 객체 멤버로 이동하고 Client/Server x64 Debug 빌드를 확인했다. |
 | RS-007 | Network I/O | TCP partial recv 상태 소실 및 미완료 패킷 해석 | 수신 결과를 완료·대기·종료·오류로 구분하고 소켓별 헤더와 누적 바이트를 보존한다. 가변 길이 패킷은 크기와 구조 단위를 검증하며, 완성된 페이로드만 해석하도록 수정하고 Client/Server x64 Debug 빌드를 확인했다. |
+| RS-008 | Network I/O | TCP partial send 데이터 유실 및 송신 요청 혼합 | 소켓별 송신 큐와 전송 위치를 유지해 partial send 및 `WSAEWOULDBLOCK` 이후 실제 `FD_WRITE`에서 재개한다. 애플리케이션 송신 요청은 `RequestSend()`로 분리하고 Client/Server x64 Debug 빌드와 서버 실행을 확인했다. |
 
 ## 항목 작성 규칙
 

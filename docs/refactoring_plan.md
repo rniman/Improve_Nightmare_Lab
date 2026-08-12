@@ -45,11 +45,13 @@
 - `CScene`, `CLobbyScene`, `CMainScene`의 접근 범위와 선언 순서를 정리했다.
 - `Scene.cpp`의 멤버 함수 정의 순서를 헤더 선언 순서에 맞췄다.
 - command list를 `Reset()`한 직후 공통 root signature와 descriptor heap을 설정하도록 정리했다.
-- Client 빌드 및 실행이 정상임을 확인했다.
+- 네트워크 연결 종료 경로를 통합하고 TCP partial recv/send 진행 상태를 소켓별로 보존하도록 수정했다.
+- 애플리케이션 송신 요청과 Winsock `FD_WRITE` 알림을 분리하고 송신 큐 처리를 통합했다.
+- Client/Server x64 Debug 빌드와 변경 후 실행을 확인했다.
 
 ### 우선 확인 대상
 
-- TCP partial send/recv와 `WOULDBLOCK` 재개 경로를 확인한다.
+- TCP partial send/recv와 `WOULDBLOCK`을 강제로 발생시키는 부하 조건에서 재개 경로를 검증한다.
 - 패킷 크기, player/slot/object 인덱스의 입력 범위를 검증한다.
 - 씬 전환과 연결 종료 경로에서 객체 및 네트워크 상태 수명을 확인한다.
 - 렌더 리소스의 소유권과 command list 상태 변경이 기존 동작을 보존하는지 확인한다.
@@ -85,6 +87,10 @@
 
 ## Phase 2. 네트워크 송수신 안정화
 
+핵심 코드 변경은 완료했다. 기존 패킷 포맷과 `WSAAsyncSelect` 구조를 유지하면서
+연결 종료 통합, partial recv 누적, 소켓별 송신 큐 및 실제 `FD_WRITE` 재개 경로를 적용했다.
+남은 작업은 다중 접속 및 네트워크 부하 조건의 회귀 검증이다.
+
 - 소켓별 수신 진행 상태를 유지하고 완성된 패킷만 해석한다.
 - partial send와 `WOULDBLOCK`에서 남은 데이터를 보존하고 이후 `FD_WRITE`에서 재개한다.
 - 애플리케이션의 송신 요청과 Winsock의 쓰기 가능 알림을 구분한다.
@@ -109,8 +115,11 @@ IOCP 전환이나 서버 다중 스레드화는 현재 범위에 포함하지 �
 - `Scene`과 `TCPClient`의 직접 의존을 점진적으로 완화한다.
 - 네트워크 패킷 파싱과 게임 상태 적용을 분리한다.
 - 소유권이나 수명이 불명확해 실제 위험이 있는 리소스부터 정리한다.
+- 헤더가 PCH 또는 다른 헤더의 간접 include에 의존하지 않도록, 실제로 수정하는 모듈부터 필요한 표준·외부 헤더를 직접 include한다.
 - 이미 정리된 Scene 선언 구조는 추가 변경보다 안정화를 우선한다.
 - public API 변경과 대규모 클래스 분리는 별도 승인된 작업으로 진행한다.
+
+include 의존성 정리는 동작 변경이나 전체 헤더 일괄 수정과 분리해 작은 커밋으로 진행한다.
 
 ## Phase 5. 보류된 성능 및 품질 개선
 
