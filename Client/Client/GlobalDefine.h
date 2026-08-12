@@ -1,5 +1,12 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+
+// 가변 길이 패킷의 payload 크기는 uint16_t 필드로 전달한다.
+constexpr std::size_t MAX_PACKET_PAYLOAD_SIZE = (std::numeric_limits<std::uint16_t>::max)();
+
 #define FRAME_BUFFER_WIDTH 1600
 #define FRAME_BUFFER_HEIGHT 1024
 

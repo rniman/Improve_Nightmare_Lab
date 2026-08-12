@@ -5,6 +5,11 @@
 #include "ServerPlayer.h"
 #include "ServerCollision.h"
 
+namespace
+{
+	constexpr size_t MAX_PENDING_SEND_BYTES = 4 * 1024 * 1024;
+}
+
 default_random_engine TCPServer::m_mt19937Gen;
 HWND TCPServer::m_hWnd;
 INT8 TCPServer::m_nClient = 0;
@@ -73,32 +78,37 @@ void TCPServer::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		m_timer.Start();
 		break;
 	case WM_SOUND:
+	{
+		const int nSocketIndex = static_cast<int>(lParam);
+		if (nSocketIndex < 0 || nSocketIndex >= static_cast<int>(m_vSocketInfoList.size()) ||
+			!m_vSocketInfoList[nSocketIndex].m_bUsed)
+		{
+			break;
+		}
+
 		switch (wParam)
 		{
 		case SOUND_MESSAGE::OPEN_DRAWER:
-			m_vSocketInfoList[(int)lParam].m_socketState = SOCKET_STATE::SEND_OPEN_DRAWER_SOUND;
-			PostMessage(m_hWnd, WM_SOCKET, (WPARAM)m_vSocketInfoList[(int)lParam].m_sock, MAKELPARAM(FD_WRITE, 0));
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_OPEN_DRAWER_SOUND;
 			break;
 		case SOUND_MESSAGE::CLOSE_DRAWER:
-			m_vSocketInfoList[(int)lParam].m_socketState = SOCKET_STATE::SEND_CLOSE_DRAWER_SOUND;
-			PostMessage(m_hWnd, WM_SOCKET, (WPARAM)m_vSocketInfoList[(int)lParam].m_sock, MAKELPARAM(FD_WRITE, 0));
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_CLOSE_DRAWER_SOUND;
 			break;
 		case SOUND_MESSAGE::OPEN_DOOR:
-			m_vSocketInfoList[(int)lParam].m_socketState = SOCKET_STATE::SEND_OPEN_DOOR_SOUND;
-			PostMessage(m_hWnd, WM_SOCKET, (WPARAM)m_vSocketInfoList[(int)lParam].m_sock, MAKELPARAM(FD_WRITE, 0));
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_OPEN_DOOR_SOUND;
 			break;
 		case SOUND_MESSAGE::CLOSE_DOOR:
-			m_vSocketInfoList[(int)lParam].m_socketState = SOCKET_STATE::SEND_CLOSE_DOOR_SOUND;
-			PostMessage(m_hWnd, WM_SOCKET, (WPARAM)m_vSocketInfoList[(int)lParam].m_sock, MAKELPARAM(FD_WRITE, 0));
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_CLOSE_DOOR_SOUND;
 			break;
 		case SOUND_MESSAGE::BLUE_SUIT_DEAD:
-			m_vSocketInfoList[(int)lParam].m_socketState = SOCKET_STATE::SEND_BLUE_SUIT_DEAD;
-			PostMessage(m_hWnd, WM_SOCKET, (WPARAM)m_vSocketInfoList[(int)lParam].m_sock, MAKELPARAM(FD_WRITE, 0));
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_BLUE_SUIT_DEAD;
 			break;
 		default:
-			break;
+			return;
 		}
+		RequestSend(nSocketIndex);
 		break;
+	}
 	default:
 		break;
 	}
@@ -125,8 +135,6 @@ void TCPServer::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		break;
 	case FD_READ:
 		OnProcessingReadMessage(hWnd, nMessageID, wParam, lParam);
-		// 기존 요청-응답 흐름을 유지하되 암시적인 switch fall-through는 사용하지 않는다.
-		OnProcessingWriteMessage(hWnd, nMessageID, wParam, lParam);
 		break;
 	case FD_WRITE:
 		OnProcessingWriteMessage(hWnd, nMessageID, wParam, lParam);
@@ -197,6 +205,7 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 	}
 
 	m_pCollisionManager->AddCollisionPlayer(m_apPlayers[nSocketIndex], nSocketIndex);
+	RequestSend(nSocketIndex);
 
 	for (auto& sockInfo : m_vSocketInfoList)
 	{
@@ -205,7 +214,7 @@ void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 			continue;
 		}
 		sockInfo.m_socketState = SOCKET_STATE::SEND_NUM_OF_CLIENT;
-		PostMessage(m_hWnd, WM_SOCKET, (WPARAM)sockInfo.m_sock, MAKELPARAM(FD_WRITE, 0));
+		RequestSend(GetSocketIndex(sockInfo.m_sock));
 	}
 
 	return;
@@ -246,7 +255,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 
 		m_vSocketInfoList[nSocketIndex].m_bRecvHead = true;
 		memcpy(&m_vSocketInfoList[nSocketIndex].m_nHead, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, sizeof(INT8));
-		memset(m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, 0, BUFSIZE);
+		memset(m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 	}
 
 	switch (m_vSocketInfoList[nSocketIndex].m_nHead)
@@ -281,7 +290,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 			{
 				continue;
 			}
-			PostMessage(m_hWnd, WM_SOCKET, (WPARAM)m_vSocketInfoList[i].m_sock, MAKELPARAM(FD_WRITE, 0));
+			RequestSend(i);
 		}
 		break;
 	}
@@ -403,7 +412,6 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 		if (loadCompleteCount == connectCount)
 		{
 			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_LOADING_COMPLETE;
-			PostMessage(m_hWnd, WM_SOCKET, (WPARAM)m_vSocketInfoList[nSocketIndex].m_sock, MAKELPARAM(FD_WRITE, 0));
 		}
 		break;
 	}
@@ -412,36 +420,42 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 	}
 
 	ResetReceiveState(m_vSocketInfoList[nSocketIndex]);
+	RequestSend(nSocketIndex);
 }
 
 void TCPServer::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	size_t nBufferSize = sizeof(INT8);
-	INT8 nHead;
-	int nRetval;
-	int nSocketIndex = GetSocketIndex(wParam);
+	const SOCKET socket = static_cast<SOCKET>(wParam);
+	const int nSocketIndex = GetSocketIndex(socket);
 	if (nSocketIndex < 0)
 	{
 		return;
 	}
 
-	std::shared_ptr<CServerPlayer> pPlayer = m_apPlayers[nSocketIndex];
+	if (FlushSendQueue(nSocketIndex) == SendResult::Error)
+	{
+		err_display("send()");
+		DisconnectClient(socket);
+	}
+}
+
+void TCPServer::RequestSend(int nSocketIndex)
+{
+	if (nSocketIndex < 0 || nSocketIndex >= static_cast<int>(m_vSocketInfoList.size()) ||
+		!m_vSocketInfoList[nSocketIndex].m_bUsed)
+	{
+		return;
+	}
 
 	switch (m_vSocketInfoList[nSocketIndex].m_socketState)
 	{
 	case SOCKET_STATE::SEND_GAME_START:
-		nHead = 5;
-
-		nRetval = SendData(m_vSocketInfoList[nSocketIndex].m_sock, nBufferSize, nHead);
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
+		if (SubmitSendData(nSocketIndex, static_cast<INT8>(5)))
 		{
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
-		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		break;
 	case SOCKET_STATE::SEND_CHANGE_SLOT:
-		nHead = 6;
-		nBufferSize += sizeof(INT8) + sizeof(m_aUpdateInfo);
-
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
 			if (!m_vSocketInfoList[i].m_bUsed)
@@ -449,140 +463,115 @@ void TCPServer::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 				continue;
 			}
 
-			nRetval = SendData(m_vSocketInfoList[i].m_sock, nBufferSize, nHead, m_aUpdateInfo[i].m_nClientId, m_aUpdateInfo);
-			if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
-			{
-			}
-			//m_vSocketInfoList[i].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			SubmitSendData(i, static_cast<INT8>(6), m_aUpdateInfo[i].m_nClientId, m_aUpdateInfo);
+		}
+		if (m_vSocketInfoList[nSocketIndex].m_bUsed)
+		{
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	case SOCKET_STATE::SEND_ID:
-		nHead = 0;
-		//nBufferSize += sizeof(INT8) * 2;
-		nBufferSize += sizeof(INT8) * 2 + sizeof(m_aUpdateInfo);
-
-		m_vSocketInfoList[nSocketIndex].SendNum++;
-		//nRetval = SendData(m_vSocketInfoList[nSocketIndex].m_sock, nBufferSize, nHead, m_aUpdateInfo[nSocketIndex].m_nClientId, m_nClient);
-		nRetval = SendData(m_vSocketInfoList[nSocketIndex].m_sock, nBufferSize, nHead, m_aUpdateInfo[nSocketIndex].m_nClientId, m_nClient, m_aUpdateInfo);
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
+		if (SubmitSendData(
+			nSocketIndex,
+			static_cast<INT8>(0),
+			m_aUpdateInfo[nSocketIndex].m_nClientId,
+			m_nClient,
+			m_aUpdateInfo))
 		{
+			m_vSocketInfoList[nSocketIndex].SendNum++;
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
-		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
-
 		break;
 	case SOCKET_STATE::SEND_UPDATE_DATA:
-	{
 		if (m_nGameState == GAME_STATE::IN_LOBBY)
+		{
 			break;
-
-		nHead = 1;
-		nBufferSize += sizeof(m_aUpdateInfo);
-
-		m_vSocketInfoList[nSocketIndex].SendNum++;
-		nRetval = SendData(m_vSocketInfoList[nSocketIndex].m_sock, nBufferSize, nHead, m_aUpdateInfo);
-
-		m_bDataSend[nSocketIndex] = true;
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
-		{
 		}
-	}
-	break;
+		if (SubmitSendData(nSocketIndex, static_cast<INT8>(1), m_aUpdateInfo))
+		{
+			m_vSocketInfoList[nSocketIndex].SendNum++;
+			m_bDataSend[nSocketIndex] = true;
+		}
+		break;
 	case SOCKET_STATE::SEND_NUM_OF_CLIENT:
-		nHead = 2;
-		nBufferSize += sizeof(INT8) + sizeof(m_aUpdateInfo);
-
-		nRetval = SendData(m_vSocketInfoList[nSocketIndex].m_sock, nBufferSize, nHead, m_nClient, m_aUpdateInfo);
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
+		if (SubmitSendData(nSocketIndex, static_cast<INT8>(2), m_nClient, m_aUpdateInfo))
 		{
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
-
-		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		break;
 	case SOCKET_STATE::SEND_BLUE_SUIT_WIN:
-		nHead = 3;
-		nRetval = SendData(m_vSocketInfoList[nSocketIndex].m_sock, nBufferSize, nHead);
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
+		if (SubmitSendData(nSocketIndex, static_cast<INT8>(3)))
 		{
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
-		//cout << "BLUE SUIT WIN" << endl;
-		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		break;
 	case SOCKET_STATE::SEND_ZOMBIE_WIN:
-		nHead = 4;
-		nRetval = SendData(m_vSocketInfoList[nSocketIndex].m_sock, nBufferSize, nHead);
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
+		if (SubmitSendData(nSocketIndex, static_cast<INT8>(4)))
 		{
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
-		//cout << "ZOMBIE WIN" << endl;
-		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		break;
 	case SOCKET_STATE::SEND_OPEN_DRAWER_SOUND:
-		nHead = 7;
-		nRetval = SendData(m_vSocketInfoList[nSocketIndex].m_sock, nBufferSize, nHead);
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
+		if (SubmitSendData(nSocketIndex, static_cast<INT8>(7)))
 		{
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
-		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		break;
 	case SOCKET_STATE::SEND_CLOSE_DRAWER_SOUND:
-		nHead = 8;
-		nRetval = SendData(m_vSocketInfoList[nSocketIndex].m_sock, nBufferSize, nHead);
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
+		if (SubmitSendData(nSocketIndex, static_cast<INT8>(8)))
 		{
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
-		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		break;
 	case SOCKET_STATE::SEND_OPEN_DOOR_SOUND:
-		nHead = 9;
-		nRetval = SendData(m_vSocketInfoList[nSocketIndex].m_sock, nBufferSize, nHead);
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
+		if (SubmitSendData(nSocketIndex, static_cast<INT8>(9)))
 		{
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
-		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		break;
 	case SOCKET_STATE::SEND_CLOSE_DOOR_SOUND:
-		nHead = 10;
-		nRetval = SendData(m_vSocketInfoList[nSocketIndex].m_sock, nBufferSize, nHead);
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
+		if (SubmitSendData(nSocketIndex, static_cast<INT8>(10)))
 		{
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
-		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
 		break;
-	case SOCKET_STATE::SEND_BLUE_SUIT_DEAD: {
-		nHead = 11;
-		char deadUser_id = (char)nSocketIndex;
-		nBufferSize += sizeof(deadUser_id);
+	case SOCKET_STATE::SEND_BLUE_SUIT_DEAD:
+	{
+		const char deadUserId = static_cast<char>(nSocketIndex);
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
 			if (m_vSocketInfoList[i].m_bUsed)
 			{
-				nRetval = SendData(m_vSocketInfoList[i].m_sock, nBufferSize, nHead, deadUser_id);
-				if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK) {}
+				SubmitSendData(i, static_cast<INT8>(11), deadUserId);
 			}
 		}
-		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+		if (m_vSocketInfoList[nSocketIndex].m_bUsed)
+		{
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+		}
 		break;
 	}
-	case SOCKET_STATE::SEND_LOADING_COMPLETE: {
-		nHead = 13;
-		nBufferSize = sizeof(nHead);
+	case SOCKET_STATE::SEND_LOADING_COMPLETE:
+	{
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
 			if (m_vSocketInfoList[i].m_bUsed)
 			{
-				nRetval = SendData(m_vSocketInfoList[i].m_sock, nBufferSize, nHead);
-				if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK) {}
-
-				m_apPlayers[i]->GameStartLogic();
+				if (SubmitSendData(i, static_cast<INT8>(13)) && m_apPlayers[i])
+				{
+					m_apPlayers[i]->GameStartLogic();
+				}
 			}
 		}
-		m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+		if (m_vSocketInfoList[nSocketIndex].m_bUsed)
+		{
+			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+		}
 		break;
 	}
 	default:
 		break;
 	}
-	return;
 }
 
 void TCPServer::OnProcessingCloseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
@@ -907,7 +896,7 @@ bool TCPServer::DisconnectClient(SOCKET sockClient)
 			}
 
 			otherSocketInfo.m_socketState = SOCKET_STATE::SEND_NUM_OF_CLIENT;
-			PostMessage(m_hWnd, WM_SOCKET, static_cast<WPARAM>(otherSocketInfo.m_sock), MAKELPARAM(FD_WRITE, 0));
+			RequestSend(GetSocketIndex(otherSocketInfo.m_sock));
 		}
 	}
 
@@ -1299,26 +1288,32 @@ void TCPServer::CreateSendObject()
 	}
 	m_pCollisionManager->GetOutSpaceObject().clear();
 
-	if (vSO_objects.size() != 0) {
-		vector<BYTE> buffer; // 데이터 전송을 위한 버퍼
-		//데이터 사이즈는 65,535를 안넘을것.
-		INT8 nHead = static_cast<INT8>(SOCKET_STATE::SEND_SPACEOUT_OBJECTS);
+	if (!vSO_objects.empty())
+	{
+		constexpr size_t maxObjectsPerPacket =
+			MAX_PACKET_PAYLOAD_SIZE / sizeof(SC_SPACEOUT_OBJECT);
+		static_assert(maxObjectsPerPacket > 0);
 
-		unsigned short bufferSize = sizeof(SC_SPACEOUT_OBJECT) * vSO_objects.size();
-		buffer.reserve(sizeof(INT8) + sizeof(unsigned short) + bufferSize); // 1 + size[2] + data size[?.. < 65,535]
-
-		buffer.push_back(nHead);
-		PushBufferData(buffer, &bufferSize, sizeof(unsigned short));
-		PushBufferData(buffer, vSO_objects.data(), bufferSize);
-
-		//cout << "공간 외에 업데이트가 필요한 오브젝트 => " << vSO_objects.size() << "개 입니다." << endl;
-		//cout << "총 보낼 사이즈 => " << buffer.size() << endl;
-		for (const auto& pPlayer : m_apPlayers)
+		for (size_t beginIndex = 0; beginIndex < vSO_objects.size(); beginIndex += maxObjectsPerPacket)
 		{
-			if (!pPlayer) continue;
-			INT8 pl_id = pPlayer->GetPlayerId();
-			if (pl_id == -1) continue;
-			SendBufferData(m_vSocketInfoList[pl_id].m_sock, buffer);
+			const size_t objectCount = (std::min)(maxObjectsPerPacket, vSO_objects.size() - beginIndex);
+			const size_t payloadSize = sizeof(SC_SPACEOUT_OBJECT) * objectCount;
+			const std::uint16_t wirePayloadSize = static_cast<std::uint16_t>(payloadSize);
+
+			vector<char> buffer;
+			buffer.reserve(sizeof(INT8) + sizeof(wirePayloadSize) + payloadSize);
+			buffer.push_back(static_cast<INT8>(SOCKET_STATE::SEND_SPACEOUT_OBJECTS));
+			PushBufferData(buffer, &wirePayloadSize, sizeof(wirePayloadSize));
+			PushBufferData(buffer, vSO_objects.data() + beginIndex, payloadSize);
+
+			for (const auto& pPlayer : m_apPlayers)
+			{
+				if (!pPlayer) continue;
+				const INT8 playerId = pPlayer->GetPlayerId();
+				if (playerId == -1) continue;
+				// 소켓마다 partial send 위치가 다르므로 각 송신 큐가 버퍼 복사본을 소유한다.
+				EnqueueSendBuffer(playerId, buffer);
+			}
 		}
 	}
 
@@ -1403,50 +1398,85 @@ void TCPServer::InitPlayerPosition(shared_ptr<CServerPlayer>& pServerPlayer, int
 }
 
 template<class... Args>
-void TCPServer::CreateSendDataBuffer(char* pBuffer, Args&&... args)
+bool TCPServer::SubmitSendData(int nSocketIndex, Args&&... args)
 {
-	size_t nOffset = 0;
-	((memcpy(pBuffer + nOffset, &args, sizeof(args)), nOffset += sizeof(args)), ...);
+	const size_t bufferSize = (sizeof(args) + ... + 0);
+	std::vector<char> buffer(bufferSize);
+	size_t offset = 0;
+	((memcpy(buffer.data() + offset, &args, sizeof(args)), offset += sizeof(args)), ...);
+
+	return EnqueueSendBuffer(nSocketIndex, std::move(buffer));
 }
 
-// 여러개 데이터를 묶어서 보낼때 사용
-template<class... Args>
-int TCPServer::SendData(SOCKET socket, size_t nBufferSize, Args&&... args)
+bool TCPServer::EnqueueSendBuffer(int nSocketIndex, vector<char> buffer)
 {
-	int nRetval;
-	char* pBuffer = new char[nBufferSize];
-	(CreateSendDataBuffer(pBuffer, args...));
-
-	nRetval = send(socket, (char*)pBuffer, nBufferSize, 0);
-	delete[] pBuffer;
-
-	if (nRetval == SOCKET_ERROR)
+	if (nSocketIndex < 0 || nSocketIndex >= static_cast<int>(m_vSocketInfoList.size()))
 	{
-		err_display("send()");
-		return SOCKET_ERROR;
+		return false;
 	}
-	return 0;
-}
 
-void TCPServer::PushBufferData(vector<BYTE>& buffer, void* data, size_t size)
-{
-	for (int i = 0; i < size; ++i) {
-		buffer.push_back(((BYTE*)data)[i]);
-	}
-}
-
-int TCPServer::SendBufferData(SOCKET socket, vector<BYTE>& buffer)
-{
-	int nRetval;
-
-	nRetval = send(socket, (char*)buffer.data(), buffer.size(), 0);
-
-	if (nRetval == SOCKET_ERROR)
+	SOCKETINFO& socketInfo = m_vSocketInfoList[nSocketIndex];
+	bool isInvalidBufferSize = !socketInfo.m_bUsed || buffer.empty() ||
+		socketInfo.m_nPendingSendBytes > MAX_PENDING_SEND_BYTES ||
+		buffer.size() > MAX_PENDING_SEND_BYTES - socketInfo.m_nPendingSendBytes;
+	if (isInvalidBufferSize)
 	{
-		err_display("send()");
-		return SOCKET_ERROR;
+		if (socketInfo.m_bUsed)
+		{
+			DisconnectClient(socketInfo.m_sock);
+		}
+		return false;
 	}
-	return 0;
+
+	socketInfo.m_nPendingSendBytes += buffer.size();
+	socketInfo.m_sendQueue.push_back(PendingSend{ std::move(buffer), 0 });
+	if (FlushSendQueue(nSocketIndex) == SendResult::Error)
+	{
+		const SOCKET socket = socketInfo.m_sock;
+		err_display("send()");
+		DisconnectClient(socket);
+		return false;
+	}
+	return true;
+}
+
+TCPServer::SendResult TCPServer::FlushSendQueue(int nSocketIndex)
+{
+	SOCKETINFO& socketInfo = m_vSocketInfoList[nSocketIndex];
+	while (!socketInfo.m_sendQueue.empty())
+	{
+		PendingSend& pending = socketInfo.m_sendQueue.front();
+		const size_t remainingBytes = pending.buffer.size() - pending.sentBytes;
+		const int sentBytes = send(
+			socketInfo.m_sock,
+			pending.buffer.data() + pending.sentBytes,
+			static_cast<int>(remainingBytes),
+			0);
+
+		if (sentBytes > 0)
+		{
+			pending.sentBytes += static_cast<size_t>(sentBytes);
+			if (pending.sentBytes == pending.buffer.size())
+			{
+				socketInfo.m_nPendingSendBytes -= pending.buffer.size();
+				socketInfo.m_sendQueue.pop_front();
+			}
+			continue;
+		}
+
+		if (sentBytes == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
+		{
+			return SendResult::Pending;
+		}
+		return SendResult::Error;
+	}
+	return SendResult::Complete;
+}
+
+void TCPServer::PushBufferData(vector<char>& buffer, const void* data, size_t size)
+{
+	const char* bytes = static_cast<const char*>(data);
+	buffer.insert(buffer.end(), bytes, bytes + size);
 }
 
 void TCPServer::ResetReceiveState(SOCKETINFO& socketInfo)
@@ -1454,7 +1484,7 @@ void TCPServer::ResetReceiveState(SOCKETINFO& socketInfo)
 	socketInfo.m_nHead = -1;
 	socketInfo.m_bRecvHead = false;
 	socketInfo.m_nCurrentRecvByte = 0;
-	memset(socketInfo.m_pCurrentBuffer, 0, BUFSIZE);
+	memset(socketInfo.m_pCurrentBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 }
 
 TCPServer::ReceiveResult TCPServer::RecvData(int nSocketIndex, size_t nBufferSize)
@@ -1462,7 +1492,7 @@ TCPServer::ReceiveResult TCPServer::RecvData(int nSocketIndex, size_t nBufferSiz
 	SOCKETINFO& socketInfo = m_vSocketInfoList[nSocketIndex];
 
 	bool isInvalidBufferSize =
-		nBufferSize > BUFSIZE ||
+		nBufferSize > MAX_PACKET_PAYLOAD_SIZE ||
 		socketInfo.m_nCurrentRecvByte < 0 ||
 		static_cast<size_t>(socketInfo.m_nCurrentRecvByte) > nBufferSize;
 	if (isInvalidBufferSize)

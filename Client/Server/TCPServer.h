@@ -1,4 +1,10 @@
 #pragma once
+#include <array>
+#include <deque>
+#include <memory>
+#include <vector>
+
+#include "../Client/GlobalDefine.h"
 #include "Timer.h"
 constexpr size_t MAX_CLIENT{ 5 };
 constexpr size_t MAX_SEND_OBJECT_INFO{ 30 };
@@ -29,7 +35,6 @@ enum SOUND_MESSAGE
 	CLOSE_DOOR,
 	BLUE_SUIT_DEAD,
 };
-
 
 enum GAME_STATE
 {
@@ -112,6 +117,12 @@ enum RECV_HEAD
 	HEAD_LOADING_COMPLETE
 };
 
+struct PendingSend
+{
+	std::vector<char> buffer;
+	size_t sentBytes = 0;
+};
+
 struct SOCKETINFO
 {
 	bool m_bUsed = false;
@@ -126,7 +137,9 @@ struct SOCKETINFO
 	// 소켓마다 HEAD와 DATA의 partial recv 진행 상태를 함께 보존한다.
 	bool m_bRecvHead = false;
 	int m_nCurrentRecvByte = 0;		// 현재까지 받은 데이터의 길이
-	char m_pCurrentBuffer[BUFSIZE];
+	char m_pCurrentBuffer[MAX_PACKET_PAYLOAD_SIZE];
+	std::deque<PendingSend> m_sendQueue;
+	size_t m_nPendingSendBytes = 0;
 
 	SOCKET_STATE m_socketState = SOCKET_STATE::SEND_ID;
 
@@ -173,6 +186,13 @@ private:
 		Error
 	};
 
+	enum class SendResult
+	{
+		Complete,
+		Pending,
+		Error
+	};
+
 	void OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	void OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	void OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
@@ -186,11 +206,12 @@ private:
 	ReceiveResult RecvData(int nSocketIndex, size_t nBufferSize);
 
 	template<class... Args>
-	void CreateSendDataBuffer(char* pBuffer, Args&&... args);
-	template<class... Args>
-	int SendData(SOCKET socket, size_t nBufferSize, Args&&... args);
-	int SendBufferData(SOCKET socket, vector<BYTE>& buffer);
-	void PushBufferData(vector<BYTE>& buffer, void* data, size_t size);
+	bool SubmitSendData(int nSocketIndex, Args&&... args);
+	bool EnqueueSendBuffer(int nSocketIndex, vector<char> buffer);
+	// partial send와 WSAEWOULDBLOCK 이후에도 소켓별 전송 위치를 유지한다.
+	SendResult FlushSendQueue(int nSocketIndex);
+	void RequestSend(int nSocketIndex);
+	void PushBufferData(vector<char>& buffer, const void* data, size_t size);
 
 	int CheckLobby();
 	int CheckEndGame();

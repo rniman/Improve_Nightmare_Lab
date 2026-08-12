@@ -5,6 +5,11 @@
 #include "SharedObject.h"
 #include "Sound.h"
 
+namespace
+{
+	constexpr size_t MAX_PENDING_SEND_BYTES = 4 * 1024 * 1024;
+}
+
 CTcpClient::CTcpClient()
 {}
 
@@ -28,6 +33,8 @@ void CTcpClient::CloseConnection()
 		m_bWsaStarted = false;
 	}
 
+	m_sendQueue.clear();
+	m_nPendingSendBytes = 0;
 	ResetReceiveState();
 }
 
@@ -38,7 +45,7 @@ void CTcpClient::ResetReceiveState()
 	m_bPayloadSizeReceived = false;
 	m_nHead = -1;
 	m_nExpectedPayloadSize = 0;
-	memset(m_pCurrentBuffer, 0, BUFSIZE);
+	memset(m_pCurrentBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 }
 
 bool CTcpClient::CreateSocket(HWND hWnd, TCHAR* pszIPAddress)
@@ -162,7 +169,7 @@ void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		m_bRecvHead = true;
 		memcpy(&m_nHead, m_pCurrentBuffer, sizeof(INT8));
-		memset(m_pCurrentBuffer, 0, BUFSIZE);
+		memset(m_pCurrentBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 	}
 
 	switch (m_nHead)
@@ -301,13 +308,13 @@ void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 				return;
 			}
 
-			unsigned short bufferSize = 0;
+			std::uint16_t bufferSize = 0;
 			memcpy(&bufferSize, m_pCurrentBuffer, sizeof(bufferSize));
 			m_nExpectedPayloadSize = bufferSize;
 			m_bPayloadSizeReceived = true;
-			memset(m_pCurrentBuffer, 0, BUFSIZE);
+			memset(m_pCurrentBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 
-			if (m_nExpectedPayloadSize > BUFSIZE ||
+			if (m_nExpectedPayloadSize > MAX_PACKET_PAYLOAD_SIZE ||
 				m_nExpectedPayloadSize % sizeof(SC_SPACEOUT_OBJECT) != 0)
 			{
 				CloseConnection();
@@ -455,11 +462,25 @@ void CTcpClient::UpdatePickedObject(int i)
 
 void CTcpClient::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	size_t nBufferSize = sizeof(INT8);
-	INT8 nHead;
-	int nRetval;
+	if (m_sendQueue.empty() && m_socketState == SOCKET_STATE::SEND_GAME_START)
+	{
+		// 기존 연결 직후 최초 FD_WRITE가 게임 시작 요청을 발생시키던 동작을 유지한다.
+		RequestSend();
+		return;
+	}
+
+	if (FlushSendQueue() == SendResult::Error)
+	{
+		CloseConnection();
+	}
+}
+
+void CTcpClient::RequestSend()
+{
 	// TCP 송수신은 독립적이므로 partial recv 대기 중에도 클라이언트 입력은 계속 전송한다.
-	if (m_nMainClientId == -1 || !m_apPlayers[m_nMainClientId])
+	bool isInvalid = m_sock == INVALID_SOCKET || m_nMainClientId < 0 ||
+		m_nMainClientId >= static_cast<INT8>(MAX_CLIENT) || !m_apPlayers[m_nMainClientId];
+	if (isInvalid)
 	{
 		return;
 	}
@@ -472,50 +493,27 @@ void CTcpClient::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 	switch (m_socketState)
 	{
 	case SOCKET_STATE::SEND_GAME_START:
-		nHead = 1;
-		nRetval = SendData(m_sock, nBufferSize, nHead);
-
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
-		{
-		}
+		SubmitSendData(static_cast<INT8>(1));
 		break;
 	case SOCKET_STATE::SEND_CHANGE_SLOT:
-		nHead = 2;
-		nBufferSize += sizeof(INT8);
-		nRetval = SendData(m_sock, nBufferSize, nHead, m_nSelectedSlot);
-
-		m_socketState = SOCKET_STATE::SEND_GAME_START;
+		if (SubmitSendData(static_cast<INT8>(2), m_nSelectedSlot))
+		{
+			m_socketState = SOCKET_STATE::SEND_GAME_START;
+		}
 		break;
 	case SOCKET_STATE::SEND_KEY_BUFFER:
 	{
-		nHead = 0;
-		UCHAR keysBuffer[256];
-
 		UCHAR* pKeysBuffer = CGameFramework::GetKeysBuffer();
 		WORD wKeyBuffer = 0;
 		UpdateKeyBitMask(pKeysBuffer, wKeyBuffer);
 
-		std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
-
-		nBufferSize += sizeof(WORD);
-
-		//nBufferSize += sizeof(keysBuffer);
-		//if (pKeysBuffer != nullptr)
-		//{
-		//	memcpy(keysBuffer, pKeysBuffer, nBufferSize - sizeof(int));
-		//}
-		nBufferSize += sizeof(std::chrono::time_point<std::chrono::steady_clock>);
-		nBufferSize += sizeof(XMFLOAT4X4);
-		nBufferSize += sizeof(XMFLOAT3) * 3;
-		nBufferSize += sizeof(CS_ANIMATION_INFO);
-		nBufferSize += sizeof(CS_PLAYER_INFO);
-
-		SendNum++;
+		const std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
+		bool submitted = false;
 		// 키버퍼, 카메라Matrix, LOOK,RIGHT 같이 보내주기
 		if (m_apPlayers[m_nMainClientId]->m_pSkinnedAnimationController->IsAnimation())
 		{
-			nRetval = SendData(wParam, nBufferSize,
-				nHead,
+			submitted = SubmitSendData(
+				static_cast<INT8>(0),
 				now,
 				wKeyBuffer,
 				m_apPlayers[m_nMainClientId]->GetCamera()->GetViewMatrix(),
@@ -528,8 +526,8 @@ void CTcpClient::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		}
 		else
 		{
-			nRetval = SendData(wParam, nBufferSize,
-				nHead,
+			submitted = SubmitSendData(
+				static_cast<INT8>(0),
 				now,
 				wKeyBuffer,
 				m_apPlayers[m_nMainClientId]->GetCamera()->GetViewMatrix(),
@@ -541,44 +539,79 @@ void CTcpClient::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 			);
 		}
 
-		if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
+		if (submitted)
 		{
+			SendNum++;
 		}
+		break;
 	}
-	break;
 	default:
 		break;
 	}
 }
 
 template<class... Args>
-void CTcpClient::CreateSendDataBuffer(char* pBuffer, Args&&... args)
+bool CTcpClient::SubmitSendData(Args&&... args)
 {
+	const size_t bufferSize = (sizeof(args) + ... + 0);
+	if (bufferSize == 0 ||
+		m_nPendingSendBytes > MAX_PENDING_SEND_BYTES ||
+		bufferSize > MAX_PENDING_SEND_BYTES - m_nPendingSendBytes)
+	{
+		CloseConnection();
+		return false;
+	}
+
+	std::vector<char> buffer(bufferSize);
 	size_t nOffset = 0;
-	((memcpy(pBuffer + nOffset, &args, sizeof(args)), nOffset += sizeof(args)), ...);
+	((memcpy(buffer.data() + nOffset, &args, sizeof(args)), nOffset += sizeof(args)), ...);
+
+	m_nPendingSendBytes += buffer.size();
+	m_sendQueue.push_back(PendingSend{ std::move(buffer), 0 });
+	if (FlushSendQueue() == SendResult::Error)
+	{
+		CloseConnection();
+		return false;
+	}
+	return true;
 }
 
-template<class... Args>
-int CTcpClient::SendData(SOCKET socket, size_t nBufferSize, Args&&... args)
+CTcpClient::SendResult CTcpClient::FlushSendQueue()
 {
-	int nRetval;
-	char* pBuffer = new char[nBufferSize];
-	(CreateSendDataBuffer(pBuffer, args...));
-
-	nRetval = send(socket, (char*)pBuffer, nBufferSize, 0);
-	delete[] pBuffer;
-
-	if (nRetval == SOCKET_ERROR)
+	while (!m_sendQueue.empty())
 	{
-		return -1;
+		PendingSend& pending = m_sendQueue.front();
+		const size_t remainingBytes = pending.buffer.size() - pending.sentBytes;
+		const int sentBytes = send(
+			m_sock,
+			pending.buffer.data() + pending.sentBytes,
+			static_cast<int>(remainingBytes),
+			0);
+
+		if (sentBytes > 0)
+		{
+			pending.sentBytes += static_cast<size_t>(sentBytes);
+			if (pending.sentBytes == pending.buffer.size())
+			{
+				m_nPendingSendBytes -= pending.buffer.size();
+				m_sendQueue.pop_front();
+			}
+			continue;
+		}
+
+		if (sentBytes == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
+		{
+			return SendResult::Pending;
+		}
+		return SendResult::Error;
 	}
-	return 0;
+	return SendResult::Complete;
 }
 
 CTcpClient::ReceiveResult CTcpClient::RecvData(SOCKET socket, size_t nBufferSize)
 {
 	bool isInvalidBuffer =
-		nBufferSize > BUFSIZE ||
+		nBufferSize > MAX_PACKET_PAYLOAD_SIZE ||
 		m_nCurrentRecvByte < 0 ||
 		static_cast<size_t>(m_nCurrentRecvByte) > nBufferSize;
 
@@ -796,13 +829,7 @@ void CTcpClient::UpdatePlayer(int nIndex)
 
 void CTcpClient::LoadCompleteSend()
 {
-	INT8 nHead = static_cast<INT8>(SOCKET_STATE::SEND_LOADING_COMPLETE);
-	size_t nBufferSize = sizeof(INT8);
-	int nRetval = SendData(m_sock, nBufferSize, nHead);
-
-	if (nRetval == -1 && WSAGetLastError() == WSAEWOULDBLOCK)
-	{
-	}
+	SubmitSendData(static_cast<INT8>(SOCKET_STATE::SEND_LOADING_COMPLETE));
 }
 
 void ConvertLPWSTRToChar(LPWSTR lpwstr, char* dest, int destSize)

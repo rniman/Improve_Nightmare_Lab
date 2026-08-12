@@ -1,8 +1,12 @@
 #pragma once
+#include <deque>
+#include <vector>
+
+#include "GlobalDefine.h"
+
 constexpr UINT WM_SOCKET{ WM_USER + 1 };
 constexpr char SERVERIP[16]{ "127.0.0.1" };
 constexpr UINT SERVERPORT{ 9000 };
-constexpr UINT BUFSIZE{ 12000 };
 
 constexpr size_t MAX_CLIENT{ 5 };
 constexpr size_t MAX_SURVIVOR{ 4 };
@@ -100,6 +104,7 @@ public:
 
 	bool CreateSocket(HWND hWnd, TCHAR* pszIPAddress);
 	void OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void RequestSend();
 	void LoadCompleteSend();
 
 	INT8 GetMainClientId() const { return m_nMainClientId; }
@@ -127,6 +132,19 @@ private:
 		Error
 	};
 
+	enum class SendResult
+	{
+		Complete,
+		Pending,
+		Error
+	};
+
+	struct PendingSend
+	{
+		std::vector<char> buffer;
+		size_t sentBytes = 0;
+	};
+
 	void OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	void OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
@@ -136,9 +154,9 @@ private:
 	ReceiveResult RecvData(SOCKET socket, size_t nBufferSize);
 
 	template<class... Args>
-	void CreateSendDataBuffer(char* pBuffer, Args&&... args);
-	template<class... Args>
-	int SendData(SOCKET socket, size_t nBufferSize, Args&&... args);
+	bool SubmitSendData(Args&&... args);
+	// partial send와 WSAEWOULDBLOCK 이후에도 큐의 전송 위치를 유지한다.
+	SendResult FlushSendQueue();
 
 	void UpdateDataFromServer();
 	void UpdatePickedObject(int i);
@@ -147,7 +165,7 @@ private:
 	void UpdatePlayer(int nIndex);
 
 	// HEAD와 DATA가 여러 FD_READ에 나뉘어 도착할 때 이어 받기 위한 상태다.
-	char m_pCurrentBuffer[BUFSIZE];
+	char m_pCurrentBuffer[MAX_PACKET_PAYLOAD_SIZE];
 	size_t m_nExpectedPayloadSize = 0;
 	int m_nCurrentRecvByte = 0;
 	INT8 m_nHead = -1;
@@ -156,6 +174,8 @@ private:
 
 	std::array<CS_CLIENTS_INFO, MAX_CLIENT> m_aClientInfo;
 	std::array<shared_ptr<CPlayer>, MAX_CLIENT> m_apPlayers;
+	std::deque<PendingSend> m_sendQueue;
+	size_t m_nPendingSendBytes = 0;
 
 	SOCKET_STATE m_socketState = SOCKET_STATE::SEND_GAME_START;
 	INT8 m_nMainClientId = -1;

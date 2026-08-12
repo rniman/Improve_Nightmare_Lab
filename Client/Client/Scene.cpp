@@ -509,7 +509,8 @@ bool CLobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wP
 		int nRetVal = pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::START_BUTTON_UP);
 		if (nRetVal == 1)	// GAME START
 		{
-			PostMessage(m_hWnd, WM_SOCKET, NULL, MAKELPARAM(FD_WRITE, 0));
+			// 애플리케이션 송신 요청은 Winsock의 실제 FD_WRITE 알림과 분리한다.
+			PostMessage(m_hWnd, WM_REQUEST_SEND, 0, 0);
 			break;
 		}
 		nRetVal = pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::CHANGE_BUTTON_UP);

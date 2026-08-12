@@ -570,7 +570,7 @@ void CGameFramework::ProcessInput()
 	}
 
 	//if ( && m_pScene) bProcessedByScene = m_pScene->ProcessInput(m_pKeysBuffer);
-	PostMessage(m_hWnd, WM_SOCKET, (WPARAM)m_pTcpClient->m_sock, MAKELPARAM(FD_WRITE, 0));
+	m_pTcpClient->RequestSend();
 
 	if (!bProcessedByScene)
 	{
@@ -969,7 +969,7 @@ void CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARA
 			m_pTcpClient->SetSocketState(SOCKET_STATE::SEND_CHANGE_SLOT);
 			INT8 nSelectedSlot = pScene->GetSelectedSlot();
 			m_pTcpClient->SetSelectedSlot(nSelectedSlot);
-			PostMessage(m_hWnd, WM_SOCKET, NULL, MAKELPARAM(FD_WRITE, 0));
+			m_pTcpClient->RequestSend();
 
 			INT8 nChangeID = m_apPlayer[nSelectedSlot]->GetClientId();
 			m_apPlayer[m_nMainClientId]->SetClientId(nChangeID);
@@ -990,6 +990,9 @@ void CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARA
 		}
 	}
 	break;
+	case WM_REQUEST_SEND:
+		m_pTcpClient->RequestSend();
+		break;
 	case WM_CREATE_TCP:
 		m_bTcpClient = true;
 		break;
