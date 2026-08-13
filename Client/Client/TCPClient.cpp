@@ -507,14 +507,12 @@ void CTcpClient::RequestSend()
 		WORD wKeyBuffer = 0;
 		UpdateKeyBitMask(pKeysBuffer, wKeyBuffer);
 
-		const std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
 		bool submitted = false;
 		// 키버퍼, 카메라Matrix, LOOK,RIGHT 같이 보내주기
 		if (m_apPlayers[m_nMainClientId]->m_pSkinnedAnimationController->IsAnimation())
 		{
 			submitted = SubmitSendData(
 				static_cast<INT8>(0),
-				now,
 				wKeyBuffer,
 				m_apPlayers[m_nMainClientId]->GetCamera()->GetViewMatrix(),
 				m_apPlayers[m_nMainClientId]->GetLook(),
@@ -528,7 +526,6 @@ void CTcpClient::RequestSend()
 		{
 			submitted = SubmitSendData(
 				static_cast<INT8>(0),
-				now,
 				wKeyBuffer,
 				m_apPlayers[m_nMainClientId]->GetCamera()->GetViewMatrix(),
 				m_apPlayers[m_nMainClientId]->GetCamera()->GetLookVector(),

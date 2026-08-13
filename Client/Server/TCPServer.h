@@ -1,5 +1,7 @@
 #pragma once
 #include <array>
+#include <chrono>
+#include <cstdint>
 #include <deque>
 #include <memory>
 #include <vector>
@@ -123,6 +125,34 @@ struct PendingSend
 	size_t sentBytes = 0;
 };
 
+struct NetworkPacketStatistics
+{
+	std::uint64_t bytes = 0;
+	std::uint64_t packets = 0;
+};
+
+struct NetworkStatistics
+{
+	static constexpr size_t PACKET_TYPE_COUNT = 256;
+
+	// send()/recv()가 실제로 처리한 바이트만 기록한다.
+	// TCP/IP 헤더까지 포함한 회선 사용량이 아니라 애플리케이션 데이터량이다.
+	std::uint64_t sentBytes = 0;
+	std::uint64_t receivedBytes = 0;
+	std::uint64_t sentPackets = 0;
+	std::uint64_t receivedPackets = 0;
+	std::uint64_t sendWouldBlockCount = 0;
+	std::uint64_t receiveWouldBlockCount = 0;
+
+	// 송신 큐가 순간적으로 얼마나 밀렸는지 확인하기 위한 구간 내 최고치다.
+	size_t peakUnsentBytes = 0;
+	size_t peakPendingPackets = 0;
+
+	// 패킷 헤더별 통계로 전체 트래픽을 많이 만드는 메시지를 찾는다.
+	std::array<NetworkPacketStatistics, PACKET_TYPE_COUNT> sentByHead;
+	std::array<NetworkPacketStatistics, PACKET_TYPE_COUNT> receivedByHead;
+};
+
 struct SOCKETINFO
 {
 	bool m_bUsed = false;
@@ -139,12 +169,16 @@ struct SOCKETINFO
 	int m_nCurrentRecvByte = 0;		// 현재까지 받은 데이터의 길이
 	char m_pCurrentBuffer[MAX_PACKET_PAYLOAD_SIZE];
 	std::deque<PendingSend> m_sendQueue;
+	// 큐가 소유한 전체 버퍼 크기와 아직 send()하지 못한 바이트를 구분한다.
 	size_t m_nPendingSendBytes = 0;
+	size_t m_nUnsentSendBytes = 0;
+	size_t m_nCurrentPacketReceivedBytes = 0;
+
+	// 누적 통계는 연결 종료 요약에, 구간 통계는 1초 단위 출력에 사용한다.
+	NetworkStatistics m_totalNetworkStatistics;
+	NetworkStatistics m_intervalNetworkStatistics;
 
 	SOCKET_STATE m_socketState = SOCKET_STATE::SEND_ID;
-
-	int SendNum = 0;
-	int RecvNum = 0;
 
 	bool m_bLoadComplete = false;
 };
@@ -202,8 +236,12 @@ private:
 	bool DisconnectClient(SOCKET sockClient);
 	INT8 AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, int nAddrLen);
 	INT8 GetSocketIndex(SOCKET sockClient);
+	bool IsValidReceiveHead(INT8 head) const;
 	void ResetReceiveState(SOCKETINFO& socketInfo);
 	ReceiveResult RecvData(int nSocketIndex, size_t nBufferSize);
+	void RecordReceivedPacket(SOCKETINFO& socketInfo);
+	void ReportNetworkStatisticsIfDue();
+	void ReportDisconnectedClientStatistics(int nSocketIndex, const SOCKETINFO& socketInfo) const;
 
 	template<class... Args>
 	bool SubmitSendData(int nSocketIndex, Args&&... args);
@@ -223,11 +261,15 @@ private:
 	void LoadScene();
 	void CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4World, const vector<BoundingOrientedBox>& voobb);
 	void CreateItemObject();
-	void CreateSendObject();
+	void ProcessObjectReplication();
+	std::vector<SC_SPACEOUT_OBJECT> CollectOutOfSpaceObjects();
+	void EnqueueOutOfSpaceObjectPackets(const std::vector<SC_SPACEOUT_OBJECT>& objectUpdates);
+	void UpdateNearbyObjectReplicationData();
 	void InitPlayerPosition(shared_ptr<CServerPlayer>& pServerPlayer, int nIndex);
 
 	int m_nGameState;
 	CTimer m_timer;
+	std::chrono::steady_clock::time_point m_lastNetworkStatisticsReportTime;
 	static INT8 m_nClient;
 
 	// 접속한 클라이언트들의 정보를 저장.
