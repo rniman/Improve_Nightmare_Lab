@@ -617,11 +617,11 @@ void CGameFramework::AnimateObjects()
 void CGameFramework::AnimateEnding()
 {
 	static bool bUpdateElevatorDoor = false;
-	shared_ptr<CGameObject> pDoor = g_collisionManager.GetCollisionObjectWithNumber(m_pTcpClient->GetEscapeDoor()).lock();
+	shared_ptr<CGameObject> pDoor = g_collisionManager.GetCollisionObjectWithNumber(m_pTcpClient->GetEscapeDoorId()).lock();
 
 	if (!bUpdateElevatorDoor)
 	{
-		g_collisionManager.GetCollisionObjectWithNumber(m_pTcpClient->GetEscapeDoor()).lock()->UpdatePicking();
+		g_collisionManager.GetCollisionObjectWithNumber(m_pTcpClient->GetEscapeDoorId()).lock()->UpdatePicking();
 		bUpdateElevatorDoor = true;
 	}
 	pDoor->Animate(gGameTimer.GetTimeElapsed());
@@ -704,7 +704,7 @@ void CGameFramework::FrameAdvance()
 	}
 	else if (m_nGameState == GAME_STATE::IN_LOADING)
 	{
-		if (m_pTcpClient->GetRecvLoadComplete())
+		if (m_pTcpClient->IsLoadingCompleteReceived())
 		{
 			m_nGameState = GAME_STATE::IN_GAME;
 		}
@@ -821,7 +821,7 @@ void CGameFramework::FrameAdvance()
 		_stprintf_s(
 			m_pszFrameRate + nLength, 200 - nLength, _T("ID:%d, NumOfClient: %d, (%.3f, %.3f, %.3f)"),
 			m_pTcpClient->GetMainClientId(),
-			m_pTcpClient->GetNumOfClient(),
+			m_pTcpClient->GetClientCount(),
 			xmf3Position.x, xmf3Position.y, xmf3Position.z);
 	}
 	else
@@ -829,7 +829,7 @@ void CGameFramework::FrameAdvance()
 		_stprintf_s(
 			m_pszFrameRate + nLength, 200 - nLength, _T("ID:%d, NumOfClient: %d, (%.3f, %.3f, %.3f), S: %.3f, I: %.3f, B: %.3f"),
 			m_pTcpClient->GetMainClientId(),
-			m_pTcpClient->GetNumOfClient(),
+			m_pTcpClient->GetClientCount(),
 			xmf3Position.x, xmf3Position.y, xmf3Position.z,
 			pMainScene->GetScale(),
 			pMainScene->GetIntesity(),
@@ -1012,7 +1012,7 @@ void CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARA
 		m_apPlayer[m_nMainClientId]->SetGameStart();
 
 		//로드 완료 메시지 Send
-		m_pTcpClient->LoadCompleteSend();
+		m_pTcpClient->SendLoadingComplete();
 	}
 	break;
 	case WM_END_GAME:
@@ -1519,7 +1519,7 @@ void CGameFramework::BindPlayersToTcpClient()
 	{
 		m_apPlayer[i] = m_pScene->GetPlayer(i);
 		m_pTcpClient->SetPlayer(m_pScene->GetPlayer(i), i);
-		int nClientId = m_pTcpClient->GetClientID(i);
+		int nClientId = m_pTcpClient->GetClientId(i);
 		m_apPlayer[i]->SetClientId(nClientId);
 	}
 

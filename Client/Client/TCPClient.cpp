@@ -5,9 +5,209 @@
 #include "SharedObject.h"
 #include "Sound.h"
 
+#include <cmath>
+#include <cstdio>
+
 namespace
 {
 	constexpr size_t MAX_PENDING_SEND_BYTES = 4 * 1024 * 1024;
+	constexpr UINT SERVER_PORT = 9000;
+	constexpr size_t MAX_SPACEOUT_OBJECTS_PER_PACKET =
+		MAX_PACKET_PAYLOAD_SIZE / sizeof(SC_SPACEOUT_OBJECT);
+	static_assert(MAX_SPACEOUT_OBJECTS_PER_PACKET > 0);
+
+	void ConvertWideStringToUtf8(const wchar_t* source, char* destination, int destinationSize)
+	{
+		WideCharToMultiByte(
+			CP_UTF8,
+			0,
+			source,
+			-1,
+			destination,
+			destinationSize,
+			nullptr,
+			nullptr);
+	}
+
+	void LogInvalidServerPacket(const char* packetName, const char* fieldName, int value)
+	{
+		char message[256] = {};
+		sprintf_s(
+			message,
+			"[Network] Invalid server packet: packet=%s, field=%s, value=%d\n",
+			packetName,
+			fieldName,
+			value);
+		OutputDebugStringA(message);
+	}
+
+	void LogInvalidServerPacket(
+		const char* packetName,
+		const char* fieldName,
+		size_t index,
+		int value)
+	{
+		char message[256] = {};
+		sprintf_s(
+			message,
+			"[Network] Invalid server packet: packet=%s, field=%s, index=%zu, value=%d\n",
+			packetName,
+			fieldName,
+			index,
+			value);
+		OutputDebugStringA(message);
+	}
+
+	void LogInvalidServerPacketElement(
+		const char* packetName,
+		const char* fieldName,
+		size_t index,
+		size_t elementIndex)
+	{
+		char message[256] = {};
+		sprintf_s(
+			message,
+			"[Network] Invalid server packet: packet=%s, field=%s, index=%zu, elementIndex=%zu\n",
+			packetName,
+			fieldName,
+			index,
+			elementIndex);
+		OutputDebugStringA(message);
+	}
+
+	void LogInvalidServerPacketAtIndex(
+		const char* packetName,
+		const char* fieldName,
+		size_t index)
+	{
+		char message[256] = {};
+		sprintf_s(
+			message,
+			"[Network] Invalid server packet: packet=%s, field=%s, index=%zu\n",
+			packetName,
+			fieldName,
+			index);
+		OutputDebugStringA(message);
+	}
+
+	bool IsAssignedClientId(INT8 clientId)
+	{
+		return clientId >= 0 && clientId < static_cast<INT8>(MAX_CLIENT);
+	}
+
+	bool IsValidClientCount(INT8 clientCount)
+	{
+		return clientCount >= 0 && clientCount <= static_cast<INT8>(MAX_CLIENT);
+	}
+
+	bool IsValidObjectId(int objectId)
+	{
+		return objectId >= 0 && objectId < g_collisionManager.GetNumOfCollisionObject();
+	}
+
+	bool IsFiniteVector(const XMFLOAT3& value)
+	{
+		// NaN이나 무한대가 카메라·애니메이션·충돌 계산으로 전파되지 않도록 한다.
+		return std::isfinite(value.x) &&
+			std::isfinite(value.y) &&
+			std::isfinite(value.z);
+	}
+
+	bool IsFiniteMatrix(const XMFLOAT4X4& value)
+	{
+		for (size_t row = 0; row < 4; ++row)
+		{
+			for (size_t column = 0; column < 4; ++column)
+			{
+				if (!std::isfinite(value.m[row][column]))
+				{
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	bool ValidateClientInfoArray(const std::array<CS_CLIENTS_INFO, MAX_CLIENT>& clientInfo)
+	{
+		for (size_t index = 0; index < clientInfo.size(); ++index)
+		{
+			const CS_CLIENTS_INFO& info = clientInfo[index];
+			const bool hasValidClientId =
+				info.m_nClientId == -1 || IsAssignedClientId(info.m_nClientId);
+			if (!hasValidClientId)
+			{
+				LogInvalidServerPacket(
+					"CLIENT_INFO",
+					"clientId",
+					index,
+					static_cast<int>(info.m_nClientId));
+				return false;
+			}
+
+			// -1은 아직 주변 오브젝트 정보가 설정되지 않은 슬롯을 의미한다.
+			if (info.m_nNumOfObject < -1 ||
+				info.m_nNumOfObject > static_cast<int>(MAX_RECV_OBJECT_INFO))
+			{
+				LogInvalidServerPacket(
+					"CLIENT_INFO",
+					"nearbyObjectCount",
+					index,
+					info.m_nNumOfObject);
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool ValidateClientTransforms(const std::array<CS_CLIENTS_INFO, MAX_CLIENT>& clientInfo)
+	{
+		// 로비 초기 패킷에는 아직 사용하지 않는 변환값이 포함될 수 있으므로
+		// 실제 게임 상태를 적용하는 UPDATE_DATA에서 활성 슬롯만 검사한다.
+		for (size_t index = 0; index < clientInfo.size(); ++index)
+		{
+			const CS_CLIENTS_INFO& info = clientInfo[index];
+			if (info.m_nClientId == -1)
+			{
+				continue;
+			}
+
+			if (!IsFiniteVector(info.m_xmf3Position))
+			{
+				LogInvalidServerPacketAtIndex("CLIENT_INFO", "position", index);
+				return false;
+			}
+			if (!IsFiniteVector(info.m_xmf3Velocity))
+			{
+				LogInvalidServerPacketAtIndex("CLIENT_INFO", "velocity", index);
+				return false;
+			}
+			if (!IsFiniteVector(info.m_xmf3Look))
+			{
+				LogInvalidServerPacketAtIndex("CLIENT_INFO", "look", index);
+				return false;
+			}
+			if (!std::isfinite(info.m_animationInfo.pitch))
+			{
+				LogInvalidServerPacketAtIndex("CLIENT_INFO", "pitch", index);
+				return false;
+			}
+
+			for (int objectIndex = 0; objectIndex < info.m_nNumOfObject; ++objectIndex)
+			{
+				if (!IsFiniteMatrix(info.m_axmf4x4World[objectIndex]))
+				{
+					LogInvalidServerPacketElement(
+						"CLIENT_INFO",
+						"nearbyObjectTransform",
+						index,
+						static_cast<size_t>(objectIndex));
+					return false;
+				}
+			}
+		}
+		return true;
+	}
 }
 
 CTcpClient::CTcpClient()
@@ -27,30 +227,29 @@ void CTcpClient::CloseConnection()
 		m_sock = INVALID_SOCKET;
 	}
 
-	if (m_bWsaStarted)
+	if (mWsaStarted)
 	{
 		WSACleanup();
-		m_bWsaStarted = false;
+		mWsaStarted = false;
 	}
 
-	m_sendQueue.clear();
-	m_nPendingSendBytes = 0;
+	mSendQueue.clear();
+	mPendingSendBytes = 0;
 	ResetReceiveState();
 }
 
 void CTcpClient::ResetReceiveState()
 {
-	m_nCurrentRecvByte = 0;
-	m_bRecvHead = false;
-	m_bPayloadSizeReceived = false;
-	m_nHead = -1;
-	m_nExpectedPayloadSize = 0;
-	memset(m_pCurrentBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+	mReceivedBytes = 0;
+	mHasReceiveHead = false;
+	mHasPayloadSize = false;
+	mReceiveHead = -1;
+	mExpectedPayloadBytes = 0;
+	memset(mReceiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 }
 
-bool CTcpClient::CreateSocket(HWND hWnd, TCHAR* pszIPAddress)
+bool CTcpClient::CreateSocket(HWND window, const TCHAR* ipAddress)
 {
-	int nRetval;
 	CloseConnection();
 
 	// 윈속 초기화
@@ -60,42 +259,38 @@ bool CTcpClient::CreateSocket(HWND hWnd, TCHAR* pszIPAddress)
 		err_quit("WSAStartup");
 		return false;
 	}
-	m_bWsaStarted = true;
+	mWsaStarted = true;
 
 	// 소켓 생성
-	SOCKET s = socket(AF_INET, SOCK_STREAM, 0);
-	m_sock = s;
-	//m_sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (s == INVALID_SOCKET)
+	m_sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (m_sock == INVALID_SOCKET)
 	{
 		err_quit("socket()");
 		CloseConnection();
 		return false;
 	}
 
-	char pIPAddress[20];
-	ConvertLPWSTRToChar(pszIPAddress, pIPAddress, 20);
+	char ipAddressBuffer[20] = {};
+	ConvertWideStringToUtf8(ipAddress, ipAddressBuffer, static_cast<int>(std::size(ipAddressBuffer)));
 
-	// connect()
-	struct sockaddr_in serveraddr;
-	memset(&serveraddr, 0, sizeof(serveraddr));
-	serveraddr.sin_family = AF_INET;
-	//inet_pton(AF_INET, SERVERIP, &serveraddr.sin_addr);
-	inet_pton(AF_INET, pIPAddress, &serveraddr.sin_addr);
-	serveraddr.sin_port = htons(SERVERPORT);
+	struct sockaddr_in serverAddress = {};
+	serverAddress.sin_family = AF_INET;
+	inet_pton(AF_INET, ipAddressBuffer, &serverAddress.sin_addr);
+	serverAddress.sin_port = htons(SERVER_PORT);
 
-	//nRetval = connect(m_sock, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
-	nRetval = connect(s, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
-	if (nRetval == SOCKET_ERROR)
+	int result = connect(
+		m_sock,
+		reinterpret_cast<sockaddr*>(&serverAddress),
+		sizeof(serverAddress));
+	if (result == SOCKET_ERROR)
 	{
 		err_display("connect()");
 		CloseConnection();
 		return false;
 	}
 
-	//nRetval = WSAAsyncSelect(m_sock, hWnd, WM_SOCKET, FD_CLOSE | FD_READ | FD_WRITE);	// FD_WRITE가 발생할것이다.
-	nRetval = WSAAsyncSelect(s, hWnd, WM_SOCKET, FD_CLOSE | FD_READ | FD_WRITE);	// FD_WRITE가 발생할것이다.
-	if (nRetval == SOCKET_ERROR)
+	result = WSAAsyncSelect(m_sock, window, WM_SOCKET, FD_CLOSE | FD_READ | FD_WRITE);
+	if (result == SOCKET_ERROR)
 	{
 		err_display("WSAAsyncSelect()");
 		CloseConnection();
@@ -105,17 +300,12 @@ bool CTcpClient::CreateSocket(HWND hWnd, TCHAR* pszIPAddress)
 	return true;
 }
 
-std::array<CS_CLIENTS_INFO, 5>& CTcpClient::GetArrayClientsInfo()
+void CTcpClient::OnProcessingSocketMessage(HWND window, UINT, WPARAM wParam, LPARAM lParam)
 {
-	return m_aClientInfo;
-}
-
-void CTcpClient::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
-{
-	const int nSocketError = WSAGETSELECTERROR(lParam);
-	if (nSocketError != 0)
+	const int socketError = WSAGETSELECTERROR(lParam);
+	if (socketError != 0)
 	{
-		err_display(nSocketError);
+		err_display(socketError);
 		if (static_cast<SOCKET>(wParam) == m_sock)
 		{
 			CloseConnection();
@@ -126,13 +316,13 @@ void CTcpClient::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wP
 	switch (WSAGETSELECTEVENT(lParam))
 	{
 	case FD_READ:	// 소켓이 데이터를 읽을 준비가 되었다.
-		OnProcessingReadMessage(hWnd, nMessageID, wParam, lParam);
+		ProcessReadEvent(window, static_cast<SOCKET>(wParam));
 		break;
 	case FD_WRITE:	// 소켓이 데이터를 전송할 준비가 되었다.
-		OnProcessingWriteMessage(hWnd, nMessageID, wParam, lParam);
+		ProcessWriteEvent();
 		break;
 	case FD_CLOSE:
-		if ((SOCKET)wParam == m_sock)
+		if (static_cast<SOCKET>(wParam) == m_sock)
 		{
 			CloseConnection();
 		}
@@ -142,213 +332,352 @@ void CTcpClient::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wP
 	}
 }
 
-void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+bool CTcpClient::HandleReceiveResult(ReceiveResult result)
 {
-	const SOCKET socket = static_cast<SOCKET>(wParam);
-	auto handleReceiveResult = [this](ReceiveResult result)
-		{
-			if (result == ReceiveResult::Complete)
-			{
-				return true;
-			}
-
-			if (result == ReceiveResult::Closed || result == ReceiveResult::Error)
-			{
-				CloseConnection();
-			}
-			return false;
-		};
-
-	if (!m_bRecvHead)
+	if (result == ReceiveResult::Complete)
 	{
-		const ReceiveResult result = RecvData(socket, sizeof(INT8));
-		if (!handleReceiveResult(result))
+		return true;
+	}
+
+	if (result == ReceiveResult::Closed || result == ReceiveResult::Error)
+	{
+		CloseConnection();
+	}
+	return false;
+}
+
+void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
+{
+
+	if (!mHasReceiveHead)
+	{
+		const ReceiveResult result = ReceiveData(socket, sizeof(INT8));
+		if (!HandleReceiveResult(result))
 		{
 			return;
 		}
 
-		m_bRecvHead = true;
-		memcpy(&m_nHead, m_pCurrentBuffer, sizeof(INT8));
-		memset(m_pCurrentBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+		mHasReceiveHead = true;
+		memcpy(&mReceiveHead, mReceiveBuffer, sizeof(INT8));
+		memset(mReceiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+
+		// 등록되지 않은 HEAD는 payload 크기와 형식을 결정할 수 없으므로 스트림 해석을 중단한다.
+		// 연결을 종료해 이후 바이트를 다음 패킷의 HEAD로 잘못 처리하는 상황도 방지한다.
+		if (!IsValidReceiveHead(mReceiveHead))
+		{
+			LogInvalidServerPacket("HEADER", "head", static_cast<int>(mReceiveHead));
+			CloseConnection();
+			return;
+		}
 	}
 
-	switch (m_nHead)
+	switch (mReceiveHead)
 	{
 	case HEAD_GAME_START:
-		PostMessage(hWnd, WM_START_GAME, 0, 0);
-		m_socketState = SOCKET_STATE::SEND_KEY_BUFFER;
+		PostMessage(window, WM_START_GAME, 0, 0);
+		mSocketState = SOCKET_STATE::SEND_KEY_BUFFER;
 		break;
 	case HEAD_CHANGE_SLOT:
 	{
-		if (!handleReceiveResult(RecvData(socket, sizeof(INT8) + sizeof(m_aClientInfo))))
+		if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) + sizeof(mClientInfo))))
 		{
 			return;
 		}
-		RecvNum++;
-		const INT8 nPrevMainClientId = m_nMainClientId;
-		memcpy(&m_nMainClientId, m_pCurrentBuffer, sizeof(INT8));
-		memcpy(&m_aClientInfo, m_pCurrentBuffer + sizeof(INT8), sizeof(m_aClientInfo));
-		for (int i = 0; i < MAX_CLIENT; ++i)
-		{
-			if (m_apPlayers[i])
-			{
-				m_apPlayers[i]->SetClientId(m_aClientInfo[i].m_nClientId);
-			}
-		}
+		// 고정 패킷 전체를 지역 변수에 먼저 역직렬화한다.
+		// 이후 검증이 추가되더라도 일부 멤버만 먼저 변경되는 상황을 방지한다.
+		INT8 receivedMainClientId = -1;
+		std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
+		memcpy(&receivedMainClientId, mReceiveBuffer, sizeof(receivedMainClientId));
+		memcpy(
+			receivedClientInfo.data(),
+			mReceiveBuffer + sizeof(receivedMainClientId),
+			sizeof(receivedClientInfo));
 
-		if (nPrevMainClientId != m_nMainClientId)
+		if (!IsAssignedClientId(receivedMainClientId))
 		{
-			PostMessage(hWnd, WM_CHANGE_SLOT, 1, 0);
-		}
-	}
-	break;
-	case HEAD_INIT:
-	{
-		if (!handleReceiveResult(RecvData(socket, sizeof(INT8) * 2 + sizeof(m_aClientInfo))))
-		{
+			LogInvalidServerPacket(
+				"CHANGE_SLOT",
+				"mainClientId",
+				static_cast<int>(receivedMainClientId));
+			CloseConnection();
 			return;
 		}
-		RecvNum++;
-
-		memcpy(&m_nMainClientId, m_pCurrentBuffer, sizeof(INT8));
-		memcpy(&m_nClient, m_pCurrentBuffer + sizeof(INT8), sizeof(INT8));
-		memcpy(&m_aClientInfo, m_pCurrentBuffer + sizeof(INT8) * 2, sizeof(m_aClientInfo));
-
-		break;
-	}
-	case HEAD_UPDATE_DATA:
-	{
-		if (!handleReceiveResult(RecvData(socket, sizeof(m_aClientInfo))))
-		{
-			return;
-		}
-		RecvNum++;
-
-		memcpy(m_aClientInfo.data(), m_pCurrentBuffer, sizeof(m_aClientInfo));
-
-		UpdateDataFromServer();
-
-		break;
-	}
-	case HEAD_NUM_OF_CLIENT:
-	{
-		if (!handleReceiveResult(RecvData(socket, sizeof(INT8) + sizeof(m_aClientInfo))))
-		{
-			return;
-		}
-		RecvNum++;
-
-		memcpy(&m_nClient, m_pCurrentBuffer, sizeof(INT8));
-		memcpy(&m_aClientInfo, m_pCurrentBuffer + sizeof(INT8), sizeof(m_aClientInfo));
-		for (int i = 0; i < MAX_CLIENT; ++i)
-		{
-			if (m_apPlayers[i])
-			{
-				m_apPlayers[i]->SetClientId(m_aClientInfo[i].m_nClientId);
-			}
-		}
-		break;
-	}
-	case HEAD_BLUE_SUIT_WIN:
-		PostMessage(hWnd, WM_END_GAME, 0, 0);
-		break;
-	case HEAD_ZOMBIE_WIN:
-		PostMessage(hWnd, WM_END_GAME, 1, 0);
-		break;
-	case HEAD_OPEN_DRAWER_SOUND:
-	{
-		SoundManager& soundManager = soundManager.GetInstance();
-		soundManager.PlaySoundWithName(sound::OPEN_DRAWER);
-		break;
-	}
-	case HEAD_CLOSE_DRAWER_SOUND:
-	{
-		SoundManager& soundManager = soundManager.GetInstance();
-		soundManager.PlaySoundWithName(sound::CLOSE_DRAWER);
-		break;
-	}
-	case HEAD_OPEN_DOOR_SOUND:
-	{
-		SoundManager& soundManager = soundManager.GetInstance();
-		soundManager.PlaySoundWithName(sound::OPEN_DOOR);
-		break;
-	}
-	case HEAD_CLOSE_DOOR_SOUND:
-	{
-		SoundManager& soundManager = soundManager.GetInstance();
-		soundManager.PlaySoundWithName(sound::CLOSE_DOOR);
-		break;
-	}
-	case HEAD_BLUE_SUIT_DEAD:
-	{
-		if (!handleReceiveResult(RecvData(socket, sizeof(char))))
-		{
-			return;
-		}
-
-		char deadUserId = -1;
-		memcpy(&deadUserId, m_pCurrentBuffer, sizeof(deadUserId));
-		if (deadUserId < 0 || deadUserId >= static_cast<char>(MAX_CLIENT) || !m_apPlayers[deadUserId])
+		if (!ValidateClientInfoArray(receivedClientInfo))
 		{
 			CloseConnection();
 			return;
 		}
 
-		SoundManager& soundManager = soundManager.GetInstance();
+		const INT8 previousMainClientId = mMainClientId;
+		mMainClientId = receivedMainClientId;
+		mClientInfo = receivedClientInfo;
+		for (size_t playerIndex = 0; playerIndex < MAX_CLIENT; ++playerIndex)
+		{
+			if (mPlayers[playerIndex])
+			{
+				mPlayers[playerIndex]->SetClientId(mClientInfo[playerIndex].m_nClientId);
+			}
+		}
+
+		if (previousMainClientId != mMainClientId)
+		{
+			PostMessage(window, WM_CHANGE_SLOT, 1, 0);
+		}
+	}
+	break;
+	case HEAD_INIT:
+	{
+		if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) * 2 + sizeof(mClientInfo))))
+		{
+			return;
+		}
+		INT8 receivedMainClientId = -1;
+		INT8 receivedClientCount = -1;
+		std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
+		memcpy(&receivedMainClientId, mReceiveBuffer, sizeof(receivedMainClientId));
+		memcpy(
+			&receivedClientCount,
+			mReceiveBuffer + sizeof(receivedMainClientId),
+			sizeof(receivedClientCount));
+		memcpy(
+			receivedClientInfo.data(),
+			mReceiveBuffer + sizeof(receivedMainClientId) + sizeof(receivedClientCount),
+			sizeof(receivedClientInfo));
+
+		if (!IsAssignedClientId(receivedMainClientId))
+		{
+			LogInvalidServerPacket(
+				"INIT",
+				"mainClientId",
+				static_cast<int>(receivedMainClientId));
+			CloseConnection();
+			return;
+		}
+		if (!IsValidClientCount(receivedClientCount))
+		{
+			LogInvalidServerPacket(
+				"INIT",
+				"clientCount",
+				static_cast<int>(receivedClientCount));
+			CloseConnection();
+			return;
+		}
+		if (!ValidateClientInfoArray(receivedClientInfo))
+		{
+			CloseConnection();
+			return;
+		}
+
+		// 패킷 전체를 읽은 뒤 관련 멤버를 함께 갱신한다.
+		mMainClientId = receivedMainClientId;
+		mClientCount = receivedClientCount;
+		mClientInfo = receivedClientInfo;
+
+		break;
+	}
+	case HEAD_UPDATE_DATA:
+	{
+		if (!HandleReceiveResult(ReceiveData(socket, sizeof(mClientInfo))))
+		{
+			return;
+		}
+		std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
+		memcpy(receivedClientInfo.data(), mReceiveBuffer, sizeof(receivedClientInfo));
+		if (!ValidateClientInfoArray(receivedClientInfo) ||
+			!ValidateClientTransforms(receivedClientInfo))
+		{
+			CloseConnection();
+			return;
+		}
+
+		mClientInfo = receivedClientInfo;
+
+		ApplyServerUpdate();
+
+		break;
+	}
+	case HEAD_NUM_OF_CLIENT:
+	{
+		if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) + sizeof(mClientInfo))))
+		{
+			return;
+		}
+		INT8 receivedClientCount = -1;
+		std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
+		memcpy(&receivedClientCount, mReceiveBuffer, sizeof(receivedClientCount));
+		memcpy(
+			receivedClientInfo.data(),
+			mReceiveBuffer + sizeof(receivedClientCount),
+			sizeof(receivedClientInfo));
+
+		if (!IsValidClientCount(receivedClientCount))
+		{
+			LogInvalidServerPacket(
+				"NUM_OF_CLIENT",
+				"clientCount",
+				static_cast<int>(receivedClientCount));
+			CloseConnection();
+			return;
+		}
+		if (!ValidateClientInfoArray(receivedClientInfo))
+		{
+			CloseConnection();
+			return;
+		}
+
+		mClientCount = receivedClientCount;
+		mClientInfo = receivedClientInfo;
+		for (size_t playerIndex = 0; playerIndex < MAX_CLIENT; ++playerIndex)
+		{
+			if (mPlayers[playerIndex])
+			{
+				mPlayers[playerIndex]->SetClientId(mClientInfo[playerIndex].m_nClientId);
+			}
+		}
+		break;
+	}
+	case HEAD_BLUE_SUIT_WIN:
+		PostMessage(window, WM_END_GAME, 0, 0);
+		break;
+	case HEAD_ZOMBIE_WIN:
+		PostMessage(window, WM_END_GAME, 1, 0);
+		break;
+	case HEAD_OPEN_DRAWER_SOUND:
+	{
+		SoundManager& soundManager = SoundManager::GetInstance();
+		soundManager.PlaySoundWithName(sound::OPEN_DRAWER);
+		break;
+	}
+	case HEAD_CLOSE_DRAWER_SOUND:
+	{
+		SoundManager& soundManager = SoundManager::GetInstance();
+		soundManager.PlaySoundWithName(sound::CLOSE_DRAWER);
+		break;
+	}
+	case HEAD_OPEN_DOOR_SOUND:
+	{
+		SoundManager& soundManager = SoundManager::GetInstance();
+		soundManager.PlaySoundWithName(sound::OPEN_DOOR);
+		break;
+	}
+	case HEAD_CLOSE_DOOR_SOUND:
+	{
+		SoundManager& soundManager = SoundManager::GetInstance();
+		soundManager.PlaySoundWithName(sound::CLOSE_DOOR);
+		break;
+	}
+	case HEAD_BLUE_SUIT_DEAD:
+	{
+		if (!HandleReceiveResult(ReceiveData(socket, sizeof(char))))
+		{
+			return;
+		}
+
+		char deadUserId = -1;
+		memcpy(&deadUserId, mReceiveBuffer, sizeof(deadUserId));
+		if (deadUserId < 0 || deadUserId >= static_cast<char>(MAX_CLIENT) || !mPlayers[deadUserId])
+		{
+			CloseConnection();
+			return;
+		}
+
+		SoundManager& soundManager = SoundManager::GetInstance();
 		soundManager.PlaySoundWithName(sound::DEAD_BLUESUIT);
-		soundManager.SetVolume(sound::DEAD_BLUESUIT, m_apPlayers[deadUserId]->GetPlayerVolume());
+		soundManager.SetVolume(sound::DEAD_BLUESUIT, mPlayers[deadUserId]->GetPlayerVolume());
 		break;
 	}
 	case SEND_SPACEOUT_OBJECTS:
 	{
-		if (!m_bPayloadSizeReceived)
+		if (!mHasPayloadSize)
 		{
-			if (!handleReceiveResult(RecvData(socket, sizeof(unsigned short))))
+			if (!HandleReceiveResult(ReceiveData(socket, sizeof(std::uint16_t))))
 			{
 				return;
 			}
 
 			std::uint16_t bufferSize = 0;
-			memcpy(&bufferSize, m_pCurrentBuffer, sizeof(bufferSize));
-			m_nExpectedPayloadSize = bufferSize;
-			m_bPayloadSizeReceived = true;
-			memset(m_pCurrentBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+			memcpy(&bufferSize, mReceiveBuffer, sizeof(bufferSize));
+			mExpectedPayloadBytes = bufferSize;
+			mHasPayloadSize = true;
+			memset(mReceiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 
-			if (m_nExpectedPayloadSize > MAX_PACKET_PAYLOAD_SIZE ||
-				m_nExpectedPayloadSize % sizeof(SC_SPACEOUT_OBJECT) != 0)
+			if (mExpectedPayloadBytes == 0 ||
+				mExpectedPayloadBytes > MAX_PACKET_PAYLOAD_SIZE ||
+				mExpectedPayloadBytes % sizeof(SC_SPACEOUT_OBJECT) != 0)
 			{
+				LogInvalidServerPacket(
+					"SPACEOUT_OBJECTS",
+					"payloadSize",
+					static_cast<int>(mExpectedPayloadBytes));
 				CloseConnection();
 				return;
 			}
 		}
 
-		if (!handleReceiveResult(RecvData(socket, m_nExpectedPayloadSize)))
+		if (!HandleReceiveResult(ReceiveData(socket, mExpectedPayloadBytes)))
 		{
 			return;
 		}
 
-		const size_t objectCount = m_nExpectedPayloadSize / sizeof(SC_SPACEOUT_OBJECT);
+		const size_t objectCount = mExpectedPayloadBytes / sizeof(SC_SPACEOUT_OBJECT);
+		if (objectCount == 0 || objectCount > MAX_SPACEOUT_OBJECTS_PER_PACKET)
+		{
+			LogInvalidServerPacket(
+				"SPACEOUT_OBJECTS",
+				"objectCount",
+				static_cast<int>(objectCount));
+			CloseConnection();
+			return;
+		}
 		vector<SC_SPACEOUT_OBJECT> spaceOutObjects(objectCount);
 
-		if (m_nExpectedPayloadSize > 0)
+		if (mExpectedPayloadBytes > 0)
 		{
-			memcpy(spaceOutObjects.data(), m_pCurrentBuffer, m_nExpectedPayloadSize);
+			memcpy(spaceOutObjects.data(), mReceiveBuffer, mExpectedPayloadBytes);
 		}
-		for (const auto& obj : spaceOutObjects)
+
+		// 하나라도 잘못된 ID나 변환값이 있으면 일부 오브젝트만 먼저 갱신하지 않고 패킷 전체를 거부한다.
+		for (size_t objectIndex = 0; objectIndex < spaceOutObjects.size(); ++objectIndex)
 		{
-			shared_ptr<CGameObject> pGameObject = g_collisionManager.GetCollisionObjectWithNumber(obj.m_iObjectId).lock();
-			if (pGameObject)
+			const SC_SPACEOUT_OBJECT& objectInfo = spaceOutObjects[objectIndex];
+			const int objectId = objectInfo.m_iObjectId;
+			if (!IsValidObjectId(objectId))
 			{
-				pGameObject->m_xmf4x4World = obj.m_xmf4x4World;
-				pGameObject->m_xmf4x4ToParent = obj.m_xmf4x4World;
-				pGameObject->SetObtain(false);
+				LogInvalidServerPacket(
+					"SPACEOUT_OBJECTS",
+					"objectId",
+					objectIndex,
+					objectId);
+				CloseConnection();
+				return;
+			}
+			if (!IsFiniteMatrix(objectInfo.m_xmf4x4World))
+			{
+				LogInvalidServerPacketAtIndex(
+					"SPACEOUT_OBJECTS",
+					"worldTransform",
+					objectIndex);
+				CloseConnection();
+				return;
+			}
+		}
+
+		for (const SC_SPACEOUT_OBJECT& objectInfo : spaceOutObjects)
+		{
+			shared_ptr<CGameObject> gameObject =
+				g_collisionManager.GetCollisionObjectWithNumber(objectInfo.m_iObjectId).lock();
+			if (gameObject)
+			{
+				gameObject->m_xmf4x4World = objectInfo.m_xmf4x4World;
+				gameObject->m_xmf4x4ToParent = objectInfo.m_xmf4x4World;
+				gameObject->SetObtain(false);
 			}
 		}
 		break;
 	}
 	case HEAD_LOADING_COMPLETE:
 	{
-		m_bRecvLoadComplete = true;
+		mLoadingCompleteReceived = true;
 		break;
 	}
 	default:
@@ -358,111 +687,165 @@ void CTcpClient::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	ResetReceiveState();
 }
 
-void CTcpClient::UpdateDataFromServer()
+bool CTcpClient::IsValidReceiveHead(INT8 head) const
 {
-	for (int i = 0; i < MAX_CLIENT; ++i)
+	// 클라이언트가 payload 크기와 처리 방법을 알고 있는 서버 패킷만 허용한다.
+	switch (head)
 	{
-		if (m_apPlayers[i])
+	case HEAD_INIT:
+	case HEAD_UPDATE_DATA:
+	case HEAD_NUM_OF_CLIENT:
+	case HEAD_BLUE_SUIT_WIN:
+	case HEAD_ZOMBIE_WIN:
+	case HEAD_GAME_START:
+	case HEAD_CHANGE_SLOT:
+	case HEAD_OPEN_DRAWER_SOUND:
+	case HEAD_CLOSE_DRAWER_SOUND:
+	case HEAD_OPEN_DOOR_SOUND:
+	case HEAD_CLOSE_DOOR_SOUND:
+	case HEAD_BLUE_SUIT_DEAD:
+	case SEND_SPACEOUT_OBJECTS:
+	case HEAD_LOADING_COMPLETE:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool CTcpClient::TryGetCollisionObject(
+	int objectId,
+	const char* fieldName,
+	shared_ptr<CGameObject>& gameObject)
+{
+	// 충돌 관리자의 조회 함수는 vector::operator[]를 사용하므로 반드시 먼저 범위를 검사한다.
+	if (!IsValidObjectId(objectId))
+	{
+		LogInvalidServerPacket("CLIENT_INFO", fieldName, objectId);
+		CloseConnection();
+		gameObject.reset();
+		return false;
+	}
+
+	gameObject = g_collisionManager.GetCollisionObjectWithNumber(objectId).lock();
+	return true;
+}
+
+void CTcpClient::ApplyServerUpdate()
+{
+	for (int playerIndex = 0; playerIndex < MAX_CLIENT; ++playerIndex)
+	{
+		if (mPlayers[playerIndex])
 		{
-			m_apPlayers[i]->SetAlive(m_aClientInfo[i].m_bAlive);
-			m_apPlayers[i]->SetRunning(m_aClientInfo[i].m_bRunning);
-			m_apPlayers[i]->SetClientId(m_aClientInfo[i].m_nClientId);
-			m_apPlayers[i]->SetPosition(m_aClientInfo[i].m_xmf3Position);
-			m_apPlayers[i]->SetVelocity(m_aClientInfo[i].m_xmf3Velocity);
-			if (i != m_nMainClientId)
+			mPlayers[playerIndex]->SetAlive(mClientInfo[playerIndex].m_bAlive);
+			mPlayers[playerIndex]->SetRunning(mClientInfo[playerIndex].m_bRunning);
+			mPlayers[playerIndex]->SetClientId(mClientInfo[playerIndex].m_nClientId);
+			mPlayers[playerIndex]->SetPosition(mClientInfo[playerIndex].m_xmf3Position);
+			mPlayers[playerIndex]->SetVelocity(mClientInfo[playerIndex].m_xmf3Velocity);
+			if (playerIndex != mMainClientId)
 			{
-				m_apPlayers[i]->SetPitch(m_aClientInfo[i].m_animationInfo.pitch);
+				mPlayers[playerIndex]->SetPitch(mClientInfo[playerIndex].m_animationInfo.pitch);
 			}
 
-
-			if (i != m_nMainClientId)
+			if (playerIndex != mMainClientId)
 			{
-				m_apPlayers[i]->SetLook(m_aClientInfo[i].m_xmf3Look);
-				XMFLOAT3 xmf3Right = XMFLOAT3(0.0f, 1.0f, 0.0f);
-				xmf3Right = Vector3::CrossProduct(xmf3Right, m_aClientInfo[i].m_xmf3Look, true);
-				m_apPlayers[i]->SetRight(xmf3Right);
+				mPlayers[playerIndex]->SetLook(mClientInfo[playerIndex].m_xmf3Look);
+				XMFLOAT3 right = XMFLOAT3(0.0f, 1.0f, 0.0f);
+				right = Vector3::CrossProduct(right, mClientInfo[playerIndex].m_xmf3Look, true);
+				mPlayers[playerIndex]->SetRight(right);
 			}
 
-			//[0523] 피킹 오브젝트 설정(외곽선 작업에 필요)
-			UpdatePickedObject(i);
+			UpdatePickedObject(playerIndex);
 
 			// 지뢰 충돌
-			int nObjectNum = m_aClientInfo[i].m_playerInfo.m_iMineobjectNum;
-			if (nObjectNum >= 0) {
-				shared_ptr<CGameObject> pGameObject = g_collisionManager.GetCollisionObjectWithNumber(nObjectNum).lock();
-				auto mine = dynamic_pointer_cast<CMineObject>(pGameObject);
+			const int mineObjectId = mClientInfo[playerIndex].m_playerInfo.m_iMineobjectNum;
+			if (mineObjectId != -1)
+			{
+				shared_ptr<CGameObject> gameObject;
+				if (!TryGetCollisionObject(mineObjectId, "mineObjectId", gameObject))
+				{
+					return;
+				}
+				auto mine = dynamic_pointer_cast<CMineObject>(gameObject);
 				if (mine)
 				{
 					mine->SetCollide(true);
-					shared_ptr<CZombiePlayer> pZombiePlayer = dynamic_pointer_cast<CZombiePlayer>(m_apPlayers[i]);
-					if (pZombiePlayer)
+					shared_ptr<CZombiePlayer> zombiePlayer =
+						dynamic_pointer_cast<CZombiePlayer>(mPlayers[playerIndex]);
+					if (zombiePlayer)
 					{
-						pZombiePlayer->SetEectricShock();
+						zombiePlayer->SetEectricShock();
 					}
 
-					float fVolume = m_apPlayers[i]->GetPlayerVolume();
-					SoundManager& soundManager = soundManager.GetInstance();
-					if (m_apPlayers[i]->GetPlayerVolume() - EPSILON >= 0.0f)
+					const float volume = mPlayers[playerIndex]->GetPlayerVolume();
+					SoundManager& soundManager = SoundManager::GetInstance();
+					if (volume - EPSILON >= 0.0f)
 					{
-						soundManager.PlaySoundWithName(sound::ACTIVE_MINE, fVolume);
+						soundManager.PlaySoundWithName(sound::ACTIVE_MINE, volume);
 					}
 				}
 			}
 		}
 
-		if (i == ZOMBIEPLAYER)
+		if (playerIndex == ZOMBIEPLAYER)
 		{
 			UpdateZombiePlayer();
 		}
 		else
 		{
-			UpdatePlayer(i);
+			UpdateSurvivorPlayer(playerIndex);
 		}
 
-		int nNumOfGameObject = m_aClientInfo[i].m_nNumOfObject;
-		for (int j = 0; j < nNumOfGameObject; ++j)
+		const int nearbyObjectCount = mClientInfo[playerIndex].m_nNumOfObject;
+		for (int objectIndex = 0; objectIndex < nearbyObjectCount; ++objectIndex)
 		{
-			int nObjectNum = m_aClientInfo[i].m_anObjectNum[j];
+			const int objectId = mClientInfo[playerIndex].m_anObjectNum[objectIndex];
 
-			if (nObjectNum <= -1 || nObjectNum >= g_collisionManager.GetNumOfCollisionObject())
+			if (!IsValidObjectId(objectId))
 			{
-				continue;
+				LogInvalidServerPacket("CLIENT_INFO", "nearbyObjectId", objectId);
+				CloseConnection();
+				return;
 			}
 #ifdef LOADSCENE
-			shared_ptr<CGameObject> pGameObject = g_collisionManager.GetCollisionObjectWithNumber(nObjectNum).lock();
-			if (pGameObject)
+			shared_ptr<CGameObject> gameObject =
+				g_collisionManager.GetCollisionObjectWithNumber(objectId).lock();
+			if (gameObject)
 			{
-				pGameObject->m_xmf4x4World = m_aClientInfo[i].m_axmf4x4World[j];
-				pGameObject->m_xmf4x4ToParent = m_aClientInfo[i].m_axmf4x4World[j];
+				gameObject->m_xmf4x4World = mClientInfo[playerIndex].m_axmf4x4World[objectIndex];
+				gameObject->m_xmf4x4ToParent = mClientInfo[playerIndex].m_axmf4x4World[objectIndex];
 			}
-#endif LOADSCENE
+#endif // LOADSCENE
 		}
 	}
 }
 
-void CTcpClient::UpdatePickedObject(int i)
+void CTcpClient::UpdatePickedObject(int playerIndex)
 {
-	if (i == m_nMainClientId)
+	if (playerIndex == mMainClientId)
 	{
-		if (m_aClientInfo[i].m_nPickedObjectNum == -1)
+		if (mClientInfo[playerIndex].m_nPickedObjectNum == -1)
 		{
-			m_apPlayers[i]->SetPickedObject(nullptr);
+			mPlayers[playerIndex]->SetPickedObject(nullptr);
 		}
 		else
 		{
-			int nObjectNum = m_aClientInfo[i].m_nPickedObjectNum;
-			shared_ptr<CGameObject> pGameObject = g_collisionManager.GetCollisionObjectWithNumber(nObjectNum).lock();
-			if (pGameObject)
+			const int objectId = mClientInfo[playerIndex].m_nPickedObjectNum;
+			shared_ptr<CGameObject> gameObject;
+			if (!TryGetCollisionObject(objectId, "pickedObjectId", gameObject))
 			{
-				m_apPlayers[i]->SetPickedObject(pGameObject);
+				return;
+			}
+			if (gameObject)
+			{
+				mPlayers[playerIndex]->SetPickedObject(gameObject);
 			}
 		}
 	}
 }
 
-void CTcpClient::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+void CTcpClient::ProcessWriteEvent()
 {
-	if (m_sendQueue.empty() && m_socketState == SOCKET_STATE::SEND_GAME_START)
+	if (mSendQueue.empty() && mSocketState == SOCKET_STATE::SEND_GAME_START)
 	{
 		// 기존 연결 직후 최초 FD_WRITE가 게임 시작 요청을 발생시키던 동작을 유지한다.
 		RequestSend();
@@ -478,67 +861,61 @@ void CTcpClient::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 void CTcpClient::RequestSend()
 {
 	// TCP 송수신은 독립적이므로 partial recv 대기 중에도 클라이언트 입력은 계속 전송한다.
-	bool isInvalid = m_sock == INVALID_SOCKET || m_nMainClientId < 0 ||
-		m_nMainClientId >= static_cast<INT8>(MAX_CLIENT) || !m_apPlayers[m_nMainClientId];
-	if (isInvalid)
+	const bool cannotSend =
+		m_sock == INVALID_SOCKET ||
+		mMainClientId < 0 ||
+		mMainClientId >= static_cast<INT8>(MAX_CLIENT) ||
+		!mPlayers[mMainClientId];
+	if (cannotSend)
 	{
 		return;
 	}
 
-	//데이터 갱신 후 전송
-	m_aClientInfo[m_nMainClientId].m_animationInfo.pitch = m_apPlayers[m_nMainClientId]->GetPitch();
-	m_aClientInfo[m_nMainClientId].m_playerInfo.m_bRightClick = m_apPlayers[m_nMainClientId]->IsRightClick();
-	m_apPlayers[m_nMainClientId]->SetRightClick(false);
+	mClientInfo[mMainClientId].m_animationInfo.pitch = mPlayers[mMainClientId]->GetPitch();
+	mClientInfo[mMainClientId].m_playerInfo.m_bRightClick = mPlayers[mMainClientId]->IsRightClick();
+	mPlayers[mMainClientId]->SetRightClick(false);
 
-	switch (m_socketState)
+	switch (mSocketState)
 	{
 	case SOCKET_STATE::SEND_GAME_START:
-		SubmitSendData(static_cast<INT8>(1));
+		SubmitSendData(static_cast<INT8>(SOCKET_STATE::SEND_GAME_START));
 		break;
 	case SOCKET_STATE::SEND_CHANGE_SLOT:
-		if (SubmitSendData(static_cast<INT8>(2), m_nSelectedSlot))
+		if (SubmitSendData(static_cast<INT8>(SOCKET_STATE::SEND_CHANGE_SLOT), mSelectedSlot))
 		{
-			m_socketState = SOCKET_STATE::SEND_GAME_START;
+			mSocketState = SOCKET_STATE::SEND_GAME_START;
 		}
 		break;
 	case SOCKET_STATE::SEND_KEY_BUFFER:
 	{
-		UCHAR* pKeysBuffer = CGameFramework::GetKeysBuffer();
-		WORD wKeyBuffer = 0;
-		UpdateKeyBitMask(pKeysBuffer, wKeyBuffer);
+		const UCHAR* keysBuffer = CGameFramework::GetKeysBuffer();
+		const WORD keyMask = BuildKeyBitMask(keysBuffer);
 
-		bool submitted = false;
-		// 키버퍼, 카메라Matrix, LOOK,RIGHT 같이 보내주기
-		if (m_apPlayers[m_nMainClientId]->m_pSkinnedAnimationController->IsAnimation())
+		if (mPlayers[mMainClientId]->m_pSkinnedAnimationController->IsAnimation())
 		{
-			submitted = SubmitSendData(
-				static_cast<INT8>(0),
-				wKeyBuffer,
-				m_apPlayers[m_nMainClientId]->GetCamera()->GetViewMatrix(),
-				m_apPlayers[m_nMainClientId]->GetLook(),
-				m_apPlayers[m_nMainClientId]->GetRight(),
-				m_apPlayers[m_nMainClientId]->GetUp(),
-				m_aClientInfo[m_nMainClientId].m_animationInfo,
-				m_aClientInfo[m_nMainClientId].m_playerInfo
+			SubmitSendData(
+				static_cast<INT8>(SOCKET_STATE::SEND_KEY_BUFFER),
+				keyMask,
+				mPlayers[mMainClientId]->GetCamera()->GetViewMatrix(),
+				mPlayers[mMainClientId]->GetLook(),
+				mPlayers[mMainClientId]->GetRight(),
+				mPlayers[mMainClientId]->GetUp(),
+				mClientInfo[mMainClientId].m_animationInfo,
+				mClientInfo[mMainClientId].m_playerInfo
 			);
 		}
 		else
 		{
-			submitted = SubmitSendData(
-				static_cast<INT8>(0),
-				wKeyBuffer,
-				m_apPlayers[m_nMainClientId]->GetCamera()->GetViewMatrix(),
-				m_apPlayers[m_nMainClientId]->GetCamera()->GetLookVector(),
-				m_apPlayers[m_nMainClientId]->GetCamera()->GetRightVector(),
-				m_apPlayers[m_nMainClientId]->GetCamera()->GetUpVector(),
-				m_aClientInfo[m_nMainClientId].m_animationInfo,
-				m_aClientInfo[m_nMainClientId].m_playerInfo
+			SubmitSendData(
+				static_cast<INT8>(SOCKET_STATE::SEND_KEY_BUFFER),
+				keyMask,
+				mPlayers[mMainClientId]->GetCamera()->GetViewMatrix(),
+				mPlayers[mMainClientId]->GetCamera()->GetLookVector(),
+				mPlayers[mMainClientId]->GetCamera()->GetRightVector(),
+				mPlayers[mMainClientId]->GetCamera()->GetUpVector(),
+				mClientInfo[mMainClientId].m_animationInfo,
+				mClientInfo[mMainClientId].m_playerInfo
 			);
-		}
-
-		if (submitted)
-		{
-			SendNum++;
 		}
 		break;
 	}
@@ -552,19 +929,19 @@ bool CTcpClient::SubmitSendData(Args&&... args)
 {
 	const size_t bufferSize = (sizeof(args) + ... + 0);
 	if (bufferSize == 0 ||
-		m_nPendingSendBytes > MAX_PENDING_SEND_BYTES ||
-		bufferSize > MAX_PENDING_SEND_BYTES - m_nPendingSendBytes)
+		mPendingSendBytes > MAX_PENDING_SEND_BYTES ||
+		bufferSize > MAX_PENDING_SEND_BYTES - mPendingSendBytes)
 	{
 		CloseConnection();
 		return false;
 	}
 
 	std::vector<char> buffer(bufferSize);
-	size_t nOffset = 0;
-	((memcpy(buffer.data() + nOffset, &args, sizeof(args)), nOffset += sizeof(args)), ...);
+	size_t offset = 0;
+	((memcpy(buffer.data() + offset, &args, sizeof(args)), offset += sizeof(args)), ...);
 
-	m_nPendingSendBytes += buffer.size();
-	m_sendQueue.push_back(PendingSend{ std::move(buffer), 0 });
+	mPendingSendBytes += buffer.size();
+	mSendQueue.push_back(PendingSend{ std::move(buffer), 0 });
 	if (FlushSendQueue() == SendResult::Error)
 	{
 		CloseConnection();
@@ -575,9 +952,9 @@ bool CTcpClient::SubmitSendData(Args&&... args)
 
 CTcpClient::SendResult CTcpClient::FlushSendQueue()
 {
-	while (!m_sendQueue.empty())
+	while (!mSendQueue.empty())
 	{
-		PendingSend& pending = m_sendQueue.front();
+		PendingSend& pending = mSendQueue.front();
 		const size_t remainingBytes = pending.buffer.size() - pending.sentBytes;
 		const int sentBytes = send(
 			m_sock,
@@ -590,8 +967,8 @@ CTcpClient::SendResult CTcpClient::FlushSendQueue()
 			pending.sentBytes += static_cast<size_t>(sentBytes);
 			if (pending.sentBytes == pending.buffer.size())
 			{
-				m_nPendingSendBytes -= pending.buffer.size();
-				m_sendQueue.pop_front();
+				mPendingSendBytes -= pending.buffer.size();
+				mSendQueue.pop_front();
 			}
 			continue;
 		}
@@ -605,30 +982,30 @@ CTcpClient::SendResult CTcpClient::FlushSendQueue()
 	return SendResult::Complete;
 }
 
-CTcpClient::ReceiveResult CTcpClient::RecvData(SOCKET socket, size_t nBufferSize)
+CTcpClient::ReceiveResult CTcpClient::ReceiveData(SOCKET socket, size_t expectedBytes)
 {
-	bool isInvalidBuffer =
-		nBufferSize > MAX_PACKET_PAYLOAD_SIZE ||
-		m_nCurrentRecvByte < 0 ||
-		static_cast<size_t>(m_nCurrentRecvByte) > nBufferSize;
+	const bool hasInvalidBufferState =
+		expectedBytes > MAX_PACKET_PAYLOAD_SIZE ||
+		mReceivedBytes < 0 ||
+		static_cast<size_t>(mReceivedBytes) > expectedBytes;
 
-	if (isInvalidBuffer)
+	if (hasInvalidBufferState)
 	{
 		return ReceiveResult::Error;
 	}
 
-	if (nBufferSize == 0)
+	if (expectedBytes == 0)
 	{
 		return ReceiveResult::Complete;
 	}
 
-	const int remainRecvByte = static_cast<int>(nBufferSize) - m_nCurrentRecvByte;
-	const int retval = recv(socket, m_pCurrentBuffer + m_nCurrentRecvByte, remainRecvByte, 0);
-	if (retval > 0)
+	const int remainingBytes = static_cast<int>(expectedBytes) - mReceivedBytes;
+	const int receivedBytes = recv(socket, mReceiveBuffer + mReceivedBytes, remainingBytes, 0);
+	if (receivedBytes > 0)
 	{
-		m_nCurrentRecvByte += retval;
+		mReceivedBytes += receivedBytes;
 	}
-	else if (retval == 0)
+	else if (receivedBytes == 0)
 	{
 		return ReceiveResult::Closed;
 	}
@@ -642,218 +1019,225 @@ CTcpClient::ReceiveResult CTcpClient::RecvData(SOCKET socket, size_t nBufferSize
 		return ReceiveResult::Error;
 	}
 
-	if (static_cast<size_t>(m_nCurrentRecvByte) < nBufferSize)
+	if (static_cast<size_t>(mReceivedBytes) < expectedBytes)
 	{
 		return ReceiveResult::Pending;
 	}
 
-	m_nCurrentRecvByte = 0;
+	mReceivedBytes = 0;
 	return ReceiveResult::Complete;
 }
 
-void CTcpClient::UpdateKeyBitMask(UCHAR* pKeysBuffer, WORD& wKeyBuffer)	// 보낼 키 버퍼를 업데이트
+WORD CTcpClient::BuildKeyBitMask(const UCHAR* keysBuffer) const
 {
-	if (pKeysBuffer['W'] & 0xF0)wKeyBuffer |= KEY_W;
-	if (pKeysBuffer['S'] & 0xF0)wKeyBuffer |= KEY_S;
-	if (pKeysBuffer['A'] & 0xF0)wKeyBuffer |= KEY_A;
-	if (pKeysBuffer['D'] & 0xF0)wKeyBuffer |= KEY_D;
-	if (pKeysBuffer['1'] & 0xF0)wKeyBuffer |= KEY_1;
-	if (pKeysBuffer['2'] & 0xF0)wKeyBuffer |= KEY_2;
-	if (pKeysBuffer['3'] & 0xF0)wKeyBuffer |= KEY_3;
-	if (pKeysBuffer['4'] & 0xF0)wKeyBuffer |= KEY_4;
-	if (pKeysBuffer['E'] & 0xF0)wKeyBuffer |= KEY_E;
-	if (pKeysBuffer[VK_LSHIFT] & 0xF0)wKeyBuffer |= KEY_LSHIFT;
-	if (pKeysBuffer[VK_LBUTTON] & 0xF0)wKeyBuffer |= KEY_LBUTTON;
-	if (pKeysBuffer[VK_RBUTTON] & 0xF0)wKeyBuffer |= KEY_RBUTTON;
+	WORD keyMask = 0;
+	if (keysBuffer['W'] & 0xF0) { keyMask |= KEY_W; }
+	if (keysBuffer['S'] & 0xF0) { keyMask |= KEY_S; }
+	if (keysBuffer['A'] & 0xF0) { keyMask |= KEY_A; }
+	if (keysBuffer['D'] & 0xF0) { keyMask |= KEY_D; }
+	if (keysBuffer['1'] & 0xF0) { keyMask |= KEY_1; }
+	if (keysBuffer['2'] & 0xF0) { keyMask |= KEY_2; }
+	if (keysBuffer['3'] & 0xF0) { keyMask |= KEY_3; }
+	if (keysBuffer['4'] & 0xF0) { keyMask |= KEY_4; }
+	if (keysBuffer['E'] & 0xF0) { keyMask |= KEY_E; }
+	if (keysBuffer[VK_LSHIFT] & 0xF0) { keyMask |= KEY_LSHIFT; }
+	if (keysBuffer[VK_LBUTTON] & 0xF0) { keyMask |= KEY_LBUTTON; }
+	if (keysBuffer[VK_RBUTTON] & 0xF0) { keyMask |= KEY_RBUTTON; }
+	return keyMask;
 }
 
 void CTcpClient::UpdateZombiePlayer()
 {
-	shared_ptr<CZombiePlayer> pZombiePlayer = dynamic_pointer_cast<CZombiePlayer>(m_apPlayers[0]);
-	if (!pZombiePlayer)
+	shared_ptr<CZombiePlayer> zombiePlayer = dynamic_pointer_cast<CZombiePlayer>(mPlayers[ZOMBIEPLAYER]);
+	if (!zombiePlayer)
 	{
 		return;
 	}
 
-	for (int i = 0; i < MAX_CLIENT; ++i)
+	for (int playerIndex = 0; playerIndex < MAX_CLIENT; ++playerIndex)
 	{
-		if (m_nMainClientId == ZOMBIEPLAYER)	// 추적
+		if (mMainClientId == ZOMBIEPLAYER)	// 추적
 		{
-			if (m_aClientInfo[0].m_nSlotObjectNum[0] == 1)
+			if (mClientInfo[ZOMBIEPLAYER].m_nSlotObjectNum[0] == 1)
 			{
-				m_apPlayers[i]->SetTracking(true);
+				mPlayers[playerIndex]->SetTracking(true);
 			}
 			else
 			{
-				m_apPlayers[i]->SetTracking(false);
+				mPlayers[playerIndex]->SetTracking(false);
 			}
 		}
 
-		if (m_apPlayers[i]->GetClientId() != m_nMainClientId || i == ZOMBIEPLAYER)
+		if (mPlayers[playerIndex]->GetClientId() != mMainClientId || playerIndex == ZOMBIEPLAYER)
 		{
 			continue;
 		}
-		if (m_aClientInfo[0].m_nSlotObjectNum[1] == 1)
+		if (mClientInfo[ZOMBIEPLAYER].m_nSlotObjectNum[1] == 1)
 		{
-			m_apPlayers[i]->SetInterruption(true);
+			mPlayers[playerIndex]->SetInterruption(true);
 		}
 		else
 		{
-			m_apPlayers[i]->SetInterruption(false);
+			mPlayers[playerIndex]->SetInterruption(false);
 		}
 	}
 
 	// 시야 방해(zombie 플레이어)
-	if (m_nMainClientId == ZOMBIEPLAYER)
+	if (mMainClientId == ZOMBIEPLAYER)
 	{
-		if (m_aClientInfo[0].m_nSlotObjectNum[1] == 1)
+		if (mClientInfo[ZOMBIEPLAYER].m_nSlotObjectNum[1] == 1)
 		{
-			m_apPlayers[0]->SetInterruption(true);
+			mPlayers[ZOMBIEPLAYER]->SetInterruption(true);
 		}
 		else
 		{
-			m_apPlayers[0]->SetInterruption(false);
+			mPlayers[ZOMBIEPLAYER]->SetInterruption(false);
 		}
 	}
 
-	if (m_aClientInfo[0].m_nSlotObjectNum[2] == 1)	// 공격을 시도
+	if (mClientInfo[ZOMBIEPLAYER].m_nSlotObjectNum[2] == 1)	// 공격을 시도
 	{
-		pZombiePlayer->m_pSkinnedAnimationController->SetTrackEnable(2, true);
+		zombiePlayer->m_pSkinnedAnimationController->SetTrackEnable(2, true);
 	}
 }
 
-void CTcpClient::UpdatePlayer(int nIndex)
+void CTcpClient::UpdateSurvivorPlayer(int playerIndex)
 {
-	shared_ptr<CBlueSuitPlayer> pBlueSuitPlayer = dynamic_pointer_cast<CBlueSuitPlayer>(m_apPlayers[nIndex]);
+	shared_ptr<CBlueSuitPlayer> survivorPlayer =
+		dynamic_pointer_cast<CBlueSuitPlayer>(mPlayers[playerIndex]);
 
-	if (!pBlueSuitPlayer) // 생존자가 아니면 수행 x
+	if (!survivorPlayer)
 	{
 		return;
 	}
 
-	if (m_nEscapeDoor == -1)
+	int escapeDoorId = mEscapeDoorId;
+	if (escapeDoorId == -1)
 	{
-		m_nEscapeDoor = m_aClientInfo[nIndex].m_playerInfo.m_iEscapeDoor;
+		escapeDoorId = mClientInfo[playerIndex].m_playerInfo.m_iEscapeDoor;
 	}
-	if (m_nEscapeDoor != -1)
+	if (escapeDoorId != -1)
 	{
-		shared_ptr<CGameObject> pGameObject = g_collisionManager.GetCollisionObjectWithNumber(m_nEscapeDoor).lock();
-		pBlueSuitPlayer->SetEscapePos(pGameObject->GetPosition());
+		shared_ptr<CGameObject> gameObject;
+		if (!TryGetCollisionObject(escapeDoorId, "escapeDoorId", gameObject))
+		{
+			return;
+		}
+		if (!gameObject)
+		{
+			return;
+		}
+
+		mEscapeDoorId = escapeDoorId;
+		survivorPlayer->SetEscapePos(gameObject->GetPosition());
 	}
 
-	pBlueSuitPlayer->SelectItem(m_aClientInfo[nIndex].m_playerInfo.m_selectItem);
-	for (int j = 0; j < 3; ++j)
+	survivorPlayer->SelectItem(mClientInfo[playerIndex].m_playerInfo.m_selectItem);
+	for (int slotIndex = 0; slotIndex < 3; ++slotIndex)
 	{
-		if (m_aClientInfo[nIndex].m_nSlotObjectNum[j] != -1)
+		const int slotObjectId = mClientInfo[playerIndex].m_nSlotObjectNum[slotIndex];
+		if (slotObjectId != -1)
 		{
-			shared_ptr<CGameObject> pGameObject = g_collisionManager.GetCollisionObjectWithNumber(m_aClientInfo[nIndex].m_nSlotObjectNum[j]).lock();
-			shared_ptr<CItemObject> pItemObject = dynamic_pointer_cast<CItemObject>(pGameObject);
-			if (pItemObject)
+			shared_ptr<CGameObject> gameObject;
+			if (!TryGetCollisionObject(slotObjectId, "slotObjectId", gameObject))
 			{
-				if (!pItemObject->IsObtained())
+				return;
+			}
+			shared_ptr<CItemObject> itemObject = dynamic_pointer_cast<CItemObject>(gameObject);
+			if (itemObject)
+			{
+				if (!itemObject->IsObtained())
 				{
-					// 아이템을 획득한 순간
-					sharedobject.EnableItemGetParticle(pItemObject);
+					sharedobject.EnableItemGetParticle(itemObject);
 				}
-				pItemObject->SetObtain(true);
-				if (nIndex == m_nMainClientId && !pBlueSuitPlayer->IsSlotItemObtain(j))
+				itemObject->SetObtain(true);
+				if (playerIndex == mMainClientId && !survivorPlayer->IsSlotItemObtain(slotIndex))
 				{
-					SoundManager& soundManager = soundManager.GetInstance();
+					SoundManager& soundManager = SoundManager::GetInstance();
 					soundManager.PlaySoundWithName(sound::GET_ITEM_BLUESUIT);
 				}
-				pBlueSuitPlayer->SetSlotItem(j, m_aClientInfo[nIndex].m_nSlotObjectNum[j]);
+				survivorPlayer->SetSlotItem(slotIndex, slotObjectId);
 			}
 		}
-		else // -1을 받았는데 플레이어가 가진 Reference값이 -1이 아닌 경우를 생각해야함
+		else
 		{
-			if (pBlueSuitPlayer->GetReferenceSlotItemNum(j) != -1)
+			const int referenceObjectId = survivorPlayer->GetReferenceSlotItemNum(slotIndex);
+			if (referenceObjectId != -1)
 			{
-				shared_ptr<CGameObject> pGameObject = g_collisionManager.GetCollisionObjectWithNumber(pBlueSuitPlayer->GetReferenceSlotItemNum(j)).lock();
-				shared_ptr<CItemObject> pItemObject = dynamic_pointer_cast<CItemObject>(pGameObject);
-				if (pItemObject)
+				shared_ptr<CGameObject> gameObject;
+				if (!TryGetCollisionObject(referenceObjectId, "referenceSlotObjectId", gameObject))
 				{
-					pItemObject->SetObtain(false);
-					pBlueSuitPlayer->SetSlotItemEmpty(j);
+					return;
+				}
+				shared_ptr<CItemObject> itemObject = dynamic_pointer_cast<CItemObject>(gameObject);
+				if (itemObject)
+				{
+					itemObject->SetObtain(false);
+					survivorPlayer->SetSlotItemEmpty(slotIndex);
 				}
 			}
 		}
 	}
 
-	for (int j = 0; j < 3; ++j)
+	for (int fuseIndex = 0; fuseIndex < 3; ++fuseIndex)
 	{
-		if (m_aClientInfo[nIndex].m_nFuseObjectNum[j] != -1)
+		const int fuseObjectId = mClientInfo[playerIndex].m_nFuseObjectNum[fuseIndex];
+		if (fuseObjectId != -1)
 		{
-			shared_ptr<CGameObject> pGameObject = g_collisionManager.GetCollisionObjectWithNumber(m_aClientInfo[nIndex].m_nFuseObjectNum[j]).lock();
-			shared_ptr<CItemObject> pItemObject = dynamic_pointer_cast<CItemObject>(pGameObject);
-			if (pItemObject) {
-				if (!pItemObject->IsObtained())
+			shared_ptr<CGameObject> gameObject;
+			if (!TryGetCollisionObject(fuseObjectId, "fuseObjectId", gameObject))
+			{
+				return;
+			}
+			shared_ptr<CItemObject> itemObject = dynamic_pointer_cast<CItemObject>(gameObject);
+			if (itemObject)
+			{
+				if (!itemObject->IsObtained())
 				{
-					// 아이템을 획득한 순간
-					sharedobject.EnableItemGetParticle(pItemObject);
+					sharedobject.EnableItemGetParticle(itemObject);
 				}
-				pItemObject->SetObtain(true);
-				if (nIndex == m_nMainClientId && !pBlueSuitPlayer->IsFuseObtain(j))
+				itemObject->SetObtain(true);
+				if (playerIndex == mMainClientId && !survivorPlayer->IsFuseObtain(fuseIndex))
 				{
-					SoundManager& soundManager = soundManager.GetInstance();
+					SoundManager& soundManager = SoundManager::GetInstance();
 					soundManager.PlaySoundWithName(sound::GET_ITEM_BLUESUIT);
 				}
-				pBlueSuitPlayer->SetFuseItem(j, m_aClientInfo[nIndex].m_nFuseObjectNum[j]);
+				survivorPlayer->SetFuseItem(fuseIndex, fuseObjectId);
 			}
 		}
-		else // -1을 받았는데 플레이어가 가진 Reference값이 -1이 아닌 경우를 생각해야함
+		else
 		{
-			if (pBlueSuitPlayer->GetReferenceFuseItemNum(j) != -1)
+			const int referenceObjectId = survivorPlayer->GetReferenceFuseItemNum(fuseIndex);
+			if (referenceObjectId != -1)
 			{
-				shared_ptr<CGameObject> pGameObject = g_collisionManager.GetCollisionObjectWithNumber(pBlueSuitPlayer->GetReferenceFuseItemNum(j)).lock();
-				shared_ptr<CItemObject> pItemObject = dynamic_pointer_cast<CItemObject>(pGameObject);
-				if (pItemObject)
+				shared_ptr<CGameObject> gameObject;
+				if (!TryGetCollisionObject(referenceObjectId, "referenceFuseObjectId", gameObject))
 				{
-					pItemObject->SetObtain(false);
-					pBlueSuitPlayer->SetFuseItemEmpty(j);
+					return;
+				}
+				shared_ptr<CItemObject> itemObject = dynamic_pointer_cast<CItemObject>(gameObject);
+				if (itemObject)
+				{
+					itemObject->SetObtain(false);
+					survivorPlayer->SetFuseItemEmpty(fuseIndex);
 				}
 			}
 		}
 	}
 
-	if (m_aClientInfo[nIndex].m_playerInfo.m_bAttacked) {
-		pBlueSuitPlayer->SetHitEvent();
+	if (mClientInfo[playerIndex].m_playerInfo.m_bAttacked)
+	{
+		survivorPlayer->SetHitEvent();
 	}
 
-	if (m_aClientInfo[nIndex].m_playerInfo.m_bTeleportItemUse) {
-		pBlueSuitPlayer->Teleport();
+	if (mClientInfo[playerIndex].m_playerInfo.m_bTeleportItemUse)
+	{
+		survivorPlayer->Teleport();
 	}
 }
 
-void CTcpClient::LoadCompleteSend()
+void CTcpClient::SendLoadingComplete()
 {
 	SubmitSendData(static_cast<INT8>(SOCKET_STATE::SEND_LOADING_COMPLETE));
-}
-
-void ConvertLPWSTRToChar(LPWSTR lpwstr, char* dest, int destSize)
-{
-	// WideCharToMultiByte 함수를 사용하여 LPWSTR을 char*로 변환
-	WideCharToMultiByte(
-		CP_UTF8,
-		0,                   // 변환 옵션
-		lpwstr,              // 변환할 유니코드 문자열
-		-1,                  // 자동으로 문자열 길이 계산
-		dest,                // 대상 버퍼
-		destSize,            // 대상 버퍼의 크기
-		NULL,                // 기본 문자 사용 안 함
-		NULL                 // 기본 문자 사용 여부를 저장할 변수의 주소
-	);
-}
-
-void ConvertCharToLPWSTR(const char* pstr, LPWSTR dest, int destSize)
-{
-	// MultiByteToWideChar 함수를 사용하여 char*을 LPWSTR로 변환
-	MultiByteToWideChar(
-		CP_UTF8,
-		0,                   // 변환 옵션
-		pstr,                 // 변환할 문자열
-		-1,                  // 자동으로 문자열 길이 계산
-		dest,                // 대상 버퍼
-		destSize             // 대상 버퍼의 크기
-	);
 }
 
