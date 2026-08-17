@@ -46,7 +46,7 @@ int main()
 	);
 
 	//소켓 준비작업
-	g_tcpServer.Init(hWnd);
+	g_tcpServer.Initialize(hWnd);
 	g_tcpServer.SetClientListBox(hListBox);
 
 	MSG msg;

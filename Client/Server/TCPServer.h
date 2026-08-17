@@ -153,37 +153,35 @@ struct NetworkStatistics
 	std::array<NetworkPacketStatistics, PACKET_TYPE_COUNT> receivedByHead;
 };
 
-struct SOCKETINFO
+struct SocketInfo
 {
-	bool m_bUsed = false;
-	SOCKET m_sock = INVALID_SOCKET;
+	bool isUsed = false;
+	SOCKET socket = INVALID_SOCKET;
 
-	struct sockaddr_in m_addrClient;
-	int m_nAddrlen;
-	char m_pAddr[INET_ADDRSTRLEN];
+	struct sockaddr_in clientAddress;
+	int clientAddressLength = 0;
+	char ipAddress[INET_ADDRSTRLEN] = {};
 
-	INT8 m_nHead = -1;
+	INT8 receiveHead = -1;
 
 	// 소켓마다 HEAD와 DATA의 partial recv 진행 상태를 함께 보존한다.
-	bool m_bRecvHead = false;
-	int m_nCurrentRecvByte = 0;		// 현재까지 받은 데이터의 길이
-	char m_pCurrentBuffer[MAX_PACKET_PAYLOAD_SIZE];
-	std::deque<PendingSend> m_sendQueue;
+	bool hasReceiveHead = false;
+	int receivedBytes = 0;		// 현재까지 받은 데이터의 길이
+	char receiveBuffer[MAX_PACKET_PAYLOAD_SIZE] = {};
+	std::deque<PendingSend> sendQueue;
 	// 큐가 소유한 전체 버퍼 크기와 아직 send()하지 못한 바이트를 구분한다.
-	size_t m_nPendingSendBytes = 0;
-	size_t m_nUnsentSendBytes = 0;
-	size_t m_nCurrentPacketReceivedBytes = 0;
+	size_t pendingSendBytes = 0;
+	size_t unsentSendBytes = 0;
+	size_t currentPacketReceivedBytes = 0;
 
 	// 누적 통계는 연결 종료 요약에, 구간 통계는 1초 단위 출력에 사용한다.
-	NetworkStatistics m_totalNetworkStatistics;
-	NetworkStatistics m_intervalNetworkStatistics;
+	NetworkStatistics totalNetworkStatistics;
+	NetworkStatistics intervalNetworkStatistics;
 
-	SOCKET_STATE m_socketState = SOCKET_STATE::SEND_ID;
+	SOCKET_STATE sendState = SOCKET_STATE::SEND_ID;
 
-	bool m_bLoadComplete = false;
+	bool isLoadingComplete = false;
 };
-
-void ConvertCharToLPWSTR(const char* pstr, LPWSTR dest, int destSize);
 
 class TCPServer
 {
@@ -191,21 +189,21 @@ public:
 	TCPServer();
 	~TCPServer();
 
-	bool Init(HWND hWnd);
+	bool Initialize(HWND hWnd);
 	void SimulationLoop();
 
 	// Win32 진입점에서 전달되는 메시지만 외부에 공개한다.
 	void OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	void OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
-	void SetGameState(int nGameState) { m_nGameState = nGameState; }
-	void SetNumOfZombie(int nZombie) { m_nZombie = nZombie; }
-	void SetNumOfBlueSuit(int nBlueSuit) { m_nBlueSuit = nBlueSuit; }
-	void SetClientListBox(HWND hListBox) { m_hClientListBox = hListBox; }
+	void SetGameState(int gameState) { mGameState = gameState; }
+	void SetZombieCount(int zombieCount) { mZombieCount = zombieCount; }
+	void SetBlueSuitCount(int blueSuitCount) { mBlueSuitCount = blueSuitCount; }
+	void SetClientListBox(HWND clientListBox) { mClientListBox = clientListBox; }
 
-	int GetNumOfZombie() const { return m_nZombie; }
-	int GetNumOfBlueSuit() const { return m_nBlueSuit; }
-	shared_ptr<CServerPlayer> GetPlayer(int nIndex) { return m_apPlayers[nIndex]; }
+	int GetZombieCount() const { return mZombieCount; }
+	int GetBlueSuitCount() const { return mBlueSuitCount; }
+	shared_ptr<CServerPlayer> GetPlayer(int index) { return mPlayers[index]; }
 
 	static default_random_engine m_mt19937Gen;
 	static HWND m_hWnd;
@@ -227,36 +225,34 @@ private:
 		Error
 	};
 
-	void OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingCloseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void ProcessAcceptEvent(HWND hWnd, SOCKET listenSocket);
+	void ProcessReadEvent(SOCKET socket);
+	void ProcessWriteEvent(SOCKET socket);
+	void ProcessCloseEvent(SOCKET socket);
 
 	// 연결 종료 원인과 관계없이 소켓 및 플레이어 상태를 한 번만 정리한다.
-	bool DisconnectClient(SOCKET sockClient);
-	INT8 AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, int nAddrLen);
-	INT8 GetSocketIndex(SOCKET sockClient);
+	bool DisconnectClient(SOCKET clientSocket);
+	INT8 RegisterClientSocket(SOCKET clientSocket, struct sockaddr_in clientAddress, int clientAddressLength);
+	INT8 FindClientIndex(SOCKET clientSocket) const;
 	bool IsValidReceiveHead(INT8 head) const;
-	void ResetReceiveState(SOCKETINFO& socketInfo);
-	ReceiveResult RecvData(int nSocketIndex, size_t nBufferSize);
-	void RecordReceivedPacket(SOCKETINFO& socketInfo);
+	bool HandleReceiveResult(ReceiveResult result, SOCKET socket);
+	void ResetReceiveState(SocketInfo& socketInfo);
+	ReceiveResult ReceiveData(int clientIndex, size_t expectedBytes);
+	void RecordReceivedPacketStatistics(SocketInfo& socketInfo);
 	void ReportNetworkStatisticsIfDue();
-	void ReportDisconnectedClientStatistics(int nSocketIndex, const SOCKETINFO& socketInfo) const;
+	void ReportDisconnectedClientStatistics(int clientIndex, const SocketInfo& socketInfo) const;
 
 	template<class... Args>
-	bool SubmitSendData(int nSocketIndex, Args&&... args);
-	bool EnqueueSendBuffer(int nSocketIndex, vector<char> buffer);
+	bool SubmitSendData(int clientIndex, Args&&... args);
+	bool EnqueueSendBuffer(int clientIndex, vector<char> buffer);
 	// partial send와 WSAEWOULDBLOCK 이후에도 소켓별 전송 위치를 유지한다.
-	SendResult FlushSendQueue(int nSocketIndex);
-	void RequestSend(int nSocketIndex);
-	void PushBufferData(vector<char>& buffer, const void* data, size_t size);
+	SendResult FlushSendQueue(int clientIndex);
+	void RequestSend(int clientIndex);
+	void AppendBufferData(vector<char>& buffer, const void* data, size_t size);
 
-	int CheckLobby();
-	int CheckEndGame();
-	void UpdateEndGame(int nEndGame);
-	void UpdateInformation();
-	int CheckAllClientsSentData(int cur_nPlayer);
-	void SetAllClientsSendStatus(int cur_nPlayer, bool val);
+	int DetermineEndGameState();
+	void QueueEndGameNotifications(int endGameState);
+	void UpdatePlayerReplicationData();
 
 	void LoadScene();
 	void CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4World, const vector<BoundingOrientedBox>& voobb);
@@ -265,33 +261,30 @@ private:
 	std::vector<SC_SPACEOUT_OBJECT> CollectOutOfSpaceObjects();
 	void EnqueueOutOfSpaceObjectPackets(const std::vector<SC_SPACEOUT_OBJECT>& objectUpdates);
 	void UpdateNearbyObjectReplicationData();
-	void InitPlayerPosition(shared_ptr<CServerPlayer>& pServerPlayer, int nIndex);
+	void InitializePlayerPosition(shared_ptr<CServerPlayer>& serverPlayer, int index);
 
-	int m_nGameState;
-	CTimer m_timer;
-	std::chrono::steady_clock::time_point m_lastNetworkStatisticsReportTime;
-	static INT8 m_nClient;
+	int mGameState;
+	CTimer mTimer;
+	std::chrono::steady_clock::time_point mLastNetworkStatisticsReportTime;
+	static INT8 sClientCount;
 
 	// 접속한 클라이언트들의 정보를 저장.
-	std::array<SOCKETINFO, MAX_CLIENT> m_vSocketInfoList;	// 소켓 인덱스는 순차적으로 배정받는다
+	std::array<SocketInfo, MAX_CLIENT> mSocketInfos;	// 소켓 인덱스는 순차적으로 배정받는다
 
-	int m_nZombie = 0;
-	int m_nBlueSuit = 0;
-	std::array<std::shared_ptr<CServerPlayer>, MAX_CLIENT> m_apPlayers;
-	std::array<SC_UPDATE_INFO, MAX_CLIENT> m_aUpdateInfo;
-	std::vector<shared_ptr<CServerGameObject>> m_vpGameObject;
-	std::shared_ptr<CServerCollisionManager> m_pCollisionManager;
+	int mZombieCount = 0;
+	int mBlueSuitCount = 0;
+	std::array<std::shared_ptr<CServerPlayer>, MAX_CLIENT> mPlayers;
+	std::array<SC_UPDATE_INFO, MAX_CLIENT> mUpdateInfo;
+	std::vector<shared_ptr<CServerGameObject>> mGameObjects;
+	std::shared_ptr<CServerCollisionManager> mCollisionManager;
 
-	vector<pair<int, int>> m_vDrawerId; // <ObjectCount,type>
+	vector<pair<int, int>> mDrawerIds; // <ObjectCount,type>
 
-	bool m_bDataSend[MAX_CLIENT] = { false };
-	// 송수신 , 데이터 업데이트는 싱글스레드로 이루어짐. 데이터를 send한 이후에 업데이트된 데이터가 send이전에 덮어씌어버리면 올바른 동기화가 이뤄지지 않음
-
-	HWND m_hClientListBox;
+	HWND mClientListBox;
 
 	//[0509] CServerPlayer에서 초기화하던 시작위치를 옮김
-	array<XMFLOAT3, 28> m_axmf3Positions;
-	array<int, MAX_CLIENT> m_anPlayerStartPosNum;
+	array<XMFLOAT3, 28> mPlayerStartPositions;
+	array<int, MAX_CLIENT> mPlayerStartPositionIndices;
 };
 
 extern void err_quit(const char* msg);

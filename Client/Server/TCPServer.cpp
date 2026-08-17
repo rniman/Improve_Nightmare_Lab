@@ -146,30 +146,28 @@ namespace
 		}
 		std::cout << '\n';
 	}
+
+	void ConvertCharToWideString(const char* source, LPWSTR destination, int destinationSize)
+	{
+		MultiByteToWideChar(
+			CP_UTF8,
+			0,
+			source,
+			-1,
+			destination,
+			destinationSize);
+	}
 }
 
 default_random_engine TCPServer::m_mt19937Gen;
 HWND TCPServer::m_hWnd;
-INT8 TCPServer::m_nClient = 0;
-
-void ConvertCharToLPWSTR(const char* pstr, LPWSTR dest, int destSize)
-{
-	// MultiByteToWideChar 함수를 사용하여 char*을 LPWSTR로 변환
-	MultiByteToWideChar(
-		CP_UTF8,
-		0,                   // 변환 옵션
-		pstr,                 // 변환할 문자열
-		-1,                  // 자동으로 문자열 길이 계산
-		dest,                // 대상 버퍼
-		destSize             // 대상 버퍼의 크기
-	);
-}
+INT8 TCPServer::sClientCount = 0;
 
 TCPServer::TCPServer()
 {
-	m_lastNetworkStatisticsReportTime = std::chrono::steady_clock::now();
+	mLastNetworkStatisticsReportTime = std::chrono::steady_clock::now();
 
-	m_axmf3Positions = {
+	mPlayerStartPositions = {
 		XMFLOAT3(10.0f, 0.0f, 13.5),
 		XMFLOAT3(10.0f, 0.0f, -13.5),
 		XMFLOAT3(-10.0f, 0.0f, 18.5),
@@ -204,7 +202,7 @@ TCPServer::TCPServer()
 		XMFLOAT3(-30.0f, 4.5f, 12.f),
 	};
 
-	m_anPlayerStartPosNum = { -1, -1, -1, -1, -1 };
+	mPlayerStartPositionIndices = { -1, -1, -1, -1, -1 };
 }
 
 TCPServer::~TCPServer()
@@ -215,13 +213,13 @@ void TCPServer::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 	switch (nMessageID)
 	{
 	case WM_CREATE:
-		m_timer.Start();
+		mTimer.Start();
 		break;
 	case WM_SOUND:
 	{
-		const int nSocketIndex = static_cast<int>(lParam);
-		if (nSocketIndex < 0 || nSocketIndex >= static_cast<int>(m_vSocketInfoList.size()) ||
-			!m_vSocketInfoList[nSocketIndex].m_bUsed)
+		const int clientIndex = static_cast<int>(lParam);
+		if (clientIndex < 0 || clientIndex >= static_cast<int>(mSocketInfos.size()) ||
+			!mSocketInfos[clientIndex].isUsed)
 		{
 			break;
 		}
@@ -229,24 +227,24 @@ void TCPServer::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		switch (wParam)
 		{
 		case SOUND_MESSAGE::OPEN_DRAWER:
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_OPEN_DRAWER_SOUND;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_OPEN_DRAWER_SOUND;
 			break;
 		case SOUND_MESSAGE::CLOSE_DRAWER:
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_CLOSE_DRAWER_SOUND;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_CLOSE_DRAWER_SOUND;
 			break;
 		case SOUND_MESSAGE::OPEN_DOOR:
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_OPEN_DOOR_SOUND;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_OPEN_DOOR_SOUND;
 			break;
 		case SOUND_MESSAGE::CLOSE_DOOR:
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_CLOSE_DOOR_SOUND;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_CLOSE_DOOR_SOUND;
 			break;
 		case SOUND_MESSAGE::BLUE_SUIT_DEAD:
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_BLUE_SUIT_DEAD;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_BLUE_SUIT_DEAD;
 			break;
 		default:
 			return;
 		}
-		RequestSend(nSocketIndex);
+		RequestSend(clientIndex);
 		break;
 	}
 	default:
@@ -274,16 +272,16 @@ void TCPServer::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 	switch (nSocketEvent)
 	{
 	case FD_ACCEPT:
-		OnProcessingAcceptMessage(hWnd, nMessageID, wParam, lParam);
+		ProcessAcceptEvent(hWnd, static_cast<SOCKET>(wParam));
 		break;
 	case FD_READ:
-		OnProcessingReadMessage(hWnd, nMessageID, wParam, lParam);
+		ProcessReadEvent(static_cast<SOCKET>(wParam));
 		break;
 	case FD_WRITE:
-		OnProcessingWriteMessage(hWnd, nMessageID, wParam, lParam);
+		ProcessWriteEvent(static_cast<SOCKET>(wParam));
 		break;
 	case FD_CLOSE:
-		OnProcessingCloseMessage(hWnd, nMessageID, wParam, lParam);
+		ProcessCloseEvent(static_cast<SOCKET>(wParam));
 		break;
 	default:
 		break;
@@ -292,154 +290,156 @@ void TCPServer::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 	return;
 }
 
-void TCPServer::OnProcessingAcceptMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+void TCPServer::ProcessAcceptEvent(HWND hWnd, SOCKET listenSocket)
 {
-	struct sockaddr_in addrClient;
-	int nAddrlen = sizeof(sockaddr_in);
-	const SOCKET sockClient = accept(static_cast<SOCKET>(wParam), reinterpret_cast<struct sockaddr*>(&addrClient), &nAddrlen);
+	struct sockaddr_in clientAddress;
+	int clientAddressLength = sizeof(sockaddr_in);
+	const SOCKET clientSocket = accept(
+		listenSocket,
+		reinterpret_cast<struct sockaddr*>(&clientAddress),
+		&clientAddressLength);
 
-	if (sockClient == INVALID_SOCKET)
+	if (clientSocket == INVALID_SOCKET)
 	{
 		err_display("accept()");
 		return;
 	}
 
-	if (m_nGameState == GAME_STATE::IN_GAME)
+	if (mGameState == GAME_STATE::IN_GAME)
 	{
-		closesocket(sockClient);
+		closesocket(clientSocket);
 		err_display("Game that has already started.");
 		return;
 	}
 
-	const INT8 nSocketIndex = AddSocketInfo(sockClient, addrClient, nAddrlen);
+	const INT8 clientIndex = RegisterClientSocket(clientSocket, clientAddress, clientAddressLength);
 
 	// MAX_CLIENT보다 더 많은 접속 요구
-	if (nSocketIndex == -1)
+	if (clientIndex == -1)
 	{
-		closesocket(sockClient); // 클라이언트 소켓 종료
+		closesocket(clientSocket); // 클라이언트 소켓 종료
 		err_display("Maximum number of clients reached. Connection refused."); // 연결 거부 메시지 표시
 		return;
 	}
 
-	const int retval = WSAAsyncSelect(sockClient, hWnd, WM_SOCKET, FD_READ | FD_WRITE | FD_CLOSE);
+	const int retval = WSAAsyncSelect(clientSocket, hWnd, WM_SOCKET, FD_READ | FD_WRITE | FD_CLOSE);
 	if (retval == SOCKET_ERROR)
 	{
 		err_display("WSAAsyncSelect()");
-		DisconnectClient(sockClient);
+		DisconnectClient(clientSocket);
 		return;
 	}
 	WCHAR pszList[256];
 	WCHAR pszIP[16];
-	ConvertCharToLPWSTR(m_vSocketInfoList[nSocketIndex].m_pAddr, pszIP, 16);
-	wsprintf(pszList, L"CLIENT[%d], IP: %s, 포트 번호: %d\n", nSocketIndex, pszIP, ntohs(m_vSocketInfoList[nSocketIndex].m_addrClient.sin_port));
-	SendMessage(m_hClientListBox, LB_ADDSTRING, 0, (LPARAM)pszList);
+	ConvertCharToWideString(mSocketInfos[clientIndex].ipAddress, pszIP, 16);
+	wsprintf(pszList, L"CLIENT[%d], IP: %s, 포트 번호: %d\n", clientIndex, pszIP, ntohs(mSocketInfos[clientIndex].clientAddress.sin_port));
+	SendMessage(mClientListBox, LB_ADDSTRING, 0, (LPARAM)pszList);
 
-	if (nSocketIndex == ZOMBIEPLAYER) // ZombiePlayer는 0번 소켓에만 생성
+	if (clientIndex == ZOMBIEPLAYER) // ZombiePlayer는 0번 소켓에만 생성
 	{
-		m_apPlayers[nSocketIndex] = make_shared<CServerZombiePlayer>();
-		m_apPlayers[nSocketIndex]->SetPlayerId(nSocketIndex);
-		++m_nZombie;
+		mPlayers[clientIndex] = make_shared<CServerZombiePlayer>();
+		mPlayers[clientIndex]->SetPlayerId(clientIndex);
+		++mZombieCount;
 	}
 	else
 	{
-		m_apPlayers[nSocketIndex] = make_shared<CServerBlueSuitPlayer>();
-		m_apPlayers[nSocketIndex]->SetPlayerId(nSocketIndex);
-		++m_nBlueSuit;
+		mPlayers[clientIndex] = make_shared<CServerBlueSuitPlayer>();
+		mPlayers[clientIndex]->SetPlayerId(clientIndex);
+		++mBlueSuitCount;
 	}
 
-	m_pCollisionManager->AddCollisionPlayer(m_apPlayers[nSocketIndex], nSocketIndex);
-	RequestSend(nSocketIndex);
+	mCollisionManager->AddCollisionPlayer(mPlayers[clientIndex], clientIndex);
+	RequestSend(clientIndex);
 
-	for (auto& sockInfo : m_vSocketInfoList)
+	for (auto& socketInfo : mSocketInfos)
 	{
-		if (!sockInfo.m_bUsed || sockInfo.m_sock == sockClient)
+		if (!socketInfo.isUsed || socketInfo.socket == clientSocket)
 		{
 			continue;
 		}
-		sockInfo.m_socketState = SOCKET_STATE::SEND_NUM_OF_CLIENT;
-		RequestSend(GetSocketIndex(sockInfo.m_sock));
+		socketInfo.sendState = SOCKET_STATE::SEND_NUM_OF_CLIENT;
+		RequestSend(FindClientIndex(socketInfo.socket));
 	}
 
 	return;
 }
 
-void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+bool TCPServer::HandleReceiveResult(ReceiveResult result, SOCKET socket)
 {
-	const SOCKET socket = static_cast<SOCKET>(wParam);
-	int nSocketIndex = GetSocketIndex(socket);
-	if (nSocketIndex < 0)
+	if (result == ReceiveResult::Complete)
+	{
+		return true;
+	}
+
+	if (result == ReceiveResult::Closed || result == ReceiveResult::Error)
+	{
+		DisconnectClient(socket);
+	}
+	return false;
+}
+
+void TCPServer::ProcessReadEvent(SOCKET socket)
+{
+	int clientIndex = FindClientIndex(socket);
+	if (clientIndex < 0)
 	{
 		return;
 	}
 
-	auto handleReceiveResult = [this, socket](ReceiveResult result)
-		{
-			if (result == ReceiveResult::Complete)
-			{
-				return true;
-			}
+	std::shared_ptr<CServerPlayer> player = mPlayers[clientIndex];
 
-			if (result == ReceiveResult::Closed || result == ReceiveResult::Error)
-			{
-				DisconnectClient(socket);
-			}
-			return false;
-		};
-
-	std::shared_ptr<CServerPlayer> pPlayer = m_apPlayers[nSocketIndex];
-
-	if (!m_vSocketInfoList[nSocketIndex].m_bRecvHead)
+	if (!mSocketInfos[clientIndex].hasReceiveHead)
 	{
-		const ReceiveResult result = RecvData(nSocketIndex, sizeof(INT8));
-		if (!handleReceiveResult(result))
+		const ReceiveResult result = ReceiveData(clientIndex, sizeof(INT8));
+		if (!HandleReceiveResult(result, socket))
 		{
 			return;
 		}
 
-		m_vSocketInfoList[nSocketIndex].m_bRecvHead = true;
-		memcpy(&m_vSocketInfoList[nSocketIndex].m_nHead, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, sizeof(INT8));
-		memset(m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+		mSocketInfos[clientIndex].hasReceiveHead = true;
+		memcpy(&mSocketInfos[clientIndex].receiveHead, mSocketInfos[clientIndex].receiveBuffer, sizeof(INT8));
+		memset(mSocketInfos[clientIndex].receiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 
 		// 등록되지 않은 HEAD는 payload 크기와 형식을 결정할 수 없으므로 더 이상 스트림을 해석하지 않는다.
 		// 연결을 종료해 잘못된 바이트를 다음 패킷의 HEAD로 오인하는 상황도 방지한다.
-		if (!IsValidReceiveHead(m_vSocketInfoList[nSocketIndex].m_nHead))
+		if (!IsValidReceiveHead(mSocketInfos[clientIndex].receiveHead))
 		{
-			std::cerr << "Invalid receive packet head: client=" << nSocketIndex
-				<< ", head=" << static_cast<int>(m_vSocketInfoList[nSocketIndex].m_nHead) << '\n';
+			std::cerr << "Invalid receive packet head: client=" << clientIndex
+				<< ", head=" << static_cast<int>(mSocketInfos[clientIndex].receiveHead) << '\n';
 			DisconnectClient(socket);
 			return;
 		}
 	}
 
-	switch (m_vSocketInfoList[nSocketIndex].m_nHead)
+	switch (mSocketInfos[clientIndex].receiveHead)
 	{
 	case HEAD_GAME_START:
 	{
-		m_nGameState = GAME_STATE::IN_GAME;
-		m_nZombie = 0;
-		m_nBlueSuit = 0;
+		mGameState = GAME_STATE::IN_GAME;
+		mZombieCount = 0;
+		mBlueSuitCount = 0;
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
-			if (!m_vSocketInfoList[i].m_bUsed)
+			if (!mSocketInfos[i].isUsed)
 			{
 				continue;
 			}
 
 			if (i == 0)
 			{
-				m_nZombie++;
+				mZombieCount++;
 			}
 			else
 			{
-				m_nBlueSuit++;
+				mBlueSuitCount++;
 			}
 
-			InitPlayerPosition(m_apPlayers[i], i);
-			m_pCollisionManager->AddCollisionPlayer(m_apPlayers[i], i);
+			InitializePlayerPosition(mPlayers[i], i);
+			mCollisionManager->AddCollisionPlayer(mPlayers[i], i);
 
-			m_vSocketInfoList[i].m_socketState = SOCKET_STATE::SEND_GAME_START;
+			mSocketInfos[i].sendState = SOCKET_STATE::SEND_GAME_START;
 
-			if (i == nSocketIndex)
+			if (i == clientIndex)
 			{
 				continue;
 			}
@@ -449,68 +449,68 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 	}
 	case HEAD_CHANGE_SLOT:
 	{
-		if (!handleReceiveResult(RecvData(nSocketIndex, sizeof(INT8))))
+		if (!HandleReceiveResult(ReceiveData(clientIndex, sizeof(INT8)), socket))
 		{
 			return;
 		}
 
-		INT8 nSelectedSlot;
-		memcpy(&nSelectedSlot, m_vSocketInfoList[nSocketIndex].m_pCurrentBuffer, sizeof(INT8));
+		INT8 selectedSlot;
+		memcpy(&selectedSlot, mSocketInfos[clientIndex].receiveBuffer, sizeof(INT8));
 		// 슬롯 번호는 플레이어 및 소켓 배열의 인덱스로 사용되므로 범위를 벗어난 값은 무시할 수 없다.
 		// 잘못된 연결을 종료해 이후 패킷이 비정상적인 서버 상태에 반영되는 것을 방지한다.
-		if (nSelectedSlot < 0 || nSelectedSlot >= static_cast<INT8>(MAX_CLIENT))
+		if (selectedSlot < 0 || selectedSlot >= static_cast<INT8>(MAX_CLIENT))
 		{
-			std::cerr << "Invalid selected slot: client=" << nSocketIndex
-				<< ", slot=" << static_cast<int>(nSelectedSlot) << '\n';
+			std::cerr << "Invalid selected slot: client=" << clientIndex
+				<< ", slot=" << static_cast<int>(selectedSlot) << '\n';
 			DisconnectClient(socket);
 			return;
 		}
 
-		if (!m_apPlayers[nSelectedSlot]) // 없으면 만들어서
+		if (!mPlayers[selectedSlot]) // 없으면 만들어서
 		{
-			m_apPlayers[nSelectedSlot] = make_shared<CServerBlueSuitPlayer>();
+			mPlayers[selectedSlot] = make_shared<CServerBlueSuitPlayer>();
 		}
 
-		if (m_apPlayers[nSelectedSlot]->GetPlayerId() == -1)
+		if (mPlayers[selectedSlot]->GetPlayerId() == -1)
 		{
-			m_apPlayers[nSelectedSlot]->SetPlayerId(nSelectedSlot);
+			mPlayers[selectedSlot]->SetPlayerId(selectedSlot);
 
 			// 소켓과 수신 진행 상태는 하나의 단위이므로 전체를 함께 이동한다.
-			m_vSocketInfoList[nSelectedSlot] = m_vSocketInfoList[nSocketIndex];
-			m_vSocketInfoList[nSocketIndex] = SOCKETINFO{};
+			mSocketInfos[selectedSlot] = mSocketInfos[clientIndex];
+			mSocketInfos[clientIndex] = SocketInfo{};
 
-			m_aUpdateInfo[nSelectedSlot].m_nClientId = nSelectedSlot;
+			mUpdateInfo[selectedSlot].m_nClientId = selectedSlot;
 
-			m_aUpdateInfo[nSocketIndex].m_nClientId = -1;
-			m_apPlayers[nSocketIndex]->SetPlayerId(-1);
+			mUpdateInfo[clientIndex].m_nClientId = -1;
+			mPlayers[clientIndex]->SetPlayerId(-1);
 		}
 		else // 교환해야함
 		{
 			// 역할 슬롯을 교환해도 각 소켓의 수신 상태는 해당 소켓과 함께 이동해야 한다.
-			std::swap(m_vSocketInfoList[nSocketIndex], m_vSocketInfoList[nSelectedSlot]);
+			std::swap(mSocketInfos[clientIndex], mSocketInfos[selectedSlot]);
 
-			m_aUpdateInfo[nSelectedSlot].m_nClientId = nSelectedSlot;
+			mUpdateInfo[selectedSlot].m_nClientId = selectedSlot;
 		}
 
-		m_vSocketInfoList[nSelectedSlot].m_socketState = SOCKET_STATE::SEND_CHANGE_SLOT;
-		nSocketIndex = nSelectedSlot;
+		mSocketInfos[selectedSlot].sendState = SOCKET_STATE::SEND_CHANGE_SLOT;
+		clientIndex = selectedSlot;
 		break;
 	}
 	case HEAD_KEYS_BUFFER:
 	{
 		// 소켓 슬롯과 플레이어 슬롯이 일치할 때만 입력을 해당 플레이어에게 적용한다.
 		// 포인터가 없거나 ID가 다르면 서버 내부의 연결/플레이어 상태가 이미 불일치한 것이다.
-		if (!pPlayer || pPlayer->GetPlayerId() != nSocketIndex)
+		if (!player || player->GetPlayerId() != clientIndex)
 		{
-			const int playerId = pPlayer ? static_cast<int>(pPlayer->GetPlayerId()) : -1;
-			std::cerr << "Invalid player for input packet: client=" << nSocketIndex
+			const int playerId = player ? static_cast<int>(player->GetPlayerId()) : -1;
+			std::cerr << "Invalid player for input packet: client=" << clientIndex
 				<< ", playerId=" << playerId << '\n';
 			DisconnectClient(socket);
 			return;
 		}
 
 		// KeysBuffer(WORD), viewMatrix, vecLook, vecRight, vecUp, animationInfo, playerInfo
-		if (!handleReceiveResult(RecvData(nSocketIndex, CLIENT_INPUT_PAYLOAD_SIZE)))
+		if (!HandleReceiveResult(ReceiveData(clientIndex, CLIENT_INPUT_PAYLOAD_SIZE), socket))
 		{
 			return;
 		}
@@ -518,9 +518,9 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 		// 수신 버퍼의 모든 필드를 지역 변수로 먼저 역직렬화한다.
 		// 검증이 끝나기 전에는 일부 값만 플레이어 상태에 반영되는 일이 없어야 한다.
 		size_t readOffset = 0;
-		auto readValue = [&socketInfo = m_vSocketInfoList[nSocketIndex], &readOffset](auto& value)
+		auto readValue = [&socketInfo = mSocketInfos[clientIndex], &readOffset](auto& value)
 			{
-				memcpy(&value, socketInfo.m_pCurrentBuffer + readOffset, sizeof(value));
+				memcpy(&value, socketInfo.receiveBuffer + readOffset, sizeof(value));
 				readOffset += sizeof(value);
 			};
 
@@ -536,7 +536,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 
 		if (!IsValidKeyBuffer(input.keyBuffer))
 		{
-			std::cerr << "Invalid key buffer: client=" << nSocketIndex
+			std::cerr << "Invalid key buffer: client=" << clientIndex
 				<< ", value=" << input.keyBuffer << '\n';
 			DisconnectClient(socket);
 			return;
@@ -546,40 +546,40 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 			!IsFiniteVector(input.right) ||
 			!IsFiniteVector(input.up))
 		{
-			std::cerr << "Non-finite transform in input packet: client=" << nSocketIndex << '\n';
+			std::cerr << "Non-finite transform in input packet: client=" << clientIndex << '\n';
 			DisconnectClient(socket);
 			return;
 		}
 
 		// 모든 역직렬화와 입력 검증을 통과한 뒤 서버의 플레이어 상태를 갱신한다.
-		if (!pPlayer->IsRecvData())
+		if (!player->IsRecvData())
 		{
-			pPlayer->SetRecvData(true);
+			player->SetRecvData(true);
 		}
-		pPlayer->SetKeyBuffer(input.keyBuffer);
-		pPlayer->SetViewMatrix(input.viewMatrix);
-		pPlayer->SetLook(input.look);
-		pPlayer->SetRight(input.right);
-		pPlayer->SetUp(input.up);
-		m_aUpdateInfo[nSocketIndex].m_animationInfo = input.animationInfo;
-		pPlayer->SetRightClick(input.playerInfo.m_bRightClick);
+		player->SetKeyBuffer(input.keyBuffer);
+		player->SetViewMatrix(input.viewMatrix);
+		player->SetLook(input.look);
+		player->SetRight(input.right);
+		player->SetUp(input.up);
+		mUpdateInfo[clientIndex].m_animationInfo = input.animationInfo;
+		player->SetRightClick(input.playerInfo.m_bRightClick);
 
 		break;
 	}
 	case HEAD_LOADING_COMPLETE:
 	{
-		m_vSocketInfoList[nSocketIndex].m_bLoadComplete = true;
+		mSocketInfos[clientIndex].isLoadingComplete = true;
 		int connectCount = 0;
 		int loadCompleteCount = 0;
-		for (const auto& socketInfo : m_vSocketInfoList)
+		for (const auto& socketInfo : mSocketInfos)
 		{
-			if (!socketInfo.m_bUsed)
+			if (!socketInfo.isUsed)
 			{
 				continue;
 			}
 
 			++connectCount;
-			if (socketInfo.m_bLoadComplete)
+			if (socketInfo.isLoadingComplete)
 			{
 				++loadCompleteCount;
 			}
@@ -587,7 +587,7 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 
 		if (loadCompleteCount == connectCount)
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_LOADING_COMPLETE;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_LOADING_COMPLETE;
 		}
 		break;
 	}
@@ -596,134 +596,130 @@ void TCPServer::OnProcessingReadMessage(HWND hWnd, UINT nMessageID, WPARAM wPara
 	}
 
 	// HEAD와 DATA가 모두 도착해 하나의 애플리케이션 패킷이 완성된 시점에만 패킷 수를 증가시킨다.
-	RecordReceivedPacket(m_vSocketInfoList[nSocketIndex]);
-	ResetReceiveState(m_vSocketInfoList[nSocketIndex]);
-	RequestSend(nSocketIndex);
+	RecordReceivedPacketStatistics(mSocketInfos[clientIndex]);
+	ResetReceiveState(mSocketInfos[clientIndex]);
+	RequestSend(clientIndex);
 }
 
-void TCPServer::OnProcessingWriteMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+void TCPServer::ProcessWriteEvent(SOCKET socket)
 {
-	const SOCKET socket = static_cast<SOCKET>(wParam);
-	const int nSocketIndex = GetSocketIndex(socket);
-	if (nSocketIndex < 0)
+	const int clientIndex = FindClientIndex(socket);
+	if (clientIndex < 0)
 	{
 		return;
 	}
 
-	if (FlushSendQueue(nSocketIndex) == SendResult::Error)
+	if (FlushSendQueue(clientIndex) == SendResult::Error)
 	{
 		err_display("send()");
 		DisconnectClient(socket);
 	}
 }
 
-void TCPServer::RequestSend(int nSocketIndex)
+void TCPServer::RequestSend(int clientIndex)
 {
-	if (nSocketIndex < 0 || nSocketIndex >= static_cast<int>(m_vSocketInfoList.size()) ||
-		!m_vSocketInfoList[nSocketIndex].m_bUsed)
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(mSocketInfos.size()) ||
+		!mSocketInfos[clientIndex].isUsed)
 	{
 		return;
 	}
 
-	switch (m_vSocketInfoList[nSocketIndex].m_socketState)
+	switch (mSocketInfos[clientIndex].sendState)
 	{
 	case SOCKET_STATE::SEND_GAME_START:
-		if (SubmitSendData(nSocketIndex, static_cast<INT8>(5)))
+		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_GAME_START)))
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	case SOCKET_STATE::SEND_CHANGE_SLOT:
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
-			if (!m_vSocketInfoList[i].m_bUsed)
+			if (!mSocketInfos[i].isUsed)
 			{
 				continue;
 			}
 
-			SubmitSendData(i, static_cast<INT8>(6), m_aUpdateInfo[i].m_nClientId, m_aUpdateInfo);
+			SubmitSendData(i, static_cast<INT8>(SOCKET_STATE::SEND_CHANGE_SLOT), mUpdateInfo[i].m_nClientId, mUpdateInfo);
 		}
-		if (m_vSocketInfoList[nSocketIndex].m_bUsed)
+		if (mSocketInfos[clientIndex].isUsed)
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	case SOCKET_STATE::SEND_ID:
 		if (SubmitSendData(
-			nSocketIndex,
-			static_cast<INT8>(0),
-			m_aUpdateInfo[nSocketIndex].m_nClientId,
-			m_nClient,
-			m_aUpdateInfo))
+			clientIndex,
+			static_cast<INT8>(SOCKET_STATE::SEND_ID),
+			mUpdateInfo[clientIndex].m_nClientId,
+			sClientCount,
+			mUpdateInfo))
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	case SOCKET_STATE::SEND_UPDATE_DATA:
-		if (m_nGameState == GAME_STATE::IN_LOBBY)
+		if (mGameState == GAME_STATE::IN_LOBBY)
 		{
 			break;
 		}
-		if (SubmitSendData(nSocketIndex, static_cast<INT8>(1), m_aUpdateInfo))
-		{
-			m_bDataSend[nSocketIndex] = true;
-		}
+		SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_UPDATE_DATA), mUpdateInfo);
 		break;
 	case SOCKET_STATE::SEND_NUM_OF_CLIENT:
-		if (SubmitSendData(nSocketIndex, static_cast<INT8>(2), m_nClient, m_aUpdateInfo))
+		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_NUM_OF_CLIENT), sClientCount, mUpdateInfo))
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	case SOCKET_STATE::SEND_BLUE_SUIT_WIN:
-		if (SubmitSendData(nSocketIndex, static_cast<INT8>(3)))
+		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_BLUE_SUIT_WIN)))
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	case SOCKET_STATE::SEND_ZOMBIE_WIN:
-		if (SubmitSendData(nSocketIndex, static_cast<INT8>(4)))
+		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_ZOMBIE_WIN)))
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	case SOCKET_STATE::SEND_OPEN_DRAWER_SOUND:
-		if (SubmitSendData(nSocketIndex, static_cast<INT8>(7)))
+		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_OPEN_DRAWER_SOUND)))
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	case SOCKET_STATE::SEND_CLOSE_DRAWER_SOUND:
-		if (SubmitSendData(nSocketIndex, static_cast<INT8>(8)))
+		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_CLOSE_DRAWER_SOUND)))
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	case SOCKET_STATE::SEND_OPEN_DOOR_SOUND:
-		if (SubmitSendData(nSocketIndex, static_cast<INT8>(9)))
+		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_OPEN_DOOR_SOUND)))
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	case SOCKET_STATE::SEND_CLOSE_DOOR_SOUND:
-		if (SubmitSendData(nSocketIndex, static_cast<INT8>(10)))
+		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_CLOSE_DOOR_SOUND)))
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	case SOCKET_STATE::SEND_BLUE_SUIT_DEAD:
 	{
-		const char deadUserId = static_cast<char>(nSocketIndex);
+		const char deadUserId = static_cast<char>(clientIndex);
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
-			if (m_vSocketInfoList[i].m_bUsed)
+			if (mSocketInfos[i].isUsed)
 			{
-				SubmitSendData(i, static_cast<INT8>(11), deadUserId);
+				SubmitSendData(i, static_cast<INT8>(SOCKET_STATE::SEND_BLUE_SUIT_DEAD), deadUserId);
 			}
 		}
-		if (m_vSocketInfoList[nSocketIndex].m_bUsed)
+		if (mSocketInfos[clientIndex].isUsed)
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	}
@@ -731,17 +727,17 @@ void TCPServer::RequestSend(int nSocketIndex)
 	{
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
-			if (m_vSocketInfoList[i].m_bUsed)
+			if (mSocketInfos[i].isUsed)
 			{
-				if (SubmitSendData(i, static_cast<INT8>(13)) && m_apPlayers[i])
+				if (SubmitSendData(i, static_cast<INT8>(SOCKET_STATE::SEND_LOADING_COMPLETE)) && mPlayers[i])
 				{
-					m_apPlayers[i]->GameStartLogic();
+					mPlayers[i]->GameStartLogic();
 				}
 			}
 		}
-		if (m_vSocketInfoList[nSocketIndex].m_bUsed)
+		if (mSocketInfos[clientIndex].isUsed)
 		{
-			m_vSocketInfoList[nSocketIndex].m_socketState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
 		}
 		break;
 	}
@@ -750,12 +746,12 @@ void TCPServer::RequestSend(int nSocketIndex)
 	}
 }
 
-void TCPServer::OnProcessingCloseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+void TCPServer::ProcessCloseEvent(SOCKET socket)
 {
-	DisconnectClient(static_cast<SOCKET>(wParam));
+	DisconnectClient(socket);
 }
 
-bool TCPServer::Init(HWND hWnd)
+bool TCPServer::Initialize(HWND hWnd)
 {
 	m_mt19937Gen = default_random_engine(random_device()());
 
@@ -794,17 +790,17 @@ bool TCPServer::Init(HWND hWnd)
 		err_quit("WSAAsyncSelect()");
 	}
 
-	m_nGameState = GAME_STATE::IN_LOBBY;
-	//m_nGameState = GAME_STATE::IN_GAME;
+	mGameState = GAME_STATE::IN_LOBBY;
+	//mGameState = GAME_STATE::IN_GAME;
 
-	m_pCollisionManager = make_shared<CServerCollisionManager>();
-	m_pCollisionManager->CreateCollision(SPACE_FLOOR, SPACE_WIDTH, SPACE_DEPTH);
+	mCollisionManager = make_shared<CServerCollisionManager>();
+	mCollisionManager->CreateCollision(SPACE_FLOOR, SPACE_WIDTH, SPACE_DEPTH);
 
 	// 씬 생성
 	LoadScene();
 	vector<int> vDoor;
-	for (int i = 0; i < m_pCollisionManager->GetNumberOfCollisionObject(); ++i) {
-		shared_ptr<CServerGameObject> object = m_pCollisionManager->GetCollisionObjectWithNumber(i);
+	for (int i = 0; i < mCollisionManager->GetNumberOfCollisionObject(); ++i) {
+		shared_ptr<CServerGameObject> object = mCollisionManager->GetCollisionObjectWithNumber(i);
 		auto pElevaterDoor = dynamic_pointer_cast<CServerElevatorDoorObject>(object);
 
 		if (pElevaterDoor) {
@@ -820,7 +816,7 @@ bool TCPServer::Init(HWND hWnd)
 
 	int random_escape_index = disInt(m_mt19937Gen);
 	for (int i = 0; i < ELEVATORDOORCOUNT; ++i) {
-		shared_ptr<CServerGameObject> object = m_pCollisionManager->GetCollisionObjectWithNumber(vDoor[i]);
+		shared_ptr<CServerGameObject> object = mCollisionManager->GetCollisionObjectWithNumber(vDoor[i]);
 		auto pElevaterDoor = dynamic_pointer_cast<CServerElevatorDoorObject>(object);
 		if (!pElevaterDoor) {
 			//std::cout << "엘리베이터 문이 아닙니다.!" << std::endl;
@@ -830,84 +826,79 @@ bool TCPServer::Init(HWND hWnd)
 		if (i == random_escape_index) {
 			pElevaterDoor->SetEscapeDoor(true);
 			for (int pi = 0; pi < MAX_CLIENT; ++pi) {
-				m_aUpdateInfo[pi].m_playerInfo.m_iEscapeDoor = vDoor[i];
+				mUpdateInfo[pi].m_playerInfo.m_iEscapeDoor = vDoor[i];
 			}
 		}
 		//pElevaterDoor->SetEscapeDoor(false); // 디버그를 위해서 모든 문을 잠금
 	}
 
-	//std::cout << "생성된 충돌객체 = " << m_pCollisionManager->GetNumberOfCollisionObject() << std::endl;
+	//std::cout << "생성된 충돌객체 = " << mCollisionManager->GetNumberOfCollisionObject() << std::endl;
 	// 아이템 생성
 	CreateItemObject();
-	//std::cout << "아이템 생성후 생성된 충돌객체 = " << m_pCollisionManager->GetNumberOfCollisionObject() << std::endl;
+	//std::cout << "아이템 생성후 생성된 충돌객체 = " << mCollisionManager->GetNumberOfCollisionObject() << std::endl;
 
 
 	return true;
 }
 void TCPServer::SimulationLoop()
 {
-	m_timer.Tick();
+	mTimer.Tick();
 	ReportNetworkStatisticsIfDue();
 
-	if (m_nGameState == GAME_STATE::IN_LOBBY)
+	if (mGameState == GAME_STATE::IN_LOBBY)
 	{
 		return;
 	}
 
-	m_nGameState = CheckEndGame();
-	if (m_nGameState != GAME_STATE::IN_GAME)
+	mGameState = DetermineEndGameState();
+	if (mGameState != GAME_STATE::IN_GAME)
 	{
-		UpdateEndGame(m_nGameState);
+		QueueEndGameNotifications(mGameState);
 		return;
 	}
 
 	// 실제 시뮬레이션이 일어날곳
-	float fElapsedTime = m_timer.GetTimeElapsed();
-	for (auto& pPlayer : m_apPlayers)
+	float elapsedTime = mTimer.GetTimeElapsed();
+	for (auto& player : mPlayers)
 	{
-		if (!pPlayer || pPlayer->GetPlayerId() == -1)
+		if (!player || player->GetPlayerId() == -1)
 		{
 			continue;
 		}
-		pPlayer->SetPickedObject(m_pCollisionManager);
+		player->SetPickedObject(mCollisionManager);
 
-		pPlayer->RightClickProcess(m_pCollisionManager);
-		pPlayer->UseItem(m_pCollisionManager);
-		pPlayer->Update(fElapsedTime, m_pCollisionManager);
-		pPlayer->UpdatePicking(pPlayer->GetPlayerId());
-		//UpdateInformation(pPlayer);
-		m_pCollisionManager->Collide(fElapsedTime, pPlayer);
+		player->RightClickProcess(mCollisionManager);
+		player->UseItem(mCollisionManager);
+		player->Update(elapsedTime, mCollisionManager);
+		player->UpdatePicking(player->GetPlayerId());
+		//UpdatePlayerReplicationData(player);
+		mCollisionManager->Collide(elapsedTime, player);
 
-		pPlayer->OnUpdateToParent();
-		pPlayer->Declare(fElapsedTime);
+		player->OnUpdateToParent();
+		player->Declare(elapsedTime);
 	}
 
-	m_pCollisionManager->Update(fElapsedTime);
+	mCollisionManager->Update(elapsedTime);
 
-	UpdateInformation();
+	UpdatePlayerReplicationData();
 	ProcessObjectReplication();
 }
 
-int TCPServer::CheckLobby()
+int TCPServer::DetermineEndGameState()
 {
-	return 0;
-}
+	int endGameState = GAME_STATE::IN_GAME;
 
-int TCPServer::CheckEndGame()
-{
-	int nEndGame = GAME_STATE::IN_GAME;
-
-	if (m_nZombie == 1 && m_nBlueSuit > 0)
+	if (mZombieCount == 1 && mBlueSuitCount > 0)
 	{
 		int nAliveBlueSuit = 0;
 		for (int i = 1; i < MAX_CLIENT; ++i)
 		{
-			if (!m_apPlayers[i] || m_apPlayers[i]->GetPlayerId() == -1)
+			if (!mPlayers[i] || mPlayers[i]->GetPlayerId() == -1)
 			{
 				continue;
 			}
 
-			if (m_apPlayers[i]->IsAlive())
+			if (mPlayers[i]->IsAlive())
 			{
 				++nAliveBlueSuit;
 			}
@@ -915,105 +906,108 @@ int TCPServer::CheckEndGame()
 
 		if (nAliveBlueSuit == 0)
 		{
-			nEndGame = GAME_STATE::ZOMBIE_WIN;
-			return nEndGame;
+			endGameState = GAME_STATE::ZOMBIE_WIN;
+			return endGameState;
 		}
 	}
 
-	for (const auto& pPlayer : m_apPlayers)
+	for (const auto& player : mPlayers)
 	{
-		if (!pPlayer || pPlayer->GetPlayerId() == -1)
+		if (!player || player->GetPlayerId() == -1)
 		{
 			continue;
 		}
 
-		if (pPlayer->IsWinner())
+		if (player->IsWinner())
 		{
-			if (dynamic_pointer_cast<CServerBlueSuitPlayer>(pPlayer))
+			if (dynamic_pointer_cast<CServerBlueSuitPlayer>(player))
 			{
-				nEndGame = GAME_STATE::BLUE_SUIT_WIN;
+				endGameState = GAME_STATE::BLUE_SUIT_WIN;
 			}
 			//else
 			//{
-			//	nEndGame = GAME_STATE::ZOMBIE_WIN;
+			//	endGameState = GAME_STATE::ZOMBIE_WIN;
 			//}
 			break;
 		}
 	}
 
-	return nEndGame;
+	return endGameState;
 }
 
-void TCPServer::UpdateEndGame(int nEndGame)
+void TCPServer::QueueEndGameNotifications(int endGameState)
 {
-	for (auto& sockInfo : m_vSocketInfoList)
+	for (auto& socketInfo : mSocketInfos)
 	{
-		if (!sockInfo.m_bUsed)
+		if (!socketInfo.isUsed)
 		{
 			continue;
 		}
 
-		if (nEndGame == GAME_STATE::BLUE_SUIT_WIN) // BLUE SUIT WIN
+		if (endGameState == GAME_STATE::BLUE_SUIT_WIN) // BLUE SUIT WIN
 		{
-			sockInfo.m_socketState = SOCKET_STATE::SEND_BLUE_SUIT_WIN;
+			socketInfo.sendState = SOCKET_STATE::SEND_BLUE_SUIT_WIN;
 		}
 		else // ZOMBIE WIN
 		{
-			sockInfo.m_socketState = SOCKET_STATE::SEND_ZOMBIE_WIN;
+			socketInfo.sendState = SOCKET_STATE::SEND_ZOMBIE_WIN;
 		}
 	}
 }
 
 // 소켓 정보 추가
-INT8 TCPServer::AddSocketInfo(SOCKET sockClient, struct sockaddr_in addrClient, int nAddrLen)
+INT8 TCPServer::RegisterClientSocket(
+	SOCKET clientSocket,
+	struct sockaddr_in clientAddress,
+	int clientAddressLength)
 {
-	INT8 nSocketIndex = -1;
-	if (m_nClient >= MAX_CLIENT)
+	INT8 clientIndex = -1;
+	if (sClientCount >= MAX_CLIENT)
 	{
-		return nSocketIndex;
+		return clientIndex;
 	}
-	SOCKETINFO sockInfo;
+	SocketInfo socketInfo;
 
-	sockInfo.m_bUsed = true;
-	sockInfo.m_sock = sockClient;
-	sockInfo.m_addrClient = addrClient;
-	sockInfo.m_nAddrlen = nAddrLen;
+	socketInfo.isUsed = true;
+	socketInfo.socket = clientSocket;
+	socketInfo.clientAddress = clientAddress;
+	socketInfo.clientAddressLength = clientAddressLength;
 
-	getpeername(sockInfo.m_sock, (struct sockaddr*)&sockInfo.m_addrClient, &sockInfo.m_nAddrlen);
-	inet_ntop(AF_INET, &sockInfo.m_addrClient.sin_addr, sockInfo.m_pAddr, sizeof(sockInfo.m_pAddr));
+	getpeername(socketInfo.socket, (struct sockaddr*)&socketInfo.clientAddress, &socketInfo.clientAddressLength);
+	inet_ntop(AF_INET, &socketInfo.clientAddress.sin_addr, socketInfo.ipAddress, sizeof(socketInfo.ipAddress));
 
-	sockInfo.m_socketState = SOCKET_STATE::SEND_ID;
+	socketInfo.sendState = SOCKET_STATE::SEND_ID;
 
 	// 배열에 정보 추가 
-	for (int i = 0; i < m_nClient + 1; ++i)
+	for (int i = 0; i < sClientCount + 1; ++i)
 	{
-		if (m_vSocketInfoList[i].m_bUsed)
+		if (mSocketInfos[i].isUsed)
 		{
 			continue;
 		}
-		m_nClient++;
+		sClientCount++;
 
 		// 클라이언트 정보 초기화
-		m_aUpdateInfo[i].m_nClientId = i;
-		m_vSocketInfoList[i] = sockInfo;
-		nSocketIndex = i;
+		mUpdateInfo[i].m_nClientId = i;
+		mSocketInfos[i] = socketInfo;
+		clientIndex = i;
 		break;
 	}
 
-	return nSocketIndex;
+	return clientIndex;
 }
 
 // 소켓 정보 얻기
-INT8 TCPServer::GetSocketIndex(SOCKET sock)
+INT8 TCPServer::FindClientIndex(SOCKET clientSocket) const
 {
-	for (size_t index = 0; index < m_vSocketInfoList.size(); ++index)
+	for (size_t index = 0; index < mSocketInfos.size(); ++index)
 	{
-		const SOCKETINFO& sockInfo = m_vSocketInfoList[index];
-		if (!sockInfo.m_bUsed)
+		const SocketInfo& socketInfo = mSocketInfos[index];
+		if (!socketInfo.isUsed)
 		{
 			continue;
 		}
-		if (sockInfo.m_sock == sock)
+		if (socketInfo.socket == clientSocket)
 		{
 			return static_cast<INT8>(index);
 		}
@@ -1036,162 +1030,133 @@ bool TCPServer::IsValidReceiveHead(INT8 head) const
 	}
 }
 
-bool TCPServer::DisconnectClient(SOCKET sockClient)
+bool TCPServer::DisconnectClient(SOCKET clientSocket)
 {
-	const INT8 nSocketIndex = GetSocketIndex(sockClient);
-	if (nSocketIndex < 0)
+	const INT8 clientIndex = FindClientIndex(clientSocket);
+	if (clientIndex < 0)
 	{
 		return false;
 	}
 
-	// SOCKETINFO가 초기화되기 전에 이 연결의 누적 측정값을 남긴다.
-	ReportDisconnectedClientStatistics(nSocketIndex, m_vSocketInfoList[nSocketIndex]);
+	// SocketInfo가 초기화되기 전에 이 연결의 누적 측정값을 남긴다.
+	ReportDisconnectedClientStatistics(clientIndex, mSocketInfos[clientIndex]);
 
 	INT8 nListBoxIndex = -1;
-	for (INT8 i = 0; i <= nSocketIndex; ++i)
+	for (INT8 i = 0; i <= clientIndex; ++i)
 	{
-		if (m_vSocketInfoList[i].m_bUsed)
+		if (mSocketInfos[i].isUsed)
 		{
 			++nListBoxIndex;
 		}
 	}
 
-	const bool bHadPlayer = (m_apPlayers[nSocketIndex] != nullptr);
-	if (bHadPlayer)
+	const bool hadPlayer = (mPlayers[clientIndex] != nullptr);
+	if (hadPlayer)
 	{
-		SendMessage(m_hClientListBox, LB_DELETESTRING, static_cast<WPARAM>(nListBoxIndex), 0);
-		if (nSocketIndex == ZOMBIEPLAYER)
+		SendMessage(mClientListBox, LB_DELETESTRING, static_cast<WPARAM>(nListBoxIndex), 0);
+		if (clientIndex == ZOMBIEPLAYER)
 		{
-			m_nZombie = max(0, m_nZombie - 1);
+			mZombieCount = max(0, mZombieCount - 1);
 		}
 		else
 		{
-			m_nBlueSuit = max(0, m_nBlueSuit - 1);
+			mBlueSuitCount = max(0, mBlueSuitCount - 1);
 		}
 	}
 
-	WSAAsyncSelect(sockClient, m_hWnd, 0, 0);
-	shutdown(sockClient, SD_BOTH);
-	closesocket(sockClient);
+	WSAAsyncSelect(clientSocket, m_hWnd, 0, 0);
+	shutdown(clientSocket, SD_BOTH);
+	closesocket(clientSocket);
 
-	m_apPlayers[nSocketIndex].reset();
-	m_anPlayerStartPosNum[nSocketIndex] = -1;
-	m_aUpdateInfo[nSocketIndex] = SC_UPDATE_INFO{};
-	m_bDataSend[nSocketIndex] = false;
-	m_vSocketInfoList[nSocketIndex] = SOCKETINFO{};
-	m_nClient = max<INT8>(0, m_nClient - 1);
+	mPlayers[clientIndex].reset();
+	mPlayerStartPositionIndices[clientIndex] = -1;
+	mUpdateInfo[clientIndex] = SC_UPDATE_INFO{};
+	mSocketInfos[clientIndex] = SocketInfo{};
+	sClientCount = max<INT8>(0, sClientCount - 1);
 
-	if (bHadPlayer)
+	if (hadPlayer)
 	{
-		for (auto& otherSocketInfo : m_vSocketInfoList)
+		for (auto& otherSocketInfo : mSocketInfos)
 		{
-			if (!otherSocketInfo.m_bUsed)
+			if (!otherSocketInfo.isUsed)
 			{
 				continue;
 			}
 
-			otherSocketInfo.m_socketState = SOCKET_STATE::SEND_NUM_OF_CLIENT;
-			RequestSend(GetSocketIndex(otherSocketInfo.m_sock));
+			otherSocketInfo.sendState = SOCKET_STATE::SEND_NUM_OF_CLIENT;
+			RequestSend(FindClientIndex(otherSocketInfo.socket));
 		}
 	}
 
 	return true;
 }
 
-int TCPServer::CheckAllClientsSentData(int cur_nPlayer)
+void TCPServer::UpdatePlayerReplicationData()
 {
-	int sendClientCount{};
-	for (int i = 0; i < cur_nPlayer; ++i) {
-		if (m_bDataSend[i]) {
-			sendClientCount++;
-		}
-	}
-	return sendClientCount;
-}
-
-void TCPServer::SetAllClientsSendStatus(int cur_nPlayer, bool val)
-{
-	for (int i = 0; i < cur_nPlayer; ++i) {
-		m_bDataSend[i] = val;
-	}
-}
-
-void TCPServer::UpdateInformation()
-{
-	int cur_nPlayer{};
-	for (const auto& pPlayer : m_apPlayers)
+	for (const auto& player : mPlayers)
 	{
-		if (!pPlayer || pPlayer->GetPlayerId() == -1)
+		INT8 playerId;
+		if (!player || player->GetPlayerId() == -1)
 		{
 			continue;
 		}
-		++cur_nPlayer;
-	}
+		playerId = player->GetPlayerId();
 
-	for (const auto& pPlayer : m_apPlayers)
-	{
-		INT8 nPlayerId;
-		if (!pPlayer || pPlayer->GetPlayerId() == -1)
-		{
-			continue;
-		}
-		nPlayerId = pPlayer->GetPlayerId();
+		mUpdateInfo[playerId].m_bAlive = player->IsAlive();
+		mUpdateInfo[playerId].m_bRunning = player->IsRunning();
+		mUpdateInfo[playerId].m_xmf3Position = player->GetPosition();
+		mUpdateInfo[playerId].m_xmf3Velocity = player->GetVelocity();
+		mUpdateInfo[playerId].m_xmf3Look = player->GetLook();
 
-		m_aUpdateInfo[nPlayerId].m_bAlive = pPlayer->IsAlive();
-		m_aUpdateInfo[nPlayerId].m_bRunning = pPlayer->IsRunning();
-		m_aUpdateInfo[nPlayerId].m_xmf3Position = pPlayer->GetPosition();
-		m_aUpdateInfo[nPlayerId].m_xmf3Velocity = pPlayer->GetVelocity();
-		m_aUpdateInfo[nPlayerId].m_xmf3Look = pPlayer->GetLook();
-
-		if (pPlayer->GetPickedObject().lock())
-			m_aUpdateInfo[nPlayerId].m_nPickedObjectNum = pPlayer->GetPickedObject().lock()->GetCollisionNum();
+		if (player->GetPickedObject().lock())
+			mUpdateInfo[playerId].m_nPickedObjectNum = player->GetPickedObject().lock()->GetCollisionNum();
 		else
-			m_aUpdateInfo[nPlayerId].m_nPickedObjectNum = -1;
+			mUpdateInfo[playerId].m_nPickedObjectNum = -1;
 
 		// 지금은 일단 이렇게 해뒀지만 나중에는 0번이 Enemy고정일듯
-		if (nPlayerId == ZOMBIEPLAYER)	//Enemy
+		if (playerId == ZOMBIEPLAYER)	//Enemy
 		{
-			shared_ptr<CServerZombiePlayer> pZombiePlayer = dynamic_pointer_cast<CServerZombiePlayer>(pPlayer);
+			shared_ptr<CServerZombiePlayer> pZombiePlayer = dynamic_pointer_cast<CServerZombiePlayer>(player);
 			if (pZombiePlayer) {
-				m_aUpdateInfo[nPlayerId].m_nSlotObjectNum[0] = pZombiePlayer->IsTracking() ? 1 : -1;		// 추적
-				m_aUpdateInfo[nPlayerId].m_nSlotObjectNum[1] = pZombiePlayer->IsInterruption() ? 1 : -1;	// 시야방해
-				m_aUpdateInfo[nPlayerId].m_nSlotObjectNum[2] = pZombiePlayer->IsAttack() ? 1 : -1;			// 공격
+				mUpdateInfo[playerId].m_nSlotObjectNum[0] = pZombiePlayer->IsTracking() ? 1 : -1;		// 추적
+				mUpdateInfo[playerId].m_nSlotObjectNum[1] = pZombiePlayer->IsInterruption() ? 1 : -1;	// 시야방해
+				mUpdateInfo[playerId].m_nSlotObjectNum[2] = pZombiePlayer->IsAttack() ? 1 : -1;			// 공격
 
-				m_aUpdateInfo[nPlayerId].m_playerInfo.m_iMineobjectNum = pZombiePlayer->GetCollideMineRef();
+				mUpdateInfo[playerId].m_playerInfo.m_iMineobjectNum = pZombiePlayer->GetCollideMineRef();
 				// 지뢰충돌에 대한 데이터 로직
-				if (m_aUpdateInfo[nPlayerId].m_playerInfo.m_iMineobjectNum == -1) {
-					m_aUpdateInfo[nPlayerId].m_playerInfo.m_iMineobjectNum = pZombiePlayer->GetCollideMineRef();
+				if (mUpdateInfo[playerId].m_playerInfo.m_iMineobjectNum == -1) {
+					mUpdateInfo[playerId].m_playerInfo.m_iMineobjectNum = pZombiePlayer->GetCollideMineRef();
 					pZombiePlayer->SetExplosionDelay(0.0f);
 				}
 				else {
 					if (pZombiePlayer->GetExplosionDelay() > 0.05f) {
 						pZombiePlayer->SetCollideMineRef(-1);
-						m_aUpdateInfo[nPlayerId].m_playerInfo.m_iMineobjectNum = pZombiePlayer->GetCollideMineRef();
+						mUpdateInfo[playerId].m_playerInfo.m_iMineobjectNum = pZombiePlayer->GetCollideMineRef();
 					}
 				}
 			}
 		}
 		else
 		{
-			shared_ptr<CServerBlueSuitPlayer> pBlueSuitPlayer = dynamic_pointer_cast<CServerBlueSuitPlayer>(pPlayer);
+			shared_ptr<CServerBlueSuitPlayer> pBlueSuitPlayer = dynamic_pointer_cast<CServerBlueSuitPlayer>(player);
 			if (pBlueSuitPlayer)
 			{
 				for (int i = 0; i < 3; ++i)
 				{
-					m_aUpdateInfo[nPlayerId].m_nSlotObjectNum[i] = pBlueSuitPlayer->GetReferenceSlotItemNum(i);
-					m_aUpdateInfo[nPlayerId].m_nFuseObjectNum[i] = pBlueSuitPlayer->GetReferenceFuseItemNum(i);
+					mUpdateInfo[playerId].m_nSlotObjectNum[i] = pBlueSuitPlayer->GetReferenceSlotItemNum(i);
+					mUpdateInfo[playerId].m_nFuseObjectNum[i] = pBlueSuitPlayer->GetReferenceFuseItemNum(i);
 				}
-				m_aUpdateInfo[nPlayerId].m_playerInfo.m_bAttacked = pBlueSuitPlayer->IsAttacked();
-				m_aUpdateInfo[nPlayerId].m_playerInfo.m_selectItem = pBlueSuitPlayer->GetRightItem();
-				m_aUpdateInfo[nPlayerId].m_playerInfo.m_bTeleportItemUse = pBlueSuitPlayer->IsTeleportUse();
+				mUpdateInfo[playerId].m_playerInfo.m_bAttacked = pBlueSuitPlayer->IsAttacked();
+				mUpdateInfo[playerId].m_playerInfo.m_selectItem = pBlueSuitPlayer->GetRightItem();
+				mUpdateInfo[playerId].m_playerInfo.m_bTeleportItemUse = pBlueSuitPlayer->IsTeleportUse();
 			}
 
 		}
 		// 업데이트 오브젝트는 리셋
-		m_aUpdateInfo[nPlayerId].m_nNumOfObject = 0;
+		mUpdateInfo[playerId].m_nNumOfObject = 0;
 		for (int i = 0; i < MAX_SEND_OBJECT_INFO; ++i)
 		{
-			m_aUpdateInfo[nPlayerId].m_anObjectNum[i] = -1;
+			mUpdateInfo[playerId].m_anObjectNum[i] = -1;
 		}
 	}
 }
@@ -1306,7 +1271,7 @@ void TCPServer::CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4W
 			m_nEndDrawer1 = nServerObjectNum - 1;
 		}
 		m_nEndDrawer1++;*/
-		m_vDrawerId.push_back(pair<int, int>(nServerObjectNum, 1));
+		mDrawerIds.push_back(pair<int, int>(nServerObjectNum, 1));
 		pGameObject = make_shared<CServerDrawerObject>(pstrFrameName, xmf4x4World, voobb);
 	}
 	else if (!strcmp(pstrFrameName, "Drawer_2"))
@@ -1317,7 +1282,7 @@ void TCPServer::CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4W
 			m_nEndDrawer2 = nServerObjectNum - 1;
 		}
 		m_nEndDrawer2++;*/
-		m_vDrawerId.push_back(pair<int, int>(nServerObjectNum, 2));
+		mDrawerIds.push_back(pair<int, int>(nServerObjectNum, 2));
 		pGameObject = make_shared<CServerDrawerObject>(pstrFrameName, xmf4x4World, voobb);
 	}
 	else if (!strcmp(pstrFrameName, "Door1"))
@@ -1373,24 +1338,24 @@ void TCPServer::CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4W
 	strcpy(pGameObject->m_pstrFrameName, pstrFrameName);
 
 	nServerObjectNum++;
-	m_pCollisionManager->AddCollisionObject(pGameObject);
+	mCollisionManager->AddCollisionObject(pGameObject);
 }
 
 void TCPServer::CreateItemObject()
 {
 	//CServerItemObject::SetDrawerStartEnd(m_nStartDrawer1, m_nEndDrawer1, m_nStartDrawer2, m_nEndDrawer2);
 	// 확률: fus 30, mine 30, tp 30, radar 10
-	uniform_int_distribution<int> dis(0, m_vDrawerId.size() - 1); //[CJI 0525] m_vDrawerId 에 번호를 저장하는 방식으로 변경하여 랜덤으로 뽑아 사용
+	uniform_int_distribution<int> dis(0, mDrawerIds.size() - 1); //[CJI 0525] mDrawerIds 에 번호를 저장하는 방식으로 변경하여 랜덤으로 뽑아 사용
 	uniform_int_distribution<int> item_dis(0, 99);
 	uniform_int_distribution<int> rotation_dis(1, 360);
 	uniform_real_distribution<float> pos_dis(-0.2f, 0.2f);
-	CServerItemObject::SetDrawerIdContainer(m_vDrawerId);
+	CServerItemObject::SetDrawerIdContainer(mDrawerIds);
 
 	for (int i = 0; i < ITEM_COUNT; ++i)
 	{
 		int rd_Num = dis(m_mt19937Gen);
-		int nDrawerNum = m_vDrawerId[rd_Num].first;
-		shared_ptr<CServerDrawerObject> pDrawerObject = dynamic_pointer_cast<CServerDrawerObject>(m_pCollisionManager->GetCollisionObjectWithNumber(nDrawerNum));
+		int nDrawerNum = mDrawerIds[rd_Num].first;
+		shared_ptr<CServerDrawerObject> pDrawerObject = dynamic_pointer_cast<CServerDrawerObject>(mCollisionManager->GetCollisionObjectWithNumber(nDrawerNum));
 		if (!pDrawerObject) //error
 			assert(0);
 		//exit(1);
@@ -1400,7 +1365,7 @@ void TCPServer::CreateItemObject()
 			--i;
 			continue;
 		}
-		XMFLOAT4X4 xmf4x4World = m_pCollisionManager->GetCollisionObjectWithNumber(nDrawerNum)->GetWorldMatrix();
+		XMFLOAT4X4 xmf4x4World = mCollisionManager->GetCollisionObjectWithNumber(nDrawerNum)->GetWorldMatrix();
 
 		int nCreateItem = item_dis(m_mt19937Gen);
 		shared_ptr<CServerItemObject> pItemObject;
@@ -1413,27 +1378,27 @@ void TCPServer::CreateItemObject()
 			pItemObject = make_shared<CServerFuseObject>();
 			pItemObject->SetDrawerNumber(nDrawerNum);
 			pItemObject->SetDrawer(pDrawerObject);
-			pItemObject->SetDrawerType(m_vDrawerId[rd_Num].second);
+			pItemObject->SetDrawerType(mDrawerIds[rd_Num].second);
 			pDrawerObject->m_pStoredItem = pItemObject;
 
 			pItemObject->SetRandomRotation(xmf3RandRotation);
 			pItemObject->SetRandomOffset(xmf3RandOffset);
 
 			pItemObject->SetWorldMatrix(xmf4x4World);
-			m_pCollisionManager->AddCollisionObject(pItemObject);
+			mCollisionManager->AddCollisionObject(pItemObject);
 		}
 		else if (i < 24)	// tp
 		{
 			pItemObject = make_shared<CServerTeleportObject>();
 			pItemObject->SetDrawerNumber(nDrawerNum);
 			pItemObject->SetDrawer(pDrawerObject);
-			pItemObject->SetDrawerType(m_vDrawerId[rd_Num].second);
+			pItemObject->SetDrawerType(mDrawerIds[rd_Num].second);
 			pDrawerObject->m_pStoredItem = pItemObject;
 
 			pItemObject->SetRandomRotation(xmf3RandRotation);
 			pItemObject->SetRandomOffset(xmf3RandOffset);
 			pItemObject->SetWorldMatrix(xmf4x4World);
-			m_pCollisionManager->AddCollisionObject(pItemObject);
+			mCollisionManager->AddCollisionObject(pItemObject);
 		}
 		else if (i < 26)	// Rader
 		{
@@ -1441,13 +1406,13 @@ void TCPServer::CreateItemObject()
 			pItemObject = make_shared<CServerRadarObject>();
 			pItemObject->SetDrawerNumber(nDrawerNum);
 			pItemObject->SetDrawer(pDrawerObject);
-			pItemObject->SetDrawerType(m_vDrawerId[rd_Num].second);
+			pItemObject->SetDrawerType(mDrawerIds[rd_Num].second);
 			pDrawerObject->m_pStoredItem = pItemObject;
 
 			pItemObject->SetRandomRotation(xmf3RandRotation);
 			pItemObject->SetRandomOffset(xmf3RandOffset);
 			pItemObject->SetWorldMatrix(xmf4x4World);
-			m_pCollisionManager->AddCollisionObject(pItemObject);
+			mCollisionManager->AddCollisionObject(pItemObject);
 		}
 		else if (i < 76)	// Mine
 		{
@@ -1456,13 +1421,13 @@ void TCPServer::CreateItemObject()
 			pItemObject = make_shared<CServerMineObject>();
 			pItemObject->SetDrawerNumber(nDrawerNum);
 			pItemObject->SetDrawer(pDrawerObject);
-			pItemObject->SetDrawerType(m_vDrawerId[rd_Num].second);
+			pItemObject->SetDrawerType(mDrawerIds[rd_Num].second);
 			pDrawerObject->m_pStoredItem = pItemObject;
 
 			pItemObject->SetRandomRotation(xmf3RandRotation);
 			pItemObject->SetRandomOffset(xmf3RandOffset);
 			pItemObject->SetWorldMatrix(xmf4x4World);
-			m_pCollisionManager->AddCollisionObject(pItemObject);
+			mCollisionManager->AddCollisionObject(pItemObject);
 		}
 
 	}
@@ -1480,7 +1445,7 @@ void TCPServer::ProcessObjectReplication()
 std::vector<SC_SPACEOUT_OBJECT> TCPServer::CollectOutOfSpaceObjects()
 {
 	std::vector<SC_SPACEOUT_OBJECT> objectUpdates;
-	auto& outOfSpaceObjects = m_pCollisionManager->GetOutSpaceObject();
+	auto& outOfSpaceObjects = mCollisionManager->GetOutSpaceObject();
 	objectUpdates.reserve(outOfSpaceObjects.size());
 
 	// 충돌 관리자가 이번 시뮬레이션에서 별도 전송이 필요하다고 표시한 오브젝트를
@@ -1526,10 +1491,10 @@ void TCPServer::EnqueueOutOfSpaceObjectPackets(const std::vector<SC_SPACEOUT_OBJ
 		std::vector<char> packetBuffer;
 		packetBuffer.reserve(sizeof(INT8) + sizeof(wirePayloadBytes) + payloadBytes);
 		packetBuffer.push_back(static_cast<INT8>(SOCKET_STATE::SEND_SPACEOUT_OBJECTS));
-		PushBufferData(packetBuffer, &wirePayloadBytes, sizeof(wirePayloadBytes));
-		PushBufferData(packetBuffer, objectUpdates.data() + firstObjectIndex, payloadBytes);
+		AppendBufferData(packetBuffer, &wirePayloadBytes, sizeof(wirePayloadBytes));
+		AppendBufferData(packetBuffer, objectUpdates.data() + firstObjectIndex, payloadBytes);
 
-		for (const auto& player : m_apPlayers)
+		for (const auto& player : mPlayers)
 		{
 			if (!player)
 			{
@@ -1551,7 +1516,7 @@ void TCPServer::UpdateNearbyObjectReplicationData()
 {
 	// 고정 크기 UPDATE_DATA 패킷에 포함할 플레이어별 주변 동적 오브젝트를 갱신한다.
 	// 현재 플레이어가 속한 셀을 중심으로 3x3 셀만 탐색하고 최대 30개까지 기록한다.
-	for (const auto& player : m_apPlayers)
+	for (const auto& player : mPlayers)
 	{
 		if (!player || player->GetPlayerId() == -1)
 		{
@@ -1566,7 +1531,7 @@ void TCPServer::UpdateNearbyObjectReplicationData()
 			widthIndex <= player->GetWidth() + 1 && objectCount < MAX_SEND_OBJECT_INFO;
 			++widthIndex)
 		{
-			if (widthIndex < 0 || widthIndex >= m_pCollisionManager->GetWidth())
+			if (widthIndex < 0 || widthIndex >= mCollisionManager->GetWidth())
 			{
 				continue;
 			}
@@ -1575,12 +1540,12 @@ void TCPServer::UpdateNearbyObjectReplicationData()
 				depthIndex <= player->GetDepth() + 1 && objectCount < MAX_SEND_OBJECT_INFO;
 				++depthIndex)
 			{
-				if (depthIndex < 0 || depthIndex >= m_pCollisionManager->GetDepth())
+				if (depthIndex < 0 || depthIndex >= mCollisionManager->GetDepth())
 				{
 					continue;
 				}
 
-				for (const auto& gameObject : m_pCollisionManager->GetSpaceGameObjects(
+				for (const auto& gameObject : mCollisionManager->GetSpaceGameObjects(
 					player->GetFloor(),
 					widthIndex,
 					depthIndex))
@@ -1590,8 +1555,8 @@ void TCPServer::UpdateNearbyObjectReplicationData()
 						continue;
 					}
 
-					m_aUpdateInfo[playerId].m_anObjectNum[objectCount] = gameObject->GetCollisionNum();
-					m_aUpdateInfo[playerId].m_axmf4x4World[objectCount] = gameObject->GetWorldMatrix();
+					mUpdateInfo[playerId].m_anObjectNum[objectCount] = gameObject->GetCollisionNum();
+					mUpdateInfo[playerId].m_axmf4x4World[objectCount] = gameObject->GetWorldMatrix();
 
 					++objectCount;
 					if (objectCount == MAX_SEND_OBJECT_INFO)
@@ -1601,14 +1566,14 @@ void TCPServer::UpdateNearbyObjectReplicationData()
 				}
 			}
 		}
-		m_aUpdateInfo[playerId].m_nNumOfObject = objectCount;
+		mUpdateInfo[playerId].m_nNumOfObject = objectCount;
 	}
 }
 
-void TCPServer::InitPlayerPosition(shared_ptr<CServerPlayer>& pServerPlayer, int nIndex)
+void TCPServer::InitializePlayerPosition(shared_ptr<CServerPlayer>& serverPlayer, int index)
 {
 	// 후보지를 두고 int 값에 따라 그곳에 가도록 해야할듯
-	uniform_int_distribution<int> disIntPosition(0, m_axmf3Positions.size() - 1);
+	uniform_int_distribution<int> disIntPosition(0, mPlayerStartPositions.size() - 1);
 
 	int nStartPosNum = disIntPosition(m_mt19937Gen);
 	bool bEmpty = false;
@@ -1616,7 +1581,7 @@ void TCPServer::InitPlayerPosition(shared_ptr<CServerPlayer>& pServerPlayer, int
 	{
 		bEmpty = true;
 		nStartPosNum = disIntPosition(m_mt19937Gen);
-		for (const auto& nPlayerStartPos : m_anPlayerStartPosNum)
+		for (const auto& nPlayerStartPos : mPlayerStartPositionIndices)
 		{
 			if (nPlayerStartPos == nStartPosNum)
 			{
@@ -1626,58 +1591,58 @@ void TCPServer::InitPlayerPosition(shared_ptr<CServerPlayer>& pServerPlayer, int
 		}
 	}
 
-	m_anPlayerStartPosNum[nIndex] = nStartPosNum;
-	XMFLOAT3 xmf3Position = m_axmf3Positions[nStartPosNum];
-	pServerPlayer->SetPlayerPosition(xmf3Position);
-	pServerPlayer->SetPlayerOldPosition(xmf3Position);
+	mPlayerStartPositionIndices[index] = nStartPosNum;
+	XMFLOAT3 xmf3Position = mPlayerStartPositions[nStartPosNum];
+	serverPlayer->SetPlayerPosition(xmf3Position);
+	serverPlayer->SetPlayerOldPosition(xmf3Position);
 }
 
 template<class... Args>
-bool TCPServer::SubmitSendData(int nSocketIndex, Args&&... args)
+bool TCPServer::SubmitSendData(int clientIndex, Args&&... args)
 {
 	const size_t bufferSize = (sizeof(args) + ... + 0);
 	std::vector<char> buffer(bufferSize);
 	size_t offset = 0;
 	((memcpy(buffer.data() + offset, &args, sizeof(args)), offset += sizeof(args)), ...);
 
-	return EnqueueSendBuffer(nSocketIndex, std::move(buffer));
+	return EnqueueSendBuffer(clientIndex, std::move(buffer));
 }
 
-bool TCPServer::EnqueueSendBuffer(int nSocketIndex, vector<char> buffer)
+bool TCPServer::EnqueueSendBuffer(int clientIndex, vector<char> buffer)
 {
-	if (nSocketIndex < 0 || nSocketIndex >= static_cast<int>(m_vSocketInfoList.size()))
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(mSocketInfos.size()))
 	{
 		return false;
 	}
 
-	SOCKETINFO& socketInfo = m_vSocketInfoList[nSocketIndex];
-	const bool isInvalidBufferSize = !socketInfo.m_bUsed || buffer.empty() ||
-		socketInfo.m_nPendingSendBytes > MAX_PENDING_SEND_BYTES ||
-		buffer.size() > MAX_PENDING_SEND_BYTES - socketInfo.m_nPendingSendBytes;
+	SocketInfo& socketInfo = mSocketInfos[clientIndex];
+	const bool isInvalidBufferSize = !socketInfo.isUsed || buffer.empty() ||
+		socketInfo.pendingSendBytes > MAX_PENDING_SEND_BYTES ||
+		buffer.size() > MAX_PENDING_SEND_BYTES - socketInfo.pendingSendBytes;
 	if (isInvalidBufferSize)
 	{
-		if (socketInfo.m_bUsed)
+		if (socketInfo.isUsed)
 		{
-			DisconnectClient(socketInfo.m_sock);
+			DisconnectClient(socketInfo.socket);
 		}
 		return false;
 	}
 
-	socketInfo.m_nPendingSendBytes += buffer.size();
-	socketInfo.m_nUnsentSendBytes += buffer.size();
-	socketInfo.m_sendQueue.push_back(PendingSend{ std::move(buffer), 0 });
+	socketInfo.pendingSendBytes += buffer.size();
+	socketInfo.unsentSendBytes += buffer.size();
+	socketInfo.sendQueue.push_back(PendingSend{ std::move(buffer), 0 });
 
 	// 최고 대기량은 송신 생산 속도가 소켓 처리 속도를 앞서는지 판단하는 값이다.
 	for (NetworkStatistics* statistics : {
-		&socketInfo.m_totalNetworkStatistics,
-		&socketInfo.m_intervalNetworkStatistics })
+		&socketInfo.totalNetworkStatistics,
+		&socketInfo.intervalNetworkStatistics })
 	{
-		statistics->peakUnsentBytes = (std::max)(statistics->peakUnsentBytes, socketInfo.m_nUnsentSendBytes);
-		statistics->peakPendingPackets = (std::max)(statistics->peakPendingPackets, socketInfo.m_sendQueue.size());
+		statistics->peakUnsentBytes = (std::max)(statistics->peakUnsentBytes, socketInfo.unsentSendBytes);
+		statistics->peakPendingPackets = (std::max)(statistics->peakPendingPackets, socketInfo.sendQueue.size());
 	}
-	if (FlushSendQueue(nSocketIndex) == SendResult::Error)
+	if (FlushSendQueue(clientIndex) == SendResult::Error)
 	{
-		const SOCKET socket = socketInfo.m_sock;
+		const SOCKET socket = socketInfo.socket;
 		err_display("send()");
 		DisconnectClient(socket);
 		return false;
@@ -1685,15 +1650,15 @@ bool TCPServer::EnqueueSendBuffer(int nSocketIndex, vector<char> buffer)
 	return true;
 }
 
-TCPServer::SendResult TCPServer::FlushSendQueue(int nSocketIndex)
+TCPServer::SendResult TCPServer::FlushSendQueue(int clientIndex)
 {
-	SOCKETINFO& socketInfo = m_vSocketInfoList[nSocketIndex];
-	while (!socketInfo.m_sendQueue.empty())
+	SocketInfo& socketInfo = mSocketInfos[clientIndex];
+	while (!socketInfo.sendQueue.empty())
 	{
-		PendingSend& pending = socketInfo.m_sendQueue.front();
+		PendingSend& pending = socketInfo.sendQueue.front();
 		const size_t remainingBytes = pending.buffer.size() - pending.sentBytes;
 		const int sentBytes = send(
-			socketInfo.m_sock,
+			socketInfo.socket,
 			pending.buffer.data() + pending.sentBytes,
 			static_cast<int>(remainingBytes),
 			0);
@@ -1702,8 +1667,8 @@ TCPServer::SendResult TCPServer::FlushSendQueue(int nSocketIndex)
 		{
 			const std::uint8_t head = static_cast<std::uint8_t>(pending.buffer.front());
 			for (NetworkStatistics* statistics : {
-				&socketInfo.m_totalNetworkStatistics,
-				&socketInfo.m_intervalNetworkStatistics })
+				&socketInfo.totalNetworkStatistics,
+				&socketInfo.intervalNetworkStatistics })
 			{
 				// send()가 양수를 반환한 바이트만 실제 송신 처리량으로 기록한다.
 				statistics->sentBytes += static_cast<std::uint64_t>(sentBytes);
@@ -1711,26 +1676,26 @@ TCPServer::SendResult TCPServer::FlushSendQueue(int nSocketIndex)
 			}
 
 			pending.sentBytes += static_cast<size_t>(sentBytes);
-			socketInfo.m_nUnsentSendBytes -= static_cast<size_t>(sentBytes);
+			socketInfo.unsentSendBytes -= static_cast<size_t>(sentBytes);
 			if (pending.sentBytes == pending.buffer.size())
 			{
 				for (NetworkStatistics* statistics : {
-					&socketInfo.m_totalNetworkStatistics,
-					&socketInfo.m_intervalNetworkStatistics })
+					&socketInfo.totalNetworkStatistics,
+					&socketInfo.intervalNetworkStatistics })
 				{
 					++statistics->sentPackets;
 					++statistics->sentByHead[head].packets;
 				}
-				socketInfo.m_nPendingSendBytes -= pending.buffer.size();
-				socketInfo.m_sendQueue.pop_front();
+				socketInfo.pendingSendBytes -= pending.buffer.size();
+				socketInfo.sendQueue.pop_front();
 			}
 			continue;
 		}
 
 		if (sentBytes == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
 		{
-			++socketInfo.m_totalNetworkStatistics.sendWouldBlockCount;
-			++socketInfo.m_intervalNetworkStatistics.sendWouldBlockCount;
+			++socketInfo.totalNetworkStatistics.sendWouldBlockCount;
+			++socketInfo.intervalNetworkStatistics.sendWouldBlockCount;
 			return SendResult::Pending;
 		}
 		return SendResult::Error;
@@ -1738,55 +1703,55 @@ TCPServer::SendResult TCPServer::FlushSendQueue(int nSocketIndex)
 	return SendResult::Complete;
 }
 
-void TCPServer::PushBufferData(vector<char>& buffer, const void* data, size_t size)
+void TCPServer::AppendBufferData(vector<char>& buffer, const void* data, size_t size)
 {
 	const char* bytes = static_cast<const char*>(data);
 	buffer.insert(buffer.end(), bytes, bytes + size);
 }
 
-void TCPServer::ResetReceiveState(SOCKETINFO& socketInfo)
+void TCPServer::ResetReceiveState(SocketInfo& socketInfo)
 {
-	socketInfo.m_nHead = -1;
-	socketInfo.m_bRecvHead = false;
-	socketInfo.m_nCurrentRecvByte = 0;
-	socketInfo.m_nCurrentPacketReceivedBytes = 0;
-	memset(socketInfo.m_pCurrentBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+	socketInfo.receiveHead = -1;
+	socketInfo.hasReceiveHead = false;
+	socketInfo.receivedBytes = 0;
+	socketInfo.currentPacketReceivedBytes = 0;
+	memset(socketInfo.receiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 }
 
-TCPServer::ReceiveResult TCPServer::RecvData(int nSocketIndex, size_t nBufferSize)
+TCPServer::ReceiveResult TCPServer::ReceiveData(int clientIndex, size_t expectedBytes)
 {
-	SOCKETINFO& socketInfo = m_vSocketInfoList[nSocketIndex];
+	SocketInfo& socketInfo = mSocketInfos[clientIndex];
 
 	bool isInvalidBufferSize =
-		nBufferSize > MAX_PACKET_PAYLOAD_SIZE ||
-		socketInfo.m_nCurrentRecvByte < 0 ||
-		static_cast<size_t>(socketInfo.m_nCurrentRecvByte) > nBufferSize;
+		expectedBytes > MAX_PACKET_PAYLOAD_SIZE ||
+		socketInfo.receivedBytes < 0 ||
+		static_cast<size_t>(socketInfo.receivedBytes) > expectedBytes;
 	if (isInvalidBufferSize)
 	{
-		std::cerr << "Invalid receive buffer state: client=" << nSocketIndex
-			<< ", expectedBytes=" << nBufferSize
-			<< ", receivedBytes=" << socketInfo.m_nCurrentRecvByte << '\n';
+		std::cerr << "Invalid receive buffer state: client=" << clientIndex
+			<< ", expectedBytes=" << expectedBytes
+			<< ", receivedBytes=" << socketInfo.receivedBytes << '\n';
 		return ReceiveResult::Error;
 	}
 
-	if (nBufferSize == 0)
+	if (expectedBytes == 0)
 	{
 		return ReceiveResult::Complete;
 	}
 
-	const int remainRecvByte = static_cast<int>(nBufferSize) - socketInfo.m_nCurrentRecvByte;
-	const int retval = recv(socketInfo.m_sock, socketInfo.m_pCurrentBuffer + socketInfo.m_nCurrentRecvByte, remainRecvByte, 0);
+	const int remainRecvByte = static_cast<int>(expectedBytes) - socketInfo.receivedBytes;
+	const int retval = recv(socketInfo.socket, socketInfo.receiveBuffer + socketInfo.receivedBytes, remainRecvByte, 0);
 	if (retval > 0)
 	{
-		socketInfo.m_nCurrentRecvByte += retval;
-		socketInfo.m_nCurrentPacketReceivedBytes += static_cast<size_t>(retval);
-		socketInfo.m_totalNetworkStatistics.receivedBytes += static_cast<std::uint64_t>(retval);
-		socketInfo.m_intervalNetworkStatistics.receivedBytes += static_cast<std::uint64_t>(retval);
+		socketInfo.receivedBytes += retval;
+		socketInfo.currentPacketReceivedBytes += static_cast<size_t>(retval);
+		socketInfo.totalNetworkStatistics.receivedBytes += static_cast<std::uint64_t>(retval);
+		socketInfo.intervalNetworkStatistics.receivedBytes += static_cast<std::uint64_t>(retval);
 	}
 	else if (retval == 0)
 	{
 		// recv()가 0이면 상대가 정상적으로 연결을 종료한 것이므로 재시도하지 않는다.
-		std::cout << "Client closed connection while receiving: client=" << nSocketIndex << '\n';
+		std::cout << "Client closed connection while receiving: client=" << clientIndex << '\n';
 		return ReceiveResult::Closed;
 	}
 	else
@@ -1796,65 +1761,65 @@ TCPServer::ReceiveResult TCPServer::RecvData(int nSocketIndex, size_t nBufferSiz
 		{
 			// 아직 필요한 바이트가 도착하지 않은 정상적인 논블로킹 상태다.
 			// HEAD, 버퍼, 현재 수신 위치를 유지하고 다음 FD_READ에서 이어서 받는다.
-			++socketInfo.m_totalNetworkStatistics.receiveWouldBlockCount;
-			++socketInfo.m_intervalNetworkStatistics.receiveWouldBlockCount;
+			++socketInfo.totalNetworkStatistics.receiveWouldBlockCount;
+			++socketInfo.intervalNetworkStatistics.receiveWouldBlockCount;
 			return ReceiveResult::Pending;
 		}
 
-		std::cerr << "Receive failed: client=" << nSocketIndex
+		std::cerr << "Receive failed: client=" << clientIndex
 			<< ", error=" << errorCode << '\n';
 		return ReceiveResult::Error;
 	}
 
-	if (static_cast<size_t>(socketInfo.m_nCurrentRecvByte) < nBufferSize)
+	if (static_cast<size_t>(socketInfo.receivedBytes) < expectedBytes)
 	{
 		// partial recv도 오류가 아니다. 현재까지 받은 바이트를 보존하고 다음 FD_READ를 기다린다.
 		return ReceiveResult::Pending;
 	}
 
-	socketInfo.m_nCurrentRecvByte = 0;
+	socketInfo.receivedBytes = 0;
 	return ReceiveResult::Complete;
 }
 
-void TCPServer::RecordReceivedPacket(SOCKETINFO& socketInfo)
+void TCPServer::RecordReceivedPacketStatistics(SocketInfo& socketInfo)
 {
-	const std::uint8_t head = static_cast<std::uint8_t>(socketInfo.m_nHead);
+	const std::uint8_t head = static_cast<std::uint8_t>(socketInfo.receiveHead);
 	for (NetworkStatistics* statistics : {
-		&socketInfo.m_totalNetworkStatistics,
-		&socketInfo.m_intervalNetworkStatistics })
+		&socketInfo.totalNetworkStatistics,
+		&socketInfo.intervalNetworkStatistics })
 	{
 		++statistics->receivedPackets;
 		++statistics->receivedByHead[head].packets;
-		statistics->receivedByHead[head].bytes += socketInfo.m_nCurrentPacketReceivedBytes;
+		statistics->receivedByHead[head].bytes += socketInfo.currentPacketReceivedBytes;
 	}
 }
 
 void TCPServer::ReportNetworkStatisticsIfDue()
 {
 	const auto currentTime = std::chrono::steady_clock::now();
-	const auto elapsedTime = currentTime - m_lastNetworkStatisticsReportTime;
+	const auto elapsedTime = currentTime - mLastNetworkStatisticsReportTime;
 	if (elapsedTime < NETWORK_STATISTICS_INTERVAL)
 	{
 		return;
 	}
-	m_lastNetworkStatisticsReportTime = currentTime;
+	mLastNetworkStatisticsReportTime = currentTime;
 
 	NetworkStatistics aggregateStatistics;
 	size_t currentUnsentBytes = 0;
 	size_t currentPendingPackets = 0;
 	bool hasConnectedClient = false;
 
-	for (const SOCKETINFO& socketInfo : m_vSocketInfoList)
+	for (const SocketInfo& socketInfo : mSocketInfos)
 	{
-		if (!socketInfo.m_bUsed)
+		if (!socketInfo.isUsed)
 		{
 			continue;
 		}
 
 		hasConnectedClient = true;
-		AccumulateNetworkStatistics(aggregateStatistics, socketInfo.m_intervalNetworkStatistics);
-		currentUnsentBytes += socketInfo.m_nUnsentSendBytes;
-		currentPendingPackets += socketInfo.m_sendQueue.size();
+		AccumulateNetworkStatistics(aggregateStatistics, socketInfo.intervalNetworkStatistics);
+		currentUnsentBytes += socketInfo.unsentSendBytes;
+		currentPendingPackets += socketInfo.sendQueue.size();
 	}
 
 	if (!hasConnectedClient)
@@ -1876,34 +1841,34 @@ void TCPServer::ReportNetworkStatisticsIfDue()
 	PrintPacketBreakdown("TX", aggregateStatistics.sentByHead, true);
 	PrintPacketBreakdown("RX", aggregateStatistics.receivedByHead, false);
 
-	for (size_t i = 0; i < m_vSocketInfoList.size(); ++i)
+	for (size_t i = 0; i < mSocketInfos.size(); ++i)
 	{
-		SOCKETINFO& socketInfo = m_vSocketInfoList[i];
-		if (!socketInfo.m_bUsed)
+		SocketInfo& socketInfo = mSocketInfos[i];
+		if (!socketInfo.isUsed)
 		{
 			continue;
 		}
 
-		const NetworkStatistics& statistics = socketInfo.m_intervalNetworkStatistics;
+		const NetworkStatistics& statistics = socketInfo.intervalNetworkStatistics;
 		std::cout << "  client[" << i << "]: TX=" << statistics.sentBytes
 			<< "B/" << statistics.sentPackets << "pkt, RX="
 			<< statistics.receivedBytes << "B/" << statistics.receivedPackets
-			<< "pkt, Queue=" << socketInfo.m_nUnsentSendBytes << "B/"
-			<< socketInfo.m_sendQueue.size() << "pkt, Peak="
+			<< "pkt, Queue=" << socketInfo.unsentSendBytes << "B/"
+			<< socketInfo.sendQueue.size() << "pkt, Peak="
 			<< statistics.peakUnsentBytes << "B/"
 			<< statistics.peakPendingPackets << "pkt\n";
 
 		// 다음 1초 구간은 현재 backlog를 시작점으로 삼아 새 최고치를 측정한다.
-		socketInfo.m_intervalNetworkStatistics = NetworkStatistics{};
-		socketInfo.m_intervalNetworkStatistics.peakUnsentBytes = socketInfo.m_nUnsentSendBytes;
-		socketInfo.m_intervalNetworkStatistics.peakPendingPackets = socketInfo.m_sendQueue.size();
+		socketInfo.intervalNetworkStatistics = NetworkStatistics{};
+		socketInfo.intervalNetworkStatistics.peakUnsentBytes = socketInfo.unsentSendBytes;
+		socketInfo.intervalNetworkStatistics.peakPendingPackets = socketInfo.sendQueue.size();
 	}
 }
 
-void TCPServer::ReportDisconnectedClientStatistics(int nSocketIndex, const SOCKETINFO& socketInfo) const
+void TCPServer::ReportDisconnectedClientStatistics(int clientIndex, const SocketInfo& socketInfo) const
 {
-	const NetworkStatistics& statistics = socketInfo.m_totalNetworkStatistics;
-	std::cout << "[NET END client=" << nSocketIndex << "] TX="
+	const NetworkStatistics& statistics = socketInfo.totalNetworkStatistics;
+	std::cout << "[NET END client=" << clientIndex << "] TX="
 		<< statistics.sentBytes << "B/" << statistics.sentPackets
 		<< "pkt, RX=" << statistics.receivedBytes << "B/"
 		<< statistics.receivedPackets << "pkt, PeakQueue="
