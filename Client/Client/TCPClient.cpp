@@ -187,7 +187,7 @@ namespace
 				LogInvalidServerPacketAtIndex("CLIENT_INFO", "look", index);
 				return false;
 			}
-			if (!std::isfinite(info.m_animationInfo.pitch))
+			if (!std::isfinite(info.m_fPitch))
 			{
 				LogInvalidServerPacketAtIndex("CLIENT_INFO", "pitch", index);
 				return false;
@@ -243,7 +243,7 @@ void CTcpClient::ResetReceiveState()
 	mReceivedBytes = 0;
 	mHasReceiveHead = false;
 	mHasPayloadSize = false;
-	mReceiveHead = -1;
+	mReceiveHead = ReceiveHead::Invalid;
 	mExpectedPayloadBytes = 0;
 	memset(mReceiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 }
@@ -357,27 +357,30 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 			return;
 		}
 
-		mHasReceiveHead = true;
-		memcpy(&mReceiveHead, mReceiveBuffer, sizeof(INT8));
+		INT8 rawReceiveHead = -1;
+		memcpy(&rawReceiveHead, mReceiveBuffer, sizeof(rawReceiveHead));
 		memset(mReceiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 
 		// 등록되지 않은 HEAD는 payload 크기와 형식을 결정할 수 없으므로 스트림 해석을 중단한다.
 		// 연결을 종료해 이후 바이트를 다음 패킷의 HEAD로 잘못 처리하는 상황도 방지한다.
-		if (!IsValidReceiveHead(mReceiveHead))
+		if (!IsValidReceiveHead(rawReceiveHead))
 		{
-			LogInvalidServerPacket("HEADER", "head", static_cast<int>(mReceiveHead));
+			LogInvalidServerPacket("HEADER", "head", static_cast<int>(rawReceiveHead));
 			CloseConnection();
 			return;
 		}
+
+		mReceiveHead = static_cast<ReceiveHead>(rawReceiveHead);
+		mHasReceiveHead = true;
 	}
 
 	switch (mReceiveHead)
 	{
-	case HEAD_GAME_START:
+	case ReceiveHead::GameStart:
 		PostMessage(window, WM_START_GAME, 0, 0);
 		mSocketState = SOCKET_STATE::SEND_KEY_BUFFER;
 		break;
-	case HEAD_CHANGE_SLOT:
+	case ReceiveHead::ChangeSlot:
 	{
 		if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) + sizeof(mClientInfo))))
 		{
@@ -425,7 +428,7 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 		}
 	}
 	break;
-	case HEAD_INIT:
+	case ReceiveHead::Init:
 	{
 		if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) * 2 + sizeof(mClientInfo))))
 		{
@@ -475,7 +478,7 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 
 		break;
 	}
-	case HEAD_UPDATE_DATA:
+	case ReceiveHead::UpdateData:
 	{
 		if (!HandleReceiveResult(ReceiveData(socket, sizeof(mClientInfo))))
 		{
@@ -496,7 +499,7 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 
 		break;
 	}
-	case HEAD_NUM_OF_CLIENT:
+	case ReceiveHead::ClientCount:
 	{
 		if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) + sizeof(mClientInfo))))
 		{
@@ -536,37 +539,37 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 		}
 		break;
 	}
-	case HEAD_BLUE_SUIT_WIN:
+	case ReceiveHead::BlueSuitWin:
 		PostMessage(window, WM_END_GAME, 0, 0);
 		break;
-	case HEAD_ZOMBIE_WIN:
+	case ReceiveHead::ZombieWin:
 		PostMessage(window, WM_END_GAME, 1, 0);
 		break;
-	case HEAD_OPEN_DRAWER_SOUND:
+	case ReceiveHead::OpenDrawerSound:
 	{
 		SoundManager& soundManager = SoundManager::GetInstance();
 		soundManager.PlaySoundWithName(sound::OPEN_DRAWER);
 		break;
 	}
-	case HEAD_CLOSE_DRAWER_SOUND:
+	case ReceiveHead::CloseDrawerSound:
 	{
 		SoundManager& soundManager = SoundManager::GetInstance();
 		soundManager.PlaySoundWithName(sound::CLOSE_DRAWER);
 		break;
 	}
-	case HEAD_OPEN_DOOR_SOUND:
+	case ReceiveHead::OpenDoorSound:
 	{
 		SoundManager& soundManager = SoundManager::GetInstance();
 		soundManager.PlaySoundWithName(sound::OPEN_DOOR);
 		break;
 	}
-	case HEAD_CLOSE_DOOR_SOUND:
+	case ReceiveHead::CloseDoorSound:
 	{
 		SoundManager& soundManager = SoundManager::GetInstance();
 		soundManager.PlaySoundWithName(sound::CLOSE_DOOR);
 		break;
 	}
-	case HEAD_BLUE_SUIT_DEAD:
+	case ReceiveHead::BlueSuitDead:
 	{
 		if (!HandleReceiveResult(ReceiveData(socket, sizeof(char))))
 		{
@@ -586,7 +589,7 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 		soundManager.SetVolume(sound::DEAD_BLUESUIT, mPlayers[deadUserId]->GetPlayerVolume());
 		break;
 	}
-	case SEND_SPACEOUT_OBJECTS:
+	case ReceiveHead::SpaceOutObjects:
 	{
 		if (!mHasPayloadSize)
 		{
@@ -675,7 +678,7 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 		}
 		break;
 	}
-	case HEAD_LOADING_COMPLETE:
+	case ReceiveHead::LoadingComplete:
 	{
 		mLoadingCompleteReceived = true;
 		break;
@@ -690,22 +693,22 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 bool CTcpClient::IsValidReceiveHead(INT8 head) const
 {
 	// 클라이언트가 payload 크기와 처리 방법을 알고 있는 서버 패킷만 허용한다.
-	switch (head)
+	switch (static_cast<ReceiveHead>(head))
 	{
-	case HEAD_INIT:
-	case HEAD_UPDATE_DATA:
-	case HEAD_NUM_OF_CLIENT:
-	case HEAD_BLUE_SUIT_WIN:
-	case HEAD_ZOMBIE_WIN:
-	case HEAD_GAME_START:
-	case HEAD_CHANGE_SLOT:
-	case HEAD_OPEN_DRAWER_SOUND:
-	case HEAD_CLOSE_DRAWER_SOUND:
-	case HEAD_OPEN_DOOR_SOUND:
-	case HEAD_CLOSE_DOOR_SOUND:
-	case HEAD_BLUE_SUIT_DEAD:
-	case SEND_SPACEOUT_OBJECTS:
-	case HEAD_LOADING_COMPLETE:
+	case ReceiveHead::Init:
+	case ReceiveHead::UpdateData:
+	case ReceiveHead::ClientCount:
+	case ReceiveHead::BlueSuitWin:
+	case ReceiveHead::ZombieWin:
+	case ReceiveHead::GameStart:
+	case ReceiveHead::ChangeSlot:
+	case ReceiveHead::OpenDrawerSound:
+	case ReceiveHead::CloseDrawerSound:
+	case ReceiveHead::OpenDoorSound:
+	case ReceiveHead::CloseDoorSound:
+	case ReceiveHead::BlueSuitDead:
+	case ReceiveHead::SpaceOutObjects:
+	case ReceiveHead::LoadingComplete:
 		return true;
 	default:
 		return false;
@@ -734,30 +737,31 @@ void CTcpClient::ApplyServerUpdate()
 {
 	for (int playerIndex = 0; playerIndex < MAX_CLIENT; ++playerIndex)
 	{
-		if (mPlayers[playerIndex])
+		const auto& player = mPlayers[playerIndex];
+		const auto& clientInfo = mClientInfo[playerIndex];
+
+		if (player)
 		{
-			mPlayers[playerIndex]->SetAlive(mClientInfo[playerIndex].m_bAlive);
-			mPlayers[playerIndex]->SetRunning(mClientInfo[playerIndex].m_bRunning);
-			mPlayers[playerIndex]->SetClientId(mClientInfo[playerIndex].m_nClientId);
-			mPlayers[playerIndex]->SetPosition(mClientInfo[playerIndex].m_xmf3Position);
-			mPlayers[playerIndex]->SetVelocity(mClientInfo[playerIndex].m_xmf3Velocity);
-			if (playerIndex != mMainClientId)
-			{
-				mPlayers[playerIndex]->SetPitch(mClientInfo[playerIndex].m_animationInfo.pitch);
-			}
+			player->SetAlive(clientInfo.m_bAlive);
+			player->SetRunning(clientInfo.m_bRunning);
+			player->SetClientId(clientInfo.m_nClientId);
+			player->SetPosition(clientInfo.m_xmf3Position);
+			player->SetVelocity(clientInfo.m_xmf3Velocity);
 
 			if (playerIndex != mMainClientId)
 			{
-				mPlayers[playerIndex]->SetLook(mClientInfo[playerIndex].m_xmf3Look);
-				XMFLOAT3 right = XMFLOAT3(0.0f, 1.0f, 0.0f);
-				right = Vector3::CrossProduct(right, mClientInfo[playerIndex].m_xmf3Look, true);
-				mPlayers[playerIndex]->SetRight(right);
+				player->SetPitch(clientInfo.m_fPitch);
+				player->SetLook(clientInfo.m_xmf3Look);
+				XMFLOAT3 worldUp(0.0f, 1.0f, 0.0f);
+				XMFLOAT3 look = clientInfo.m_xmf3Look;
+				const XMFLOAT3 right = Vector3::CrossProduct(worldUp, look, true);
+				player->SetRight(right);
 			}
 
 			UpdatePickedObject(playerIndex);
 
 			// 지뢰 충돌
-			const int mineObjectId = mClientInfo[playerIndex].m_playerInfo.m_iMineobjectNum;
+			const int mineObjectId = clientInfo.m_playerInfo.m_iMineobjectNum;
 			if (mineObjectId != -1)
 			{
 				shared_ptr<CGameObject> gameObject;
@@ -770,13 +774,13 @@ void CTcpClient::ApplyServerUpdate()
 				{
 					mine->SetCollide(true);
 					shared_ptr<CZombiePlayer> zombiePlayer =
-						dynamic_pointer_cast<CZombiePlayer>(mPlayers[playerIndex]);
+						dynamic_pointer_cast<CZombiePlayer>(player);
 					if (zombiePlayer)
 					{
 						zombiePlayer->SetEectricShock();
 					}
 
-					const float volume = mPlayers[playerIndex]->GetPlayerVolume();
+					const float volume = player->GetPlayerVolume();
 					SoundManager& soundManager = SoundManager::GetInstance();
 					if (volume - EPSILON >= 0.0f)
 					{
@@ -795,10 +799,10 @@ void CTcpClient::ApplyServerUpdate()
 			UpdateSurvivorPlayer(playerIndex);
 		}
 
-		const int nearbyObjectCount = mClientInfo[playerIndex].m_nNumOfObject;
+		const int nearbyObjectCount = clientInfo.m_nNumOfObject;
 		for (int objectIndex = 0; objectIndex < nearbyObjectCount; ++objectIndex)
 		{
-			const int objectId = mClientInfo[playerIndex].m_anObjectNum[objectIndex];
+			const int objectId = clientInfo.m_anObjectNum[objectIndex];
 
 			if (!IsValidObjectId(objectId))
 			{
@@ -811,8 +815,8 @@ void CTcpClient::ApplyServerUpdate()
 				g_collisionManager.GetCollisionObjectWithNumber(objectId).lock();
 			if (gameObject)
 			{
-				gameObject->m_xmf4x4World = mClientInfo[playerIndex].m_axmf4x4World[objectIndex];
-				gameObject->m_xmf4x4ToParent = mClientInfo[playerIndex].m_axmf4x4World[objectIndex];
+				gameObject->m_xmf4x4World = clientInfo.m_axmf4x4World[objectIndex];
+				gameObject->m_xmf4x4ToParent = clientInfo.m_axmf4x4World[objectIndex];
 			}
 #endif // LOADSCENE
 		}
@@ -821,25 +825,26 @@ void CTcpClient::ApplyServerUpdate()
 
 void CTcpClient::UpdatePickedObject(int playerIndex)
 {
-	if (playerIndex == mMainClientId)
+	if (playerIndex != mMainClientId)
 	{
-		if (mClientInfo[playerIndex].m_nPickedObjectNum == -1)
-		{
-			mPlayers[playerIndex]->SetPickedObject(nullptr);
-		}
-		else
-		{
-			const int objectId = mClientInfo[playerIndex].m_nPickedObjectNum;
-			shared_ptr<CGameObject> gameObject;
-			if (!TryGetCollisionObject(objectId, "pickedObjectId", gameObject))
-			{
-				return;
-			}
-			if (gameObject)
-			{
-				mPlayers[playerIndex]->SetPickedObject(gameObject);
-			}
-		}
+		return;
+	}
+
+	const int objectId = mClientInfo[playerIndex].m_nPickedObjectNum;
+	if (objectId == -1)
+	{
+		mPlayers[playerIndex]->SetPickedObject(nullptr);
+		return;
+	}
+
+	shared_ptr<CGameObject> gameObject;
+	if (!TryGetCollisionObject(objectId, "pickedObjectId", gameObject))
+	{
+		return;
+	}
+	if (gameObject)
+	{
+		mPlayers[playerIndex]->SetPickedObject(gameObject);
 	}
 }
 
@@ -871,7 +876,7 @@ void CTcpClient::RequestSend()
 		return;
 	}
 
-	mClientInfo[mMainClientId].m_animationInfo.pitch = mPlayers[mMainClientId]->GetPitch();
+	mClientInfo[mMainClientId].m_fPitch = mPlayers[mMainClientId]->GetPitch();
 	mClientInfo[mMainClientId].m_playerInfo.m_bRightClick = mPlayers[mMainClientId]->IsRightClick();
 	mPlayers[mMainClientId]->SetRightClick(false);
 
@@ -900,7 +905,7 @@ void CTcpClient::RequestSend()
 				mPlayers[mMainClientId]->GetLook(),
 				mPlayers[mMainClientId]->GetRight(),
 				mPlayers[mMainClientId]->GetUp(),
-				mClientInfo[mMainClientId].m_animationInfo,
+				mClientInfo[mMainClientId].m_fPitch,
 				mClientInfo[mMainClientId].m_playerInfo
 			);
 		}
@@ -913,7 +918,7 @@ void CTcpClient::RequestSend()
 				mPlayers[mMainClientId]->GetCamera()->GetLookVector(),
 				mPlayers[mMainClientId]->GetCamera()->GetRightVector(),
 				mPlayers[mMainClientId]->GetCamera()->GetUpVector(),
-				mClientInfo[mMainClientId].m_animationInfo,
+				mClientInfo[mMainClientId].m_fPitch,
 				mClientInfo[mMainClientId].m_playerInfo
 			);
 		}
@@ -1054,45 +1059,27 @@ void CTcpClient::UpdateZombiePlayer()
 		return;
 	}
 
+	const bool isTrackingEnabled = mClientInfo[ZOMBIEPLAYER].m_nSlotObjectNum[0] == 1;
+	const bool isInterruptionEnabled = mClientInfo[ZOMBIEPLAYER].m_nSlotObjectNum[1] == 1;
+
 	for (int playerIndex = 0; playerIndex < MAX_CLIENT; ++playerIndex)
 	{
 		if (mMainClientId == ZOMBIEPLAYER)	// 추적
 		{
-			if (mClientInfo[ZOMBIEPLAYER].m_nSlotObjectNum[0] == 1)
-			{
-				mPlayers[playerIndex]->SetTracking(true);
-			}
-			else
-			{
-				mPlayers[playerIndex]->SetTracking(false);
-			}
+			mPlayers[playerIndex]->SetTracking(isTrackingEnabled);
 		}
 
 		if (mPlayers[playerIndex]->GetClientId() != mMainClientId || playerIndex == ZOMBIEPLAYER)
 		{
 			continue;
 		}
-		if (mClientInfo[ZOMBIEPLAYER].m_nSlotObjectNum[1] == 1)
-		{
-			mPlayers[playerIndex]->SetInterruption(true);
-		}
-		else
-		{
-			mPlayers[playerIndex]->SetInterruption(false);
-		}
+		mPlayers[playerIndex]->SetInterruption(isInterruptionEnabled);
 	}
 
 	// 시야 방해(zombie 플레이어)
 	if (mMainClientId == ZOMBIEPLAYER)
 	{
-		if (mClientInfo[ZOMBIEPLAYER].m_nSlotObjectNum[1] == 1)
-		{
-			mPlayers[ZOMBIEPLAYER]->SetInterruption(true);
-		}
-		else
-		{
-			mPlayers[ZOMBIEPLAYER]->SetInterruption(false);
-		}
+		mPlayers[ZOMBIEPLAYER]->SetInterruption(isInterruptionEnabled);
 	}
 
 	if (mClientInfo[ZOMBIEPLAYER].m_nSlotObjectNum[2] == 1)	// 공격을 시도

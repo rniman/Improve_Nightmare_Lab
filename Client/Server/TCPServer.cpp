@@ -19,7 +19,7 @@ namespace
 		sizeof(WORD) +
 		sizeof(XMFLOAT4X4) +
 		sizeof(XMFLOAT3) * 3 +
-		sizeof(SC_ANIMATION_INFO) +
+		sizeof(float) +
 		sizeof(SC_PLAYER_INFO);
 
 	struct ClientInputData
@@ -29,7 +29,7 @@ namespace
 		XMFLOAT3 look = {};
 		XMFLOAT3 right = {};
 		XMFLOAT3 up = {};
-		SC_ANIMATION_INFO animationInfo = {};
+		float pitch = 0.0f;
 		SC_PLAYER_INFO playerInfo = {};
 	};
 
@@ -88,12 +88,12 @@ namespace
 
 	const char* GetReceivePacketName(std::uint8_t head)
 	{
-		switch (static_cast<RECV_HEAD>(head))
+		switch (static_cast<ReceiveHead>(head))
 		{
-		case HEAD_KEYS_BUFFER: return "KEYS_BUFFER";
-		case HEAD_GAME_START: return "GAME_START";
-		case HEAD_CHANGE_SLOT: return "CHANGE_SLOT";
-		case HEAD_LOADING_COMPLETE: return "LOADING_COMPLETE";
+		case ReceiveHead::KeysBuffer: return "KEYS_BUFFER";
+		case ReceiveHead::GameStart: return "GAME_START";
+		case ReceiveHead::ChangeSlot: return "CHANGE_SLOT";
+		case ReceiveHead::LoadingComplete: return "LOADING_COMPLETE";
 		default: return "UNKNOWN";
 		}
 	}
@@ -396,24 +396,30 @@ void TCPServer::ProcessReadEvent(SOCKET socket)
 			return;
 		}
 
-		mSocketInfos[clientIndex].hasReceiveHead = true;
-		memcpy(&mSocketInfos[clientIndex].receiveHead, mSocketInfos[clientIndex].receiveBuffer, sizeof(INT8));
+		INT8 rawReceiveHead = -1;
+		memcpy(
+			&rawReceiveHead,
+			mSocketInfos[clientIndex].receiveBuffer,
+			sizeof(rawReceiveHead));
 		memset(mSocketInfos[clientIndex].receiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
 
 		// 등록되지 않은 HEAD는 payload 크기와 형식을 결정할 수 없으므로 더 이상 스트림을 해석하지 않는다.
 		// 연결을 종료해 잘못된 바이트를 다음 패킷의 HEAD로 오인하는 상황도 방지한다.
-		if (!IsValidReceiveHead(mSocketInfos[clientIndex].receiveHead))
+		if (!IsValidReceiveHead(rawReceiveHead))
 		{
 			std::cerr << "Invalid receive packet head: client=" << clientIndex
-				<< ", head=" << static_cast<int>(mSocketInfos[clientIndex].receiveHead) << '\n';
+				<< ", head=" << static_cast<int>(rawReceiveHead) << '\n';
 			DisconnectClient(socket);
 			return;
 		}
+
+		mSocketInfos[clientIndex].receiveHead = static_cast<ReceiveHead>(rawReceiveHead);
+		mSocketInfos[clientIndex].hasReceiveHead = true;
 	}
 
 	switch (mSocketInfos[clientIndex].receiveHead)
 	{
-	case HEAD_GAME_START:
+	case ReceiveHead::GameStart:
 	{
 		mGameState = GAME_STATE::IN_GAME;
 		mZombieCount = 0;
@@ -447,7 +453,7 @@ void TCPServer::ProcessReadEvent(SOCKET socket)
 		}
 		break;
 	}
-	case HEAD_CHANGE_SLOT:
+	case ReceiveHead::ChangeSlot:
 	{
 		if (!HandleReceiveResult(ReceiveData(clientIndex, sizeof(INT8)), socket))
 		{
@@ -496,7 +502,7 @@ void TCPServer::ProcessReadEvent(SOCKET socket)
 		clientIndex = selectedSlot;
 		break;
 	}
-	case HEAD_KEYS_BUFFER:
+	case ReceiveHead::KeysBuffer:
 	{
 		// 소켓 슬롯과 플레이어 슬롯이 일치할 때만 입력을 해당 플레이어에게 적용한다.
 		// 포인터가 없거나 ID가 다르면 서버 내부의 연결/플레이어 상태가 이미 불일치한 것이다.
@@ -509,7 +515,7 @@ void TCPServer::ProcessReadEvent(SOCKET socket)
 			return;
 		}
 
-		// KeysBuffer(WORD), viewMatrix, vecLook, vecRight, vecUp, animationInfo, playerInfo
+		// KeysBuffer(WORD), viewMatrix, vecLook, vecRight, vecUp, pitch, playerInfo
 		if (!HandleReceiveResult(ReceiveData(clientIndex, CLIENT_INPUT_PAYLOAD_SIZE), socket))
 		{
 			return;
@@ -530,7 +536,7 @@ void TCPServer::ProcessReadEvent(SOCKET socket)
 		readValue(input.look);
 		readValue(input.right);
 		readValue(input.up);
-		readValue(input.animationInfo);
+		readValue(input.pitch);
 		readValue(input.playerInfo);
 		assert(readOffset == CLIENT_INPUT_PAYLOAD_SIZE);
 
@@ -561,12 +567,12 @@ void TCPServer::ProcessReadEvent(SOCKET socket)
 		player->SetLook(input.look);
 		player->SetRight(input.right);
 		player->SetUp(input.up);
-		mUpdateInfo[clientIndex].m_animationInfo = input.animationInfo;
+		mUpdateInfo[clientIndex].m_fPitch = input.pitch;
 		player->SetRightClick(input.playerInfo.m_bRightClick);
 
 		break;
 	}
-	case HEAD_LOADING_COMPLETE:
+	case ReceiveHead::LoadingComplete:
 	{
 		mSocketInfos[clientIndex].isLoadingComplete = true;
 		int connectCount = 0;
@@ -727,12 +733,11 @@ void TCPServer::RequestSend(int clientIndex)
 	{
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
-			if (mSocketInfos[i].isUsed)
+			if (mSocketInfos[i].isUsed &&
+				SubmitSendData(i, static_cast<INT8>(SOCKET_STATE::SEND_LOADING_COMPLETE)) &&
+				mPlayers[i])
 			{
-				if (SubmitSendData(i, static_cast<INT8>(SOCKET_STATE::SEND_LOADING_COMPLETE)) && mPlayers[i])
-				{
-					mPlayers[i]->GameStartLogic();
-				}
+				mPlayers[i]->GameStartLogic();
 			}
 		}
 		if (mSocketInfos[clientIndex].isUsed)
@@ -1018,12 +1023,12 @@ INT8 TCPServer::FindClientIndex(SOCKET clientSocket) const
 bool TCPServer::IsValidReceiveHead(INT8 head) const
 {
 	// 서버가 payload 크기와 처리 방법을 알고 있는 클라이언트 패킷만 허용한다.
-	switch (head)
+	switch (static_cast<ReceiveHead>(head))
 	{
-	case HEAD_KEYS_BUFFER:
-	case HEAD_GAME_START:
-	case HEAD_CHANGE_SLOT:
-	case HEAD_LOADING_COMPLETE:
+	case ReceiveHead::KeysBuffer:
+	case ReceiveHead::GameStart:
+	case ReceiveHead::ChangeSlot:
+	case ReceiveHead::LoadingComplete:
 		return true;
 	default:
 		return false;
@@ -1095,68 +1100,66 @@ void TCPServer::UpdatePlayerReplicationData()
 {
 	for (const auto& player : mPlayers)
 	{
-		INT8 playerId;
 		if (!player || player->GetPlayerId() == -1)
 		{
 			continue;
 		}
-		playerId = player->GetPlayerId();
 
-		mUpdateInfo[playerId].m_bAlive = player->IsAlive();
-		mUpdateInfo[playerId].m_bRunning = player->IsRunning();
-		mUpdateInfo[playerId].m_xmf3Position = player->GetPosition();
-		mUpdateInfo[playerId].m_xmf3Velocity = player->GetVelocity();
-		mUpdateInfo[playerId].m_xmf3Look = player->GetLook();
+		const INT8 playerId = player->GetPlayerId();
+		auto& updateInfo = mUpdateInfo[playerId];
+		updateInfo.m_bAlive = player->IsAlive();
+		updateInfo.m_bRunning = player->IsRunning();
+		updateInfo.m_xmf3Position = player->GetPosition();
+		updateInfo.m_xmf3Velocity = player->GetVelocity();
+		updateInfo.m_xmf3Look = player->GetLook();
 
-		if (player->GetPickedObject().lock())
-			mUpdateInfo[playerId].m_nPickedObjectNum = player->GetPickedObject().lock()->GetCollisionNum();
-		else
-			mUpdateInfo[playerId].m_nPickedObjectNum = -1;
+		const auto pickedObject = player->GetPickedObject().lock();
+		updateInfo.m_nPickedObjectNum = pickedObject
+			? pickedObject->GetCollisionNum()
+			: -1;
 
 		// 지금은 일단 이렇게 해뒀지만 나중에는 0번이 Enemy고정일듯
 		if (playerId == ZOMBIEPLAYER)	//Enemy
 		{
-			shared_ptr<CServerZombiePlayer> pZombiePlayer = dynamic_pointer_cast<CServerZombiePlayer>(player);
-			if (pZombiePlayer) {
-				mUpdateInfo[playerId].m_nSlotObjectNum[0] = pZombiePlayer->IsTracking() ? 1 : -1;		// 추적
-				mUpdateInfo[playerId].m_nSlotObjectNum[1] = pZombiePlayer->IsInterruption() ? 1 : -1;	// 시야방해
-				mUpdateInfo[playerId].m_nSlotObjectNum[2] = pZombiePlayer->IsAttack() ? 1 : -1;			// 공격
+			shared_ptr<CServerZombiePlayer> zombiePlayer = dynamic_pointer_cast<CServerZombiePlayer>(player);
+			if (zombiePlayer)
+			{
+				updateInfo.m_nSlotObjectNum[0] = zombiePlayer->IsTracking() ? 1 : -1;		// 추적
+				updateInfo.m_nSlotObjectNum[1] = zombiePlayer->IsInterruption() ? 1 : -1;	// 시야방해
+				updateInfo.m_nSlotObjectNum[2] = zombiePlayer->IsAttack() ? 1 : -1;			// 공격
 
-				mUpdateInfo[playerId].m_playerInfo.m_iMineobjectNum = pZombiePlayer->GetCollideMineRef();
 				// 지뢰충돌에 대한 데이터 로직
-				if (mUpdateInfo[playerId].m_playerInfo.m_iMineobjectNum == -1) {
-					mUpdateInfo[playerId].m_playerInfo.m_iMineobjectNum = pZombiePlayer->GetCollideMineRef();
-					pZombiePlayer->SetExplosionDelay(0.0f);
+				if (zombiePlayer->GetCollideMineRef() == -1)
+				{
+					zombiePlayer->SetExplosionDelay(0.0f);
 				}
-				else {
-					if (pZombiePlayer->GetExplosionDelay() > 0.05f) {
-						pZombiePlayer->SetCollideMineRef(-1);
-						mUpdateInfo[playerId].m_playerInfo.m_iMineobjectNum = pZombiePlayer->GetCollideMineRef();
-					}
+				else if (zombiePlayer->GetExplosionDelay() > 0.05f)
+				{
+					zombiePlayer->SetCollideMineRef(-1);
 				}
+				updateInfo.m_playerInfo.m_iMineobjectNum = zombiePlayer->GetCollideMineRef();
 			}
 		}
 		else
 		{
-			shared_ptr<CServerBlueSuitPlayer> pBlueSuitPlayer = dynamic_pointer_cast<CServerBlueSuitPlayer>(player);
-			if (pBlueSuitPlayer)
+			shared_ptr<CServerBlueSuitPlayer> blueSuitPlayer = dynamic_pointer_cast<CServerBlueSuitPlayer>(player);
+			if (blueSuitPlayer)
 			{
 				for (int i = 0; i < 3; ++i)
 				{
-					mUpdateInfo[playerId].m_nSlotObjectNum[i] = pBlueSuitPlayer->GetReferenceSlotItemNum(i);
-					mUpdateInfo[playerId].m_nFuseObjectNum[i] = pBlueSuitPlayer->GetReferenceFuseItemNum(i);
+					updateInfo.m_nSlotObjectNum[i] = blueSuitPlayer->GetReferenceSlotItemNum(i);
+					updateInfo.m_nFuseObjectNum[i] = blueSuitPlayer->GetReferenceFuseItemNum(i);
 				}
-				mUpdateInfo[playerId].m_playerInfo.m_bAttacked = pBlueSuitPlayer->IsAttacked();
-				mUpdateInfo[playerId].m_playerInfo.m_selectItem = pBlueSuitPlayer->GetRightItem();
-				mUpdateInfo[playerId].m_playerInfo.m_bTeleportItemUse = pBlueSuitPlayer->IsTeleportUse();
+				updateInfo.m_playerInfo.m_bAttacked = blueSuitPlayer->IsAttacked();
+				updateInfo.m_playerInfo.m_selectItem = blueSuitPlayer->GetRightItem();
+				updateInfo.m_playerInfo.m_bTeleportItemUse = blueSuitPlayer->IsTeleportUse();
 			}
-
 		}
 		// 업데이트 오브젝트는 리셋
-		mUpdateInfo[playerId].m_nNumOfObject = 0;
+		updateInfo.m_nNumOfObject = 0;
 		for (int i = 0; i < MAX_SEND_OBJECT_INFO; ++i)
 		{
-			mUpdateInfo[playerId].m_anObjectNum[i] = -1;
+			updateInfo.m_anObjectNum[i] = -1;
 		}
 	}
 }
@@ -1711,7 +1714,7 @@ void TCPServer::AppendBufferData(vector<char>& buffer, const void* data, size_t 
 
 void TCPServer::ResetReceiveState(SocketInfo& socketInfo)
 {
-	socketInfo.receiveHead = -1;
+	socketInfo.receiveHead = ReceiveHead::Invalid;
 	socketInfo.hasReceiveHead = false;
 	socketInfo.receivedBytes = 0;
 	socketInfo.currentPacketReceivedBytes = 0;

@@ -47,11 +47,6 @@ enum GAME_STATE
 	IN_LODING
 };
 
-struct SC_ANIMATION_INFO
-{
-	float pitch = 1.0f;
-};
-
 struct SC_PLAYER_INFO
 {
 	RightItem m_selectItem;
@@ -87,7 +82,7 @@ struct SC_UPDATE_INFO
 	std::array<int, MAX_SEND_OBJECT_INFO> m_anObjectNum;
 	std::array<XMFLOAT4X4, MAX_SEND_OBJECT_INFO> m_axmf4x4World;
 
-	SC_ANIMATION_INFO m_animationInfo;
+	float m_fPitch = 1.0f;
 	SC_PLAYER_INFO m_playerInfo;
 };
 
@@ -111,12 +106,13 @@ enum class SOCKET_STATE
 	SEND_LOADING_COMPLETE
 };
 
-enum RECV_HEAD
+enum class ReceiveHead : INT8
 {
-	HEAD_KEYS_BUFFER = 0,
-	HEAD_GAME_START,
-	HEAD_CHANGE_SLOT,
-	HEAD_LOADING_COMPLETE
+	Invalid = -1,
+	KeysBuffer = 0,
+	GameStart = 1,
+	ChangeSlot = 2,
+	LoadingComplete = 3
 };
 
 struct PendingSend
@@ -162,7 +158,7 @@ struct SocketInfo
 	int clientAddressLength = 0;
 	char ipAddress[INET_ADDRSTRLEN] = {};
 
-	INT8 receiveHead = -1;
+	ReceiveHead receiveHead = ReceiveHead::Invalid;
 
 	// 소켓마다 HEAD와 DATA의 partial recv 진행 상태를 함께 보존한다.
 	bool hasReceiveHead = false;

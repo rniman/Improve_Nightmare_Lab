@@ -37,29 +37,25 @@ enum class SOCKET_STATE
 	SEND_LOADING_COMPLETE
 };
 
-enum RECV_HEAD
+enum class ReceiveHead : INT8
 {
-	HEAD_INIT = 0,
-	HEAD_UPDATE_DATA,
-	HEAD_NUM_OF_CLIENT,
-	HEAD_BLUE_SUIT_WIN,
-	HEAD_ZOMBIE_WIN,
-	HEAD_GAME_START,
-	HEAD_CHANGE_SLOT,
+	Invalid = -1,
+	Init = 0,
+	UpdateData = 1,
+	ClientCount = 2,
+	BlueSuitWin = 3,
+	ZombieWin = 4,
+	GameStart = 5,
+	ChangeSlot = 6,
 
-	HEAD_OPEN_DRAWER_SOUND,
-	HEAD_CLOSE_DRAWER_SOUND,
-	HEAD_OPEN_DOOR_SOUND,
-	HEAD_CLOSE_DOOR_SOUND,
+	OpenDrawerSound = 7,
+	CloseDrawerSound = 8,
+	OpenDoorSound = 9,
+	CloseDoorSound = 10,
 
-	HEAD_BLUE_SUIT_DEAD,
-	SEND_SPACEOUT_OBJECTS,
-	HEAD_LOADING_COMPLETE
-};
-
-struct CS_ANIMATION_INFO
-{
-	float pitch = 0.0f;
+	BlueSuitDead = 11,
+	SpaceOutObjects = 12,
+	LoadingComplete = 13
 };
 
 struct CS_PLAYER_INFO
@@ -92,7 +88,7 @@ struct CS_CLIENTS_INFO
 	std::array<int, MAX_RECV_OBJECT_INFO> m_anObjectNum;
 	std::array<XMFLOAT4X4, MAX_RECV_OBJECT_INFO> m_axmf4x4World;
 
-	CS_ANIMATION_INFO m_animationInfo;
+	float m_fPitch = 0.0f;
 	CS_PLAYER_INFO m_playerInfo;
 };
 
@@ -172,7 +168,7 @@ private:
 	char mReceiveBuffer[MAX_PACKET_PAYLOAD_SIZE];
 	std::size_t mExpectedPayloadBytes = 0;
 	int mReceivedBytes = 0;
-	INT8 mReceiveHead = -1;
+	ReceiveHead mReceiveHead = ReceiveHead::Invalid;
 	bool mHasReceiveHead = false;
 	bool mHasPayloadSize = false;
 
