@@ -124,16 +124,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	}
 	gGameFramework.OnDestroyEntryWindow();
 
-	//::SetCursor(NULL);
-	//::SetCapture(hWnd);
-	//// 마우스를 화면 중앙으로 이동시킴 (윈도우 내부로만 이동하도록)
-	//RECT rect;
-	//GetClientRect(hWnd, &rect);
-	//POINT center = { (rect.right - rect.left) / 2, (rect.bottom - rect.top) / 2 };
-	//ClientToScreen(hWnd, &center);
-	//SetCursorPos(center.x, center.y);
-	//gGameFramework.SetMousePoint(center);
-
 	// 기본 메시지 루프입니다:
 	while (gGameFramework.IsConnected())
 	{

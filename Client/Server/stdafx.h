@@ -8,6 +8,7 @@
 #include <chrono>
 #include <random>
 #include <bitset>
+#include <algorithm>
 
 #include <DirectXMath.h>
 #include <DirectXCollision.h>
