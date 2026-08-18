@@ -1081,6 +1081,14 @@ bool TCPServer::DisconnectClient(SOCKET clientSocket)
 		}
 	}
 
+	const bool shouldCloseServer = mGameState != GAME_STATE::IN_LOBBY && sClientCount == 0;
+	if (shouldCloseServer)
+	{
+		// 소켓 이벤트 처리 중 창을 직접 파괴하지 않고 메시지 루프에서 정상 종료한다.
+		LogServerNotice("Closing because the last client disconnected after the game started.");
+		PostMessage(m_hWnd, WM_CLOSE, 0, 0);
+	}
+
 	return true;
 }
 
