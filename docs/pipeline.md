@@ -11,7 +11,7 @@
 
 ### 서버 시작
 1. `main`이 메시지 기반 소켓 처리를 위한 Win32 윈도우를 생성한다.
-2. `TCPServer::Init()`이 WinSock을 초기화하고, 리슨 소켓을 생성하며, 바인드/리슨 후 `WSAAsyncSelect`를 등록한다.
+2. `TCPServer::Initialize()`가 WinSock을 초기화하고, 리슨 소켓을 생성하며, 바인드/리슨 후 `WSAAsyncSelect`를 등록한다.
 3. 서버가 충돌/월드 데이터를 로드하고 클라이언트를 대기한다.
 
 ## 2) 메인 루프
@@ -28,7 +28,7 @@
 
 프레임별 (`CGameFramework::FrameAdvance()`):
 1. 타이머 틱 + 사운드 시스템 업데이트.
-2. 입력 처리 및 네트워크 전송 요청 (`CTcpClient::RequestSend()`).
+2. 입력 처리 및 네트워크 전송 요청 (`CTcpClient::RequestSend()`). 현재 인게임에서는 렌더 프레임마다 `KEYS_BUFFER`를 요청한다.
 3. 씬 및 플레이어 애니메이션.
 4. 현재 게임 상태에 대한 커맨드 리스트 빌드/기록.
 5. 인게임 렌더 시퀀스:
@@ -50,14 +50,19 @@
    - 아이템/우클릭 로직
    - 이동/업데이트/충돌 처리
 4. 충돌 관리자/월드 오브젝트 업데이트.
-5. `UpdateInformation()`이 플레이어 상태를 갱신한다.
-6. `CreateSendObject()`가 다음 두 작업을 수행한다.
+5. `UpdatePlayerReplicationData()`가 플레이어 상태를 갱신한다.
+6. `ProcessObjectReplication()`이 다음 두 작업을 수행한다.
    - 플레이어별 주변 동적 오브젝트를 `SC_UPDATE_INFO`에 기록한다. 이 단계에서는 즉시 송신하지 않는다.
    - 영역에서 이탈한 오브젝트가 있으면 가변 길이 `SEND_SPACEOUT_OBJECTS` 패킷을 직렬화해 각 소켓의 송신 큐에 등록한다.
 
 일반 `SC_UPDATE_INFO` 패킷은 `SimulationLoop()`에서 매 틱 직접 송신하지 않는다.
 클라이언트 패킷 처리나 서버 상태 변경으로 `RequestSend()`가 호출될 때 가장 최근에
 작성된 복제 상태를 직렬화해 전송한다.
+
+현재 `ProcessReadEvent()`는 완성된 클라이언트 패킷을 처리하고 수신 상태를 초기화한 뒤
+해당 클라이언트에 `RequestSend()`를 호출한다. 일반 인게임 상태에서는 이것이
+`UPDATE_DATA` 응답이 되므로, 프레임별 `KEYS_BUFFER`와 `UPDATE_DATA`가 사실상 1:1로
+왕복하고 있다.
 
 ## 5) 네트워킹 이벤트 흐름 (요약)
 
@@ -69,7 +74,7 @@
 
 애플리케이션에서 새 패킷이 필요한 일반 경로는 `RequestSend()`이며, 현재 소켓
 상태에 맞는 패킷을 직렬화해 큐에 추가한다. 예외적으로 시뮬레이션에서 발생한 영역
-이탈 오브젝트 이벤트는 `CreateSendObject()`가 가변 길이 패킷을 직접 직렬화해
+이탈 오브젝트 이벤트는 `ProcessObjectReplication()`이 가변 길이 패킷을 직접 직렬화해
 `EnqueueSendBuffer()`로 전달한다. 두 경로 모두 같은 소켓별 큐와
 `FlushSendQueue()`를 사용한다.
 
@@ -101,8 +106,8 @@
 | 발생 조건 | 처리 경로 | 결과 |
 |---|---|---|
 | 클라이언트 패킷 처리 또는 서버 상태 변경 | `RequestSend()` → `SubmitSendData()` | 고정 필드 패킷을 직렬화하고 송신 큐에 등록 |
-| `SimulationLoop()`에서 영역 이탈 오브젝트 발견 | `CreateSendObject()` → 가변 패킷 직렬화 | 완성된 패킷을 송신 큐에 등록 |
-| `SimulationLoop()`에서 플레이어 주변 오브젝트 갱신 | `CreateSendObject()` → `SC_UPDATE_INFO` 갱신 | 데이터만 기록하며 즉시 송신하지 않음 |
+| `SimulationLoop()`에서 영역 이탈 오브젝트 발견 | `ProcessObjectReplication()` → 가변 패킷 직렬화 | 완성된 패킷을 송신 큐에 등록 |
+| `SimulationLoop()`에서 플레이어 주변 오브젝트 갱신 | `ProcessObjectReplication()` → `SC_UPDATE_INFO` 갱신 | 데이터만 기록하며 즉시 송신하지 않음 |
 | Winsock의 실제 `FD_WRITE` 알림 | `FlushSendQueue()` | 새 패킷을 만들지 않고 저장된 전송 위치부터 재개 |
 
 패킷이 송신 큐에 등록된 뒤에는 생성 경로와 관계없이 동일하게 처리한다.
@@ -121,10 +126,36 @@
 - 구조체 메모리를 그대로 복사하는 패킹 방식은 컴파일러 ABI, 정렬 및 양 끝의 동일한
   구조체 정의에 의존한다.
 - 패킷 파싱과 게임 상태 적용, 서버 시뮬레이션 책임은 여전히 `TCPServer`에 집중되어 있다.
-- 고정 tick, 전송량 절감, IOCP 또는 다중 스레드 전환은 이번 안정화 범위에 포함하지 않는다.
+- 입력 송신과 상태 복제 주기가 렌더 FPS에 결합되어 있으며, 현재 `UPDATE_DATA`는 최대
+  5명분의 고정 크기 상태 배열을 각 연결에 전송한다.
+- IOCP 또는 다중 스레드 전환은 현재 범위에 포함하지 않는다.
 
-Client/Server x64 Debug 빌드가 성공했으며 서버 실행도 확인했다. 다만 partial
+네트워크 partial I/O 안정화 변경 당시 Client/Server x64 Debug 빌드가 성공했고 서버
+실행도 확인했다. 이후 현재 코드의 Release 서버 1인 접속 실행도 확인했다. 다만 partial
 send/recv와 `WSAEWOULDBLOCK`을 의도적으로 발생시키는 네트워크 부하 테스트 및 5인
 장시간 접속 검증은 아직 별도 수행 대상이다.
+
+## 7) 현재 측정된 복제 주기 위험
+
+2026-08-18 Release 서버의 1인 접속, 1초 구간에서 다음 값이 측정됐다.
+byte 수는 TCP/IP 헤더를 제외한 애플리케이션 데이터량이다.
+
+| 방향 | 패킷 | 패킷 크기 | 빈도 | 초당 데이터량 |
+|---|---|---:|---:|---:|
+| Client → Server | `KEYS_BUFFER` | 131 byte | 141~144 packet/s | 18,471~18,864 byte/s |
+| Server → Client | `UPDATE_DATA` | 10,701 byte | 141~144 packet/s | 1,508,841~1,540,944 byte/s |
+
+측정 구간의 현재 송신 큐는 0 byte/0 packet이었고 연결별 최고치는 10,701 byte/1 packet이었다.
+이는 로컬 1인 조건에서 큐가 즉시 비워졌다는 뜻이며, 프레임 종속 전송량이 안전하다는
+근거는 아니다.
+
+현재 요청-응답 동작 자체는 정상이며, 사용자 장애가 재현된 버그로 분류하지 않는다.
+다만 전체 송신량이 대체로 클라이언트 수, 렌더 FPS, 패킷 크기의 곱에 비례해 증가하므로
+다중 접속과 느린 네트워크에서 큐 적체와 지연을 일으킬 수 있는 고위험으로 관리한다.
+
+다음 변경은 패킷 포맷을 유지하면서 클라이언트 입력과 서버 상태 복제를 각각 고정
+네트워크 주기로 분리하는 것이다. 렌더 FPS가 60, 144 또는 무제한이어도 packet/s가
+설정한 범위에 유지되는지를 회귀 기준으로 사용한다. 구체적인 실행 순서는
+`refactoring_plan.md`, 문제 상태와 측정 근거는 `code_smells.md`에서 관리한다.
 
 구체적인 결함과 개선 후보는 `code_smells.md`, 작업 순서는 `refactoring_plan.md`에서 관리한다.

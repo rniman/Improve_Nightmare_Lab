@@ -9,7 +9,7 @@
 | 분류 | 의미 |
 |---|---|
 | `Bug` | 현재 재현되는 잘못된 동작 |
-| `Risk` | 크래시, 데이터 손상, 연결 불안정 가능성이 있으나 아직 검증되지 않은 항목 |
+| `Risk` | 크래시, 데이터 손상, 연결 불안정 또는 성능·확장성 저하 가능성이 있으나 사용자 장애로는 아직 재현되지 않은 항목 |
 | `Maintainability` | 반복 변경이나 원인 추적을 어렵게 만드는 구조 |
 | `Deferred` | 현재 정상 동작하며 의도적으로 후순위에 둔 항목 |
 | `Resolved` | 수정 및 기본 검증이 끝난 항목 |
@@ -24,9 +24,9 @@
 
 | ID | 영역 | 항목 | 근거 및 확인 방법 |
 |---|---|---|---|
-| R-002 | Protocol | 패킷 및 버퍼 범위 검증 | 패킷 헤더의 크기값과 실제 수신 버퍼 접근 범위를 비교하고 내부 상태 enum의 wire 사용을 분리할지 검토한다. |
 | R-003 | Lifetime | 씬 전환 및 연결 종료 수명 | 로비에서 인게임 전환, 연결 종료, 게임 종료 경로의 null 접근과 소유 관계를 확인한다. |
 | R-004 | Rendering | 렌더 상태 및 리소스 수명 결합 | 씬 전환이나 command list 재설정 시 root signature, descriptor heap, GPU 리소스 수명이 유효한지 변경 범위마다 확인한다. |
+| R-005 | Replication | 렌더 프레임 종속 입력·상태 복제 | 현재 요청-응답 흐름은 의도대로 동작하지만 Release 1인 접속에서 `KEYS_BUFFER`와 `UPDATE_DATA`가 초당 141~144회 발생했다. 전송량은 대체로 클라이언트 수, 렌더 FPS, 패킷 크기의 곱에 비례해 증가하므로 다중 접속과 느린 네트워크에서 큐 적체·지연으로 이어질 고위험이 있다. 두 전송 트리거를 고정 네트워크 주기로 분리하고 60/144/무제한 FPS 및 다중 접속에서 packet/s와 큐를 비교한다. |
 
 ### Maintainability
 
@@ -37,6 +37,7 @@
 | M-003 | Network | 패킷 파싱과 상태 적용 결합 | 수신 처리에서 프로토콜 해석과 게임 객체 변경이 섞여 있다. 안정성 수정이 필요한 처리부터 두 단계를 분리한다. |
 | M-004 | Resource | 일부 raw pointer 및 수동 수명 관리 | 전체 일괄 교체는 하지 않는다. 소유권이 불명확하거나 오류가 재현되는 리소스부터 정리한다. |
 | M-005 | Source layout | 큰 클래스와 긴 함수 | 크기 자체를 문제로 보지 않는다. 반복 수정되는 함수만 동작 단계 기준으로 추출한다. |
+| M-006 | Network cadence | 입력 수신과 상태 복제 트리거 결합 | 완성된 클라이언트 패킷마다 서버 `RequestSend()`가 호출되어 일반 상태의 `UPDATE_DATA`가 입력·렌더 빈도를 따른다. wire 포맷 변경 전에 두 트리거를 고정 주기로 분리한다. |
 
 ## Deferred
 
@@ -47,7 +48,6 @@
 | D-003 | Rendering | GPU 동기화 구조 개선 | `WaitForGpuComplete`가 병목으로 확인될 때 재개한다. |
 | D-004 | UI | D2D text UI 및 readback 비용 분석 | UI가 프레임 저하 원인으로 확인될 때 재개한다. |
 | D-005 | Structure | 디렉토리 및 대규모 API 재구성 | 모듈 경계가 안정되고 별도 작업으로 승인될 때 진행한다. |
-| D-006 | Replication | `SC_UPDATE_INFO` 반복 전송량 | 통신량이나 서버 부하가 실제 문제로 확인되면 패킷 크기와 중복 matrix 비율을 측정한다. |
 | D-007 | Simulation | 메시지 부하에 따른 server tick 변동 | tick 지연이나 CPU 점유 문제가 재현되면 고정 tick과 대기 방식을 검토한다. |
 
 ## Resolved
@@ -59,9 +59,11 @@
 | RS-003 | Scene | Scene 클래스의 과도한 public 노출 | 접근 범위, 멤버 순서, 제한된 접근자를 정리했다. |
 | RS-004 | Rendering | command list 공통 상태의 반복 설정 | `Reset()` 직후 공통 root signature와 descriptor heap을 설정하도록 정리했다. |
 | RS-005 | Network | 연결 종료 및 접속 실패 정리 분산 | 소켓 오류, `FD_CLOSE`, 접속 등록 실패를 중복 호출에 안전한 단일 정리 경로로 통합하고 Client/Server x64 Debug 빌드를 확인했다. |
-| RS-006 | Network | 슬롯 변경 시 수신 상태 누락 및 입력 인덱스 미검증 | `SOCKETINFO` 전체 이동·교환으로 수신 상태를 보존하고 slot 범위를 검증했다. 클라이언트 수신 헤더도 객체 멤버로 이동하고 Client/Server x64 Debug 빌드를 확인했다. |
+| RS-006 | Network | 슬롯 변경 시 수신 상태 누락 및 입력 인덱스 미검증 | `SocketInfo` 전체 이동·교환으로 수신 상태를 보존하고 slot 범위를 검증했다. 클라이언트 수신 헤더도 객체 멤버로 이동하고 Client/Server x64 Debug 빌드를 확인했다. |
 | RS-007 | Network I/O | TCP partial recv 상태 소실 및 미완료 패킷 해석 | 수신 결과를 완료·대기·종료·오류로 구분하고 소켓별 헤더와 누적 바이트를 보존한다. 가변 길이 패킷은 크기와 구조 단위를 검증하며, 완성된 페이로드만 해석하도록 수정하고 Client/Server x64 Debug 빌드를 확인했다. |
 | RS-008 | Network I/O | TCP partial send 데이터 유실 및 송신 요청 혼합 | 소켓별 송신 큐와 전송 위치를 유지해 partial send 및 `WSAEWOULDBLOCK` 이후 실제 `FD_WRITE`에서 재개한다. 애플리케이션 송신 요청은 `RequestSend()`로 분리하고 Client/Server x64 Debug 빌드와 서버 실행을 확인했다. |
+| RS-009 | Protocol | 외부 패킷 값 및 버퍼 범위 미검증 | 서버는 client head, slot, key mask, transform을 검증하고, 클라이언트는 server head, payload 크기, client/object ID, 개수, transform을 검증한 뒤 상태를 적용한다. 등록되지 않은 head나 스트림을 복구할 수 없는 값은 연결을 종료한다. |
+| RS-010 | Network diagnostics | 패킷별 통신량과 큐 상태 측정 부재 | 연결별·패킷 head별 TX/RX byte와 packet, 송신 큐 최고치, `WOULDBLOCK` 횟수를 1초 구간과 연결 전체 수명으로 측정하도록 분리했다. 이 통계로 R-005의 Release 기준선을 확보했다. |
 
 ## 항목 작성 규칙
 
