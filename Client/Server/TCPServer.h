@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "../Client/GlobalDefine.h"
+#include "NetworkStatistics.h"
 #include "Timer.h"
 constexpr size_t MAX_CLIENT{ 5 };
 constexpr size_t MAX_SEND_OBJECT_INFO{ 30 };
@@ -121,34 +122,6 @@ struct PendingSend
 	size_t sentBytes = 0;
 };
 
-struct NetworkPacketStatistics
-{
-	std::uint64_t bytes = 0;
-	std::uint64_t packets = 0;
-};
-
-struct NetworkStatistics
-{
-	static constexpr size_t PACKET_TYPE_COUNT = 256;
-
-	// send()/recv()가 실제로 처리한 바이트만 기록한다.
-	// TCP/IP 헤더까지 포함한 회선 사용량이 아니라 애플리케이션 데이터량이다.
-	std::uint64_t sentBytes = 0;
-	std::uint64_t receivedBytes = 0;
-	std::uint64_t sentPackets = 0;
-	std::uint64_t receivedPackets = 0;
-	std::uint64_t sendWouldBlockCount = 0;
-	std::uint64_t receiveWouldBlockCount = 0;
-
-	// 송신 큐가 순간적으로 얼마나 밀렸는지 확인하기 위한 구간 내 최고치다.
-	size_t peakUnsentBytes = 0;
-	size_t peakPendingPackets = 0;
-
-	// 패킷 헤더별 통계로 전체 트래픽을 많이 만드는 메시지를 찾는다.
-	std::array<NetworkPacketStatistics, PACKET_TYPE_COUNT> sentByHead;
-	std::array<NetworkPacketStatistics, PACKET_TYPE_COUNT> receivedByHead;
-};
-
 struct SocketInfo
 {
 	bool isUsed = false;
@@ -170,9 +143,7 @@ struct SocketInfo
 	size_t unsentSendBytes = 0;
 	size_t currentPacketReceivedBytes = 0;
 
-	// 누적 통계는 연결 종료 요약에, 구간 통계는 1초 단위 출력에 사용한다.
-	NetworkStatistics totalNetworkStatistics;
-	NetworkStatistics intervalNetworkStatistics;
+	SocketNetworkStatistics networkStatistics;
 
 	SOCKET_STATE sendState = SOCKET_STATE::SEND_ID;
 
@@ -225,6 +196,13 @@ private:
 	void ProcessReadEvent(SOCKET socket);
 	void ProcessWriteEvent(SOCKET socket);
 	void ProcessCloseEvent(SOCKET socket);
+	void ProcessGameStartPacket(int clientIndex);
+	bool TryProcessChangeSlotPacket(SOCKET socket, int& clientIndex);
+	bool TryProcessClientInputPacket(
+		SOCKET socket,
+		int clientIndex,
+		const std::shared_ptr<CServerPlayer>& player);
+	void ProcessLoadingCompletePacket(int clientIndex);
 
 	// 연결 종료 원인과 관계없이 소켓 및 플레이어 상태를 한 번만 정리한다.
 	bool DisconnectClient(SOCKET clientSocket);
@@ -234,9 +212,7 @@ private:
 	bool HandleReceiveResult(ReceiveResult result, SOCKET socket);
 	void ResetReceiveState(SocketInfo& socketInfo);
 	ReceiveResult ReceiveData(int clientIndex, size_t expectedBytes);
-	void RecordReceivedPacketStatistics(SocketInfo& socketInfo);
 	void ReportNetworkStatisticsIfDue();
-	void ReportDisconnectedClientStatistics(int clientIndex, const SocketInfo& socketInfo) const;
 
 	template<class... Args>
 	bool SubmitSendData(int clientIndex, Args&&... args);
@@ -261,7 +237,7 @@ private:
 
 	int mGameState;
 	CTimer mTimer;
-	std::chrono::steady_clock::time_point mLastNetworkStatisticsReportTime;
+	ServerNetworkStatisticsReporter mNetworkStatisticsReporter;
 	static INT8 sClientCount;
 
 	// 접속한 클라이언트들의 정보를 저장.
@@ -282,7 +258,3 @@ private:
 	array<XMFLOAT3, 28> mPlayerStartPositions;
 	array<int, MAX_CLIENT> mPlayerStartPositionIndices;
 };
-
-extern void err_quit(const char* msg);
-extern void err_display(const char* msg);
-extern void err_display(int errcode);

@@ -1081,7 +1081,11 @@ void CGameFramework::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARA
 		{
 			m_bTcpClient = false;
 			m_bConnected = false;
-			err_display("Fail Connect", "Client count exceeded or game already started");
+			MessageBoxA(
+				hWnd,
+				"Disconnected from server.",
+				"Connection Closed",
+				MB_OK | MB_ICONERROR);
 		}
 		break;
 	}

@@ -16,6 +16,35 @@ namespace
 		MAX_PACKET_PAYLOAD_SIZE / sizeof(SC_SPACEOUT_OBJECT);
 	static_assert(MAX_SPACEOUT_OBJECTS_PER_PACKET > 0);
 
+	void ShowSocketError(HWND window, const char* operation, int errorCode)
+	{
+		LPSTR errorMessage = nullptr;
+		FormatMessageA(
+			FORMAT_MESSAGE_ALLOCATE_BUFFER |
+				FORMAT_MESSAGE_FROM_SYSTEM |
+				FORMAT_MESSAGE_IGNORE_INSERTS,
+			nullptr,
+			errorCode,
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+			reinterpret_cast<LPSTR>(&errorMessage),
+			0,
+			nullptr);
+
+		MessageBoxA(
+			window,
+			errorMessage ? errorMessage : "Unknown socket error.",
+			operation,
+			MB_OK | MB_ICONERROR);
+		LocalFree(errorMessage);
+	}
+
+	void LogSocketEventError(int errorCode)
+	{
+		char message[128] = {};
+		sprintf_s(message, "[Network] Socket event failed: error=%d\n", errorCode);
+		OutputDebugStringA(message);
+	}
+
 	void ConvertWideStringToUtf8(const wchar_t* source, char* destination, int destinationSize)
 	{
 		WideCharToMultiByte(
@@ -254,9 +283,11 @@ bool CTcpClient::CreateSocket(HWND window, const TCHAR* ipAddress)
 
 	// 윈속 초기화
 	WSADATA wsa;
-	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+	const int startupResult = WSAStartup(MAKEWORD(2, 2), &wsa);
+	if (startupResult != 0)
 	{
-		err_quit("WSAStartup");
+		// WSAStartup은 WSAGetLastError()가 아니라 반환값 자체가 오류 코드다.
+		ShowSocketError(window, "WSAStartup", startupResult);
 		return false;
 	}
 	mWsaStarted = true;
@@ -265,7 +296,8 @@ bool CTcpClient::CreateSocket(HWND window, const TCHAR* ipAddress)
 	m_sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (m_sock == INVALID_SOCKET)
 	{
-		err_quit("socket()");
+		const int errorCode = WSAGetLastError();
+		ShowSocketError(window, "socket()", errorCode);
 		CloseConnection();
 		return false;
 	}
@@ -284,7 +316,8 @@ bool CTcpClient::CreateSocket(HWND window, const TCHAR* ipAddress)
 		sizeof(serverAddress));
 	if (result == SOCKET_ERROR)
 	{
-		err_display("connect()");
+		const int errorCode = WSAGetLastError();
+		ShowSocketError(window, "connect()", errorCode);
 		CloseConnection();
 		return false;
 	}
@@ -292,7 +325,8 @@ bool CTcpClient::CreateSocket(HWND window, const TCHAR* ipAddress)
 	result = WSAAsyncSelect(m_sock, window, WM_SOCKET, FD_CLOSE | FD_READ | FD_WRITE);
 	if (result == SOCKET_ERROR)
 	{
-		err_display("WSAAsyncSelect()");
+		const int errorCode = WSAGetLastError();
+		ShowSocketError(window, "WSAAsyncSelect()", errorCode);
 		CloseConnection();
 		return false;
 	}
@@ -305,7 +339,8 @@ void CTcpClient::OnProcessingSocketMessage(HWND window, UINT, WPARAM wParam, LPA
 	const int socketError = WSAGETSELECTERROR(lParam);
 	if (socketError != 0)
 	{
-		err_display(socketError);
+		// 사용자 알림은 GameFramework의 연결 종료 경로에서 한 번만 표시한다.
+		LogSocketEventError(socketError);
 		if (static_cast<SOCKET>(wParam) == m_sock)
 		{
 			CloseConnection();
@@ -381,164 +416,29 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 		mSocketState = SOCKET_STATE::SEND_KEY_BUFFER;
 		break;
 	case ReceiveHead::ChangeSlot:
-	{
-		if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) + sizeof(mClientInfo))))
+		if (!TryProcessChangeSlotPacket(window, socket))
 		{
 			return;
 		}
-		// 고정 패킷 전체를 지역 변수에 먼저 역직렬화한다.
-		// 이후 검증이 추가되더라도 일부 멤버만 먼저 변경되는 상황을 방지한다.
-		INT8 receivedMainClientId = -1;
-		std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
-		memcpy(&receivedMainClientId, mReceiveBuffer, sizeof(receivedMainClientId));
-		memcpy(
-			receivedClientInfo.data(),
-			mReceiveBuffer + sizeof(receivedMainClientId),
-			sizeof(receivedClientInfo));
-
-		if (!IsAssignedClientId(receivedMainClientId))
-		{
-			LogInvalidServerPacket(
-				"CHANGE_SLOT",
-				"mainClientId",
-				static_cast<int>(receivedMainClientId));
-			CloseConnection();
-			return;
-		}
-		if (!ValidateClientInfoArray(receivedClientInfo))
-		{
-			CloseConnection();
-			return;
-		}
-
-		const INT8 previousMainClientId = mMainClientId;
-		mMainClientId = receivedMainClientId;
-		mClientInfo = receivedClientInfo;
-		for (size_t playerIndex = 0; playerIndex < MAX_CLIENT; ++playerIndex)
-		{
-			if (mPlayers[playerIndex])
-			{
-				mPlayers[playerIndex]->SetClientId(mClientInfo[playerIndex].m_nClientId);
-			}
-		}
-
-		if (previousMainClientId != mMainClientId)
-		{
-			PostMessage(window, WM_CHANGE_SLOT, 1, 0);
-		}
-	}
-	break;
+		break;
 	case ReceiveHead::Init:
-	{
-		if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) * 2 + sizeof(mClientInfo))))
+		if (!TryProcessInitPacket(socket))
 		{
 			return;
 		}
-		INT8 receivedMainClientId = -1;
-		INT8 receivedClientCount = -1;
-		std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
-		memcpy(&receivedMainClientId, mReceiveBuffer, sizeof(receivedMainClientId));
-		memcpy(
-			&receivedClientCount,
-			mReceiveBuffer + sizeof(receivedMainClientId),
-			sizeof(receivedClientCount));
-		memcpy(
-			receivedClientInfo.data(),
-			mReceiveBuffer + sizeof(receivedMainClientId) + sizeof(receivedClientCount),
-			sizeof(receivedClientInfo));
-
-		if (!IsAssignedClientId(receivedMainClientId))
-		{
-			LogInvalidServerPacket(
-				"INIT",
-				"mainClientId",
-				static_cast<int>(receivedMainClientId));
-			CloseConnection();
-			return;
-		}
-		if (!IsValidClientCount(receivedClientCount))
-		{
-			LogInvalidServerPacket(
-				"INIT",
-				"clientCount",
-				static_cast<int>(receivedClientCount));
-			CloseConnection();
-			return;
-		}
-		if (!ValidateClientInfoArray(receivedClientInfo))
-		{
-			CloseConnection();
-			return;
-		}
-
-		// 패킷 전체를 읽은 뒤 관련 멤버를 함께 갱신한다.
-		mMainClientId = receivedMainClientId;
-		mClientCount = receivedClientCount;
-		mClientInfo = receivedClientInfo;
-
 		break;
-	}
 	case ReceiveHead::UpdateData:
-	{
-		if (!HandleReceiveResult(ReceiveData(socket, sizeof(mClientInfo))))
+		if (!TryProcessUpdateDataPacket(socket))
 		{
 			return;
 		}
-		std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
-		memcpy(receivedClientInfo.data(), mReceiveBuffer, sizeof(receivedClientInfo));
-		if (!ValidateClientInfoArray(receivedClientInfo) ||
-			!ValidateClientTransforms(receivedClientInfo))
-		{
-			CloseConnection();
-			return;
-		}
-
-		mClientInfo = receivedClientInfo;
-
-		ApplyServerUpdate();
-
 		break;
-	}
 	case ReceiveHead::ClientCount:
-	{
-		if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) + sizeof(mClientInfo))))
+		if (!TryProcessClientCountPacket(socket))
 		{
 			return;
-		}
-		INT8 receivedClientCount = -1;
-		std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
-		memcpy(&receivedClientCount, mReceiveBuffer, sizeof(receivedClientCount));
-		memcpy(
-			receivedClientInfo.data(),
-			mReceiveBuffer + sizeof(receivedClientCount),
-			sizeof(receivedClientInfo));
-
-		if (!IsValidClientCount(receivedClientCount))
-		{
-			LogInvalidServerPacket(
-				"NUM_OF_CLIENT",
-				"clientCount",
-				static_cast<int>(receivedClientCount));
-			CloseConnection();
-			return;
-		}
-		if (!ValidateClientInfoArray(receivedClientInfo))
-		{
-			CloseConnection();
-			return;
-		}
-
-		mClientCount = receivedClientCount;
-		mClientInfo = receivedClientInfo;
-		for (size_t playerIndex = 0; playerIndex < MAX_CLIENT; ++playerIndex)
-		{
-			if (mPlayers[playerIndex])
-			{
-				mPlayers[playerIndex]->SetClientId(mClientInfo[playerIndex].m_nClientId);
-			}
 		}
 		break;
-	}
 	case ReceiveHead::BlueSuitWin:
 		PostMessage(window, WM_END_GAME, 0, 0);
 		break;
@@ -570,114 +470,17 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 		break;
 	}
 	case ReceiveHead::BlueSuitDead:
-	{
-		if (!HandleReceiveResult(ReceiveData(socket, sizeof(char))))
+		if (!TryProcessBlueSuitDeadPacket(socket))
 		{
 			return;
 		}
-
-		char deadUserId = -1;
-		memcpy(&deadUserId, mReceiveBuffer, sizeof(deadUserId));
-		if (deadUserId < 0 || deadUserId >= static_cast<char>(MAX_CLIENT) || !mPlayers[deadUserId])
-		{
-			CloseConnection();
-			return;
-		}
-
-		SoundManager& soundManager = SoundManager::GetInstance();
-		soundManager.PlaySoundWithName(sound::DEAD_BLUESUIT);
-		soundManager.SetVolume(sound::DEAD_BLUESUIT, mPlayers[deadUserId]->GetPlayerVolume());
 		break;
-	}
 	case ReceiveHead::SpaceOutObjects:
-	{
-		if (!mHasPayloadSize)
-		{
-			if (!HandleReceiveResult(ReceiveData(socket, sizeof(std::uint16_t))))
-			{
-				return;
-			}
-
-			std::uint16_t bufferSize = 0;
-			memcpy(&bufferSize, mReceiveBuffer, sizeof(bufferSize));
-			mExpectedPayloadBytes = bufferSize;
-			mHasPayloadSize = true;
-			memset(mReceiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
-
-			if (mExpectedPayloadBytes == 0 ||
-				mExpectedPayloadBytes > MAX_PACKET_PAYLOAD_SIZE ||
-				mExpectedPayloadBytes % sizeof(SC_SPACEOUT_OBJECT) != 0)
-			{
-				LogInvalidServerPacket(
-					"SPACEOUT_OBJECTS",
-					"payloadSize",
-					static_cast<int>(mExpectedPayloadBytes));
-				CloseConnection();
-				return;
-			}
-		}
-
-		if (!HandleReceiveResult(ReceiveData(socket, mExpectedPayloadBytes)))
+		if (!TryProcessSpaceOutObjectsPacket(socket))
 		{
 			return;
-		}
-
-		const size_t objectCount = mExpectedPayloadBytes / sizeof(SC_SPACEOUT_OBJECT);
-		if (objectCount == 0 || objectCount > MAX_SPACEOUT_OBJECTS_PER_PACKET)
-		{
-			LogInvalidServerPacket(
-				"SPACEOUT_OBJECTS",
-				"objectCount",
-				static_cast<int>(objectCount));
-			CloseConnection();
-			return;
-		}
-		vector<SC_SPACEOUT_OBJECT> spaceOutObjects(objectCount);
-
-		if (mExpectedPayloadBytes > 0)
-		{
-			memcpy(spaceOutObjects.data(), mReceiveBuffer, mExpectedPayloadBytes);
-		}
-
-		// 하나라도 잘못된 ID나 변환값이 있으면 일부 오브젝트만 먼저 갱신하지 않고 패킷 전체를 거부한다.
-		for (size_t objectIndex = 0; objectIndex < spaceOutObjects.size(); ++objectIndex)
-		{
-			const SC_SPACEOUT_OBJECT& objectInfo = spaceOutObjects[objectIndex];
-			const int objectId = objectInfo.m_iObjectId;
-			if (!IsValidObjectId(objectId))
-			{
-				LogInvalidServerPacket(
-					"SPACEOUT_OBJECTS",
-					"objectId",
-					objectIndex,
-					objectId);
-				CloseConnection();
-				return;
-			}
-			if (!IsFiniteMatrix(objectInfo.m_xmf4x4World))
-			{
-				LogInvalidServerPacketAtIndex(
-					"SPACEOUT_OBJECTS",
-					"worldTransform",
-					objectIndex);
-				CloseConnection();
-				return;
-			}
-		}
-
-		for (const SC_SPACEOUT_OBJECT& objectInfo : spaceOutObjects)
-		{
-			shared_ptr<CGameObject> gameObject =
-				g_collisionManager.GetCollisionObjectWithNumber(objectInfo.m_iObjectId).lock();
-			if (gameObject)
-			{
-				gameObject->m_xmf4x4World = objectInfo.m_xmf4x4World;
-				gameObject->m_xmf4x4ToParent = objectInfo.m_xmf4x4World;
-				gameObject->SetObtain(false);
-			}
 		}
 		break;
-	}
 	case ReceiveHead::LoadingComplete:
 	{
 		mLoadingCompleteReceived = true;
@@ -688,6 +491,278 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 	}
 
 	ResetReceiveState();
+}
+
+bool CTcpClient::TryProcessChangeSlotPacket(HWND window, SOCKET socket)
+{
+	if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) + sizeof(mClientInfo))))
+	{
+		return false;
+	}
+
+	// 고정 패킷 전체를 지역 변수에 먼저 역직렬화한다.
+	// 이후 검증이 추가되더라도 일부 멤버만 먼저 변경되는 상황을 방지한다.
+	INT8 receivedMainClientId = -1;
+	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
+	memcpy(&receivedMainClientId, mReceiveBuffer, sizeof(receivedMainClientId));
+	memcpy(
+		receivedClientInfo.data(),
+		mReceiveBuffer + sizeof(receivedMainClientId),
+		sizeof(receivedClientInfo));
+
+	if (!IsAssignedClientId(receivedMainClientId))
+	{
+		LogInvalidServerPacket(
+			"CHANGE_SLOT",
+			"mainClientId",
+			static_cast<int>(receivedMainClientId));
+		CloseConnection();
+		return false;
+	}
+	if (!ValidateClientInfoArray(receivedClientInfo))
+	{
+		CloseConnection();
+		return false;
+	}
+
+	const INT8 previousMainClientId = mMainClientId;
+	mMainClientId = receivedMainClientId;
+	mClientInfo = receivedClientInfo;
+	for (size_t playerIndex = 0; playerIndex < MAX_CLIENT; ++playerIndex)
+	{
+		if (mPlayers[playerIndex])
+		{
+			mPlayers[playerIndex]->SetClientId(mClientInfo[playerIndex].m_nClientId);
+		}
+	}
+
+	if (previousMainClientId != mMainClientId)
+	{
+		PostMessage(window, WM_CHANGE_SLOT, 1, 0);
+	}
+	return true;
+}
+
+bool CTcpClient::TryProcessInitPacket(SOCKET socket)
+{
+	if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) * 2 + sizeof(mClientInfo))))
+	{
+		return false;
+	}
+
+	INT8 receivedMainClientId = -1;
+	INT8 receivedClientCount = -1;
+	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
+	memcpy(&receivedMainClientId, mReceiveBuffer, sizeof(receivedMainClientId));
+	memcpy(
+		&receivedClientCount,
+		mReceiveBuffer + sizeof(receivedMainClientId),
+		sizeof(receivedClientCount));
+	memcpy(
+		receivedClientInfo.data(),
+		mReceiveBuffer + sizeof(receivedMainClientId) + sizeof(receivedClientCount),
+		sizeof(receivedClientInfo));
+
+	if (!IsAssignedClientId(receivedMainClientId))
+	{
+		LogInvalidServerPacket(
+			"INIT",
+			"mainClientId",
+			static_cast<int>(receivedMainClientId));
+		CloseConnection();
+		return false;
+	}
+	if (!IsValidClientCount(receivedClientCount))
+	{
+		LogInvalidServerPacket(
+			"INIT",
+			"clientCount",
+			static_cast<int>(receivedClientCount));
+		CloseConnection();
+		return false;
+	}
+	if (!ValidateClientInfoArray(receivedClientInfo))
+	{
+		CloseConnection();
+		return false;
+	}
+
+	// 패킷 전체를 읽은 뒤 관련 멤버를 함께 갱신한다.
+	mMainClientId = receivedMainClientId;
+	mClientCount = receivedClientCount;
+	mClientInfo = receivedClientInfo;
+	return true;
+}
+
+bool CTcpClient::TryProcessUpdateDataPacket(SOCKET socket)
+{
+	if (!HandleReceiveResult(ReceiveData(socket, sizeof(mClientInfo))))
+	{
+		return false;
+	}
+
+	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
+	memcpy(receivedClientInfo.data(), mReceiveBuffer, sizeof(receivedClientInfo));
+	if (!ValidateClientInfoArray(receivedClientInfo) ||
+		!ValidateClientTransforms(receivedClientInfo))
+	{
+		CloseConnection();
+		return false;
+	}
+
+	mClientInfo = receivedClientInfo;
+	ApplyServerUpdate();
+	return true;
+}
+
+bool CTcpClient::TryProcessClientCountPacket(SOCKET socket)
+{
+	if (!HandleReceiveResult(ReceiveData(socket, sizeof(INT8) + sizeof(mClientInfo))))
+	{
+		return false;
+	}
+
+	INT8 receivedClientCount = -1;
+	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
+	memcpy(&receivedClientCount, mReceiveBuffer, sizeof(receivedClientCount));
+	memcpy(
+		receivedClientInfo.data(),
+		mReceiveBuffer + sizeof(receivedClientCount),
+		sizeof(receivedClientInfo));
+
+	if (!IsValidClientCount(receivedClientCount))
+	{
+		LogInvalidServerPacket(
+			"NUM_OF_CLIENT",
+			"clientCount",
+			static_cast<int>(receivedClientCount));
+		CloseConnection();
+		return false;
+	}
+	if (!ValidateClientInfoArray(receivedClientInfo))
+	{
+		CloseConnection();
+		return false;
+	}
+
+	mClientCount = receivedClientCount;
+	mClientInfo = receivedClientInfo;
+	for (size_t playerIndex = 0; playerIndex < MAX_CLIENT; ++playerIndex)
+	{
+		if (mPlayers[playerIndex])
+		{
+			mPlayers[playerIndex]->SetClientId(mClientInfo[playerIndex].m_nClientId);
+		}
+	}
+	return true;
+}
+
+bool CTcpClient::TryProcessBlueSuitDeadPacket(SOCKET socket)
+{
+	if (!HandleReceiveResult(ReceiveData(socket, sizeof(char))))
+	{
+		return false;
+	}
+
+	char deadUserId = -1;
+	memcpy(&deadUserId, mReceiveBuffer, sizeof(deadUserId));
+	if (deadUserId < 0 || deadUserId >= static_cast<char>(MAX_CLIENT) || !mPlayers[deadUserId])
+	{
+		CloseConnection();
+		return false;
+	}
+
+	SoundManager& soundManager = SoundManager::GetInstance();
+	soundManager.PlaySoundWithName(sound::DEAD_BLUESUIT);
+	soundManager.SetVolume(sound::DEAD_BLUESUIT, mPlayers[deadUserId]->GetPlayerVolume());
+	return true;
+}
+
+bool CTcpClient::TryProcessSpaceOutObjectsPacket(SOCKET socket)
+{
+	if (!mHasPayloadSize)
+	{
+		if (!HandleReceiveResult(ReceiveData(socket, sizeof(std::uint16_t))))
+		{
+			return false;
+		}
+
+		std::uint16_t bufferSize = 0;
+		memcpy(&bufferSize, mReceiveBuffer, sizeof(bufferSize));
+		mExpectedPayloadBytes = bufferSize;
+		mHasPayloadSize = true;
+		memset(mReceiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+
+		if (mExpectedPayloadBytes == 0 ||
+			mExpectedPayloadBytes > MAX_PACKET_PAYLOAD_SIZE ||
+			mExpectedPayloadBytes % sizeof(SC_SPACEOUT_OBJECT) != 0)
+		{
+			LogInvalidServerPacket(
+				"SPACEOUT_OBJECTS",
+				"payloadSize",
+				static_cast<int>(mExpectedPayloadBytes));
+			CloseConnection();
+			return false;
+		}
+	}
+
+	if (!HandleReceiveResult(ReceiveData(socket, mExpectedPayloadBytes)))
+	{
+		return false;
+	}
+
+	const size_t objectCount = mExpectedPayloadBytes / sizeof(SC_SPACEOUT_OBJECT);
+	if (objectCount == 0 || objectCount > MAX_SPACEOUT_OBJECTS_PER_PACKET)
+	{
+		LogInvalidServerPacket(
+			"SPACEOUT_OBJECTS",
+			"objectCount",
+			static_cast<int>(objectCount));
+		CloseConnection();
+		return false;
+	}
+
+	vector<SC_SPACEOUT_OBJECT> spaceOutObjects(objectCount);
+	memcpy(spaceOutObjects.data(), mReceiveBuffer, mExpectedPayloadBytes);
+
+	// 하나라도 잘못된 ID나 변환값이 있으면 일부 오브젝트만 먼저 갱신하지 않고 패킷 전체를 거부한다.
+	for (size_t objectIndex = 0; objectIndex < spaceOutObjects.size(); ++objectIndex)
+	{
+		const SC_SPACEOUT_OBJECT& objectInfo = spaceOutObjects[objectIndex];
+		const int objectId = objectInfo.m_iObjectId;
+		if (!IsValidObjectId(objectId))
+		{
+			LogInvalidServerPacket(
+				"SPACEOUT_OBJECTS",
+				"objectId",
+				objectIndex,
+				objectId);
+			CloseConnection();
+			return false;
+		}
+		if (!IsFiniteMatrix(objectInfo.m_xmf4x4World))
+		{
+			LogInvalidServerPacketAtIndex(
+				"SPACEOUT_OBJECTS",
+				"worldTransform",
+				objectIndex);
+			CloseConnection();
+			return false;
+		}
+	}
+
+	for (const SC_SPACEOUT_OBJECT& objectInfo : spaceOutObjects)
+	{
+		shared_ptr<CGameObject> gameObject =
+			g_collisionManager.GetCollisionObjectWithNumber(objectInfo.m_iObjectId).lock();
+		if (gameObject)
+		{
+			gameObject->m_xmf4x4World = objectInfo.m_xmf4x4World;
+			gameObject->m_xmf4x4ToParent = objectInfo.m_xmf4x4World;
+			gameObject->SetObtain(false);
+		}
+	}
+	return true;
 }
 
 bool CTcpClient::IsValidReceiveHead(INT8 head) const

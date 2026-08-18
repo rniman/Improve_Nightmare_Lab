@@ -139,6 +139,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="NetworkStatistics.cpp" />
     <ClCompile Include="ServerEnvironmentObject.cpp" />
     <ClCompile Include="ServerCollision.cpp" />
     <ClCompile Include="ServerObject.cpp" />
@@ -155,6 +156,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Client\GlobalDefine.h" />
+    <ClInclude Include="NetworkStatistics.h" />
     <ClInclude Include="ServerEnvironmentObject.h" />
     <ClInclude Include="ServerCollision.h" />
     <ClInclude Include="ServerObject.h" />

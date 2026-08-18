@@ -102,15 +102,6 @@ extern BYTE ReadStringFromFile(FILE* pInFile, char* pstrToken);
 extern int ReadIntegerFromFile(FILE* pInFile);
 extern float ReadFloatFromFile(FILE* pInFile);
 
-// 소켓 함수 오류 출력 후 종료
-extern void err_quit(const char* msg);
-// 소켓 함수 오류 출력
-extern void err_display(const char* msg);
-extern void err_display(const char* msg, const char* msg2);
-// 소켓 함수 오류 출력
-extern void err_display(int errcode);
-
-
 inline bool IsZero(float fValue) { return((fabsf(fValue) < EPSILON)); }
 inline bool IsEqual(float fA, float fB) { return(::IsZero(fA - fB)); }
 inline bool IsZero(float fValue, float fEpsilon) { return((fabsf(fValue) < fEpsilon)); }

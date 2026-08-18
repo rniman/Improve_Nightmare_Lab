@@ -46,7 +46,11 @@ int main()
 	);
 
 	//소켓 준비작업
-	g_tcpServer.Initialize(hWnd);
+	if (!g_tcpServer.Initialize(hWnd))
+	{
+		DestroyWindow(hWnd);
+		return 1;
+	}
 	g_tcpServer.SetClientListBox(hListBox);
 
 	MSG msg;

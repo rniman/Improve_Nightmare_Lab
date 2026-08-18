@@ -139,9 +139,15 @@ private:
 		std::size_t sentBytes = 0;
 	};
 
+	bool HandleReceiveResult(ReceiveResult result);
 	void ProcessReadEvent(HWND window, SOCKET socket);
 	void ProcessWriteEvent();
-	bool HandleReceiveResult(ReceiveResult result);
+	bool TryProcessChangeSlotPacket(HWND window, SOCKET socket);
+	bool TryProcessInitPacket(SOCKET socket);
+	bool TryProcessUpdateDataPacket(SOCKET socket);
+	bool TryProcessClientCountPacket(SOCKET socket);
+	bool TryProcessBlueSuitDeadPacket(SOCKET socket);
+	bool TryProcessSpaceOutObjectsPacket(SOCKET socket);
 
 	// 생성 실패, 소켓 오류, FD_CLOSE 및 소멸 시 동일한 경로로 정리한다.
 	void CloseConnection();

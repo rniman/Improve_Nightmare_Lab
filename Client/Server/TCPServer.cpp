@@ -6,11 +6,11 @@
 #include "ServerCollision.h"
 
 #include <cmath>
+#include <iostream>
 
 namespace
 {
 	constexpr size_t MAX_PENDING_SEND_BYTES = 4 * 1024 * 1024;
-	constexpr auto NETWORK_STATISTICS_INTERVAL = std::chrono::seconds(1);
 	constexpr WORD VALID_CLIENT_KEY_MASK =
 		KEY_W | KEY_S | KEY_A | KEY_D |
 		KEY_1 | KEY_2 | KEY_3 | KEY_4 |
@@ -32,6 +32,35 @@ namespace
 		float pitch = 0.0f;
 		SC_PLAYER_INFO playerInfo = {};
 	};
+
+	void LogSocketError(const char* operation, int errorCode)
+	{
+		LPSTR errorMessage = nullptr;
+		FormatMessageA(
+			FORMAT_MESSAGE_ALLOCATE_BUFFER |
+				FORMAT_MESSAGE_FROM_SYSTEM |
+				FORMAT_MESSAGE_IGNORE_INSERTS |
+				FORMAT_MESSAGE_MAX_WIDTH_MASK,
+			nullptr,
+			errorCode,
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+			reinterpret_cast<LPSTR>(&errorMessage),
+			0,
+			nullptr);
+
+		std::cerr << '[' << operation << "] error=" << errorCode;
+		if (errorMessage)
+		{
+			std::cerr << ": " << errorMessage;
+		}
+		std::cerr << '\n';
+		LocalFree(errorMessage);
+	}
+
+	void LogServerNotice(const char* message)
+	{
+		std::cerr << "[Server] " << message << '\n';
+	}
 
 	bool IsValidKeyBuffer(WORD keyBuffer)
 	{
@@ -64,89 +93,6 @@ namespace
 		return true;
 	}
 
-	const char* GetSendPacketName(std::uint8_t head)
-	{
-		switch (static_cast<SOCKET_STATE>(head))
-		{
-		case SOCKET_STATE::SEND_ID: return "ID";
-		case SOCKET_STATE::SEND_UPDATE_DATA: return "UPDATE_DATA";
-		case SOCKET_STATE::SEND_NUM_OF_CLIENT: return "NUM_OF_CLIENT";
-		case SOCKET_STATE::SEND_BLUE_SUIT_WIN: return "BLUE_SUIT_WIN";
-		case SOCKET_STATE::SEND_ZOMBIE_WIN: return "ZOMBIE_WIN";
-		case SOCKET_STATE::SEND_GAME_START: return "GAME_START";
-		case SOCKET_STATE::SEND_CHANGE_SLOT: return "CHANGE_SLOT";
-		case SOCKET_STATE::SEND_OPEN_DRAWER_SOUND: return "OPEN_DRAWER_SOUND";
-		case SOCKET_STATE::SEND_CLOSE_DRAWER_SOUND: return "CLOSE_DRAWER_SOUND";
-		case SOCKET_STATE::SEND_OPEN_DOOR_SOUND: return "OPEN_DOOR_SOUND";
-		case SOCKET_STATE::SEND_CLOSE_DOOR_SOUND: return "CLOSE_DOOR_SOUND";
-		case SOCKET_STATE::SEND_BLUE_SUIT_DEAD: return "BLUE_SUIT_DEAD";
-		case SOCKET_STATE::SEND_SPACEOUT_OBJECTS: return "SPACEOUT_OBJECTS";
-		case SOCKET_STATE::SEND_LOADING_COMPLETE: return "LOADING_COMPLETE";
-		default: return "UNKNOWN";
-		}
-	}
-
-	const char* GetReceivePacketName(std::uint8_t head)
-	{
-		switch (static_cast<ReceiveHead>(head))
-		{
-		case ReceiveHead::KeysBuffer: return "KEYS_BUFFER";
-		case ReceiveHead::GameStart: return "GAME_START";
-		case ReceiveHead::ChangeSlot: return "CHANGE_SLOT";
-		case ReceiveHead::LoadingComplete: return "LOADING_COMPLETE";
-		default: return "UNKNOWN";
-		}
-	}
-
-	void AccumulateNetworkStatistics(NetworkStatistics& destination, const NetworkStatistics& source)
-	{
-		destination.sentBytes += source.sentBytes;
-		destination.receivedBytes += source.receivedBytes;
-		destination.sentPackets += source.sentPackets;
-		destination.receivedPackets += source.receivedPackets;
-		destination.sendWouldBlockCount += source.sendWouldBlockCount;
-		destination.receiveWouldBlockCount += source.receiveWouldBlockCount;
-		destination.peakUnsentBytes = (std::max)(destination.peakUnsentBytes, source.peakUnsentBytes);
-		destination.peakPendingPackets = (std::max)(destination.peakPendingPackets, source.peakPendingPackets);
-
-		for (size_t i = 0; i < NetworkStatistics::PACKET_TYPE_COUNT; ++i)
-		{
-			destination.sentByHead[i].bytes += source.sentByHead[i].bytes;
-			destination.sentByHead[i].packets += source.sentByHead[i].packets;
-			destination.receivedByHead[i].bytes += source.receivedByHead[i].bytes;
-			destination.receivedByHead[i].packets += source.receivedByHead[i].packets;
-		}
-	}
-
-	void PrintPacketBreakdown(
-		const char* direction,
-		const std::array<NetworkPacketStatistics, NetworkStatistics::PACKET_TYPE_COUNT>& statistics,
-		bool isSend)
-	{
-		bool hasPacket = false;
-		std::cout << "  " << direction << " by head:";
-		for (size_t i = 0; i < statistics.size(); ++i)
-		{
-			if (statistics[i].bytes == 0 && statistics[i].packets == 0)
-			{
-				continue;
-			}
-
-			hasPacket = true;
-			const char* packetName = isSend
-				? GetSendPacketName(static_cast<std::uint8_t>(i))
-				: GetReceivePacketName(static_cast<std::uint8_t>(i));
-			std::cout << ' ' << packetName << '=' << statistics[i].bytes
-				<< "B/" << statistics[i].packets << "pkt";
-		}
-
-		if (!hasPacket)
-		{
-			std::cout << " none";
-		}
-		std::cout << '\n';
-	}
-
 	void ConvertCharToWideString(const char* source, LPWSTR destination, int destinationSize)
 	{
 		MultiByteToWideChar(
@@ -165,8 +111,6 @@ INT8 TCPServer::sClientCount = 0;
 
 TCPServer::TCPServer()
 {
-	mLastNetworkStatisticsReportTime = std::chrono::steady_clock::now();
-
 	mPlayerStartPositions = {
 		XMFLOAT3(10.0f, 0.0f, 13.5),
 		XMFLOAT3(10.0f, 0.0f, -13.5),
@@ -261,7 +205,7 @@ void TCPServer::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 	const int nSocketError = WSAGETSELECTERROR(lParam);
 	if (nSocketError != 0)
 	{
-		err_display(nSocketError);
+		LogSocketError("socket event", nSocketError);
 		if (nSocketEvent != FD_ACCEPT)
 		{
 			DisconnectClient(static_cast<SOCKET>(wParam));
@@ -301,14 +245,14 @@ void TCPServer::ProcessAcceptEvent(HWND hWnd, SOCKET listenSocket)
 
 	if (clientSocket == INVALID_SOCKET)
 	{
-		err_display("accept()");
+		LogSocketError("accept()", WSAGetLastError());
 		return;
 	}
 
 	if (mGameState == GAME_STATE::IN_GAME)
 	{
 		closesocket(clientSocket);
-		err_display("Game that has already started.");
+		LogServerNotice("Connection refused because the game has already started.");
 		return;
 	}
 
@@ -318,14 +262,15 @@ void TCPServer::ProcessAcceptEvent(HWND hWnd, SOCKET listenSocket)
 	if (clientIndex == -1)
 	{
 		closesocket(clientSocket); // 클라이언트 소켓 종료
-		err_display("Maximum number of clients reached. Connection refused."); // 연결 거부 메시지 표시
+		LogServerNotice("Connection refused because the server is full.");
 		return;
 	}
 
 	const int retval = WSAAsyncSelect(clientSocket, hWnd, WM_SOCKET, FD_READ | FD_WRITE | FD_CLOSE);
 	if (retval == SOCKET_ERROR)
 	{
-		err_display("WSAAsyncSelect()");
+		const int errorCode = WSAGetLastError();
+		LogSocketError("WSAAsyncSelect()", errorCode);
 		DisconnectClient(clientSocket);
 		return;
 	}
@@ -420,191 +365,213 @@ void TCPServer::ProcessReadEvent(SOCKET socket)
 	switch (mSocketInfos[clientIndex].receiveHead)
 	{
 	case ReceiveHead::GameStart:
-	{
-		mGameState = GAME_STATE::IN_GAME;
-		mZombieCount = 0;
-		mBlueSuitCount = 0;
-		for (int i = 0; i < MAX_CLIENT; ++i)
-		{
-			if (!mSocketInfos[i].isUsed)
-			{
-				continue;
-			}
-
-			if (i == 0)
-			{
-				mZombieCount++;
-			}
-			else
-			{
-				mBlueSuitCount++;
-			}
-
-			InitializePlayerPosition(mPlayers[i], i);
-			mCollisionManager->AddCollisionPlayer(mPlayers[i], i);
-
-			mSocketInfos[i].sendState = SOCKET_STATE::SEND_GAME_START;
-
-			if (i == clientIndex)
-			{
-				continue;
-			}
-			RequestSend(i);
-		}
+		ProcessGameStartPacket(clientIndex);
 		break;
-	}
 	case ReceiveHead::ChangeSlot:
-	{
-		if (!HandleReceiveResult(ReceiveData(clientIndex, sizeof(INT8)), socket))
+		if (!TryProcessChangeSlotPacket(socket, clientIndex))
 		{
 			return;
 		}
-
-		INT8 selectedSlot;
-		memcpy(&selectedSlot, mSocketInfos[clientIndex].receiveBuffer, sizeof(INT8));
-		// 슬롯 번호는 플레이어 및 소켓 배열의 인덱스로 사용되므로 범위를 벗어난 값은 무시할 수 없다.
-		// 잘못된 연결을 종료해 이후 패킷이 비정상적인 서버 상태에 반영되는 것을 방지한다.
-		if (selectedSlot < 0 || selectedSlot >= static_cast<INT8>(MAX_CLIENT))
-		{
-			std::cerr << "Invalid selected slot: client=" << clientIndex
-				<< ", slot=" << static_cast<int>(selectedSlot) << '\n';
-			DisconnectClient(socket);
-			return;
-		}
-
-		if (!mPlayers[selectedSlot]) // 없으면 만들어서
-		{
-			mPlayers[selectedSlot] = make_shared<CServerBlueSuitPlayer>();
-		}
-
-		if (mPlayers[selectedSlot]->GetPlayerId() == -1)
-		{
-			mPlayers[selectedSlot]->SetPlayerId(selectedSlot);
-
-			// 소켓과 수신 진행 상태는 하나의 단위이므로 전체를 함께 이동한다.
-			mSocketInfos[selectedSlot] = mSocketInfos[clientIndex];
-			mSocketInfos[clientIndex] = SocketInfo{};
-
-			mUpdateInfo[selectedSlot].m_nClientId = selectedSlot;
-
-			mUpdateInfo[clientIndex].m_nClientId = -1;
-			mPlayers[clientIndex]->SetPlayerId(-1);
-		}
-		else // 교환해야함
-		{
-			// 역할 슬롯을 교환해도 각 소켓의 수신 상태는 해당 소켓과 함께 이동해야 한다.
-			std::swap(mSocketInfos[clientIndex], mSocketInfos[selectedSlot]);
-
-			mUpdateInfo[selectedSlot].m_nClientId = selectedSlot;
-		}
-
-		mSocketInfos[selectedSlot].sendState = SOCKET_STATE::SEND_CHANGE_SLOT;
-		clientIndex = selectedSlot;
 		break;
-	}
 	case ReceiveHead::KeysBuffer:
-	{
-		// 소켓 슬롯과 플레이어 슬롯이 일치할 때만 입력을 해당 플레이어에게 적용한다.
-		// 포인터가 없거나 ID가 다르면 서버 내부의 연결/플레이어 상태가 이미 불일치한 것이다.
-		if (!player || player->GetPlayerId() != clientIndex)
-		{
-			const int playerId = player ? static_cast<int>(player->GetPlayerId()) : -1;
-			std::cerr << "Invalid player for input packet: client=" << clientIndex
-				<< ", playerId=" << playerId << '\n';
-			DisconnectClient(socket);
-			return;
-		}
-
-		// KeysBuffer(WORD), viewMatrix, vecLook, vecRight, vecUp, pitch, playerInfo
-		if (!HandleReceiveResult(ReceiveData(clientIndex, CLIENT_INPUT_PAYLOAD_SIZE), socket))
+		if (!TryProcessClientInputPacket(socket, clientIndex, player))
 		{
 			return;
 		}
-
-		// 수신 버퍼의 모든 필드를 지역 변수로 먼저 역직렬화한다.
-		// 검증이 끝나기 전에는 일부 값만 플레이어 상태에 반영되는 일이 없어야 한다.
-		size_t readOffset = 0;
-		auto readValue = [&socketInfo = mSocketInfos[clientIndex], &readOffset](auto& value)
-			{
-				memcpy(&value, socketInfo.receiveBuffer + readOffset, sizeof(value));
-				readOffset += sizeof(value);
-			};
-
-		ClientInputData input;
-		readValue(input.keyBuffer);
-		readValue(input.viewMatrix);
-		readValue(input.look);
-		readValue(input.right);
-		readValue(input.up);
-		readValue(input.pitch);
-		readValue(input.playerInfo);
-		assert(readOffset == CLIENT_INPUT_PAYLOAD_SIZE);
-
-		if (!IsValidKeyBuffer(input.keyBuffer))
-		{
-			std::cerr << "Invalid key buffer: client=" << clientIndex
-				<< ", value=" << input.keyBuffer << '\n';
-			DisconnectClient(socket);
-			return;
-		}
-		if (!IsFiniteMatrix(input.viewMatrix) ||
-			!IsFiniteVector(input.look) ||
-			!IsFiniteVector(input.right) ||
-			!IsFiniteVector(input.up))
-		{
-			std::cerr << "Non-finite transform in input packet: client=" << clientIndex << '\n';
-			DisconnectClient(socket);
-			return;
-		}
-
-		// 모든 역직렬화와 입력 검증을 통과한 뒤 서버의 플레이어 상태를 갱신한다.
-		if (!player->IsRecvData())
-		{
-			player->SetRecvData(true);
-		}
-		player->SetKeyBuffer(input.keyBuffer);
-		player->SetViewMatrix(input.viewMatrix);
-		player->SetLook(input.look);
-		player->SetRight(input.right);
-		player->SetUp(input.up);
-		mUpdateInfo[clientIndex].m_fPitch = input.pitch;
-		player->SetRightClick(input.playerInfo.m_bRightClick);
-
 		break;
-	}
 	case ReceiveHead::LoadingComplete:
-	{
-		mSocketInfos[clientIndex].isLoadingComplete = true;
-		int connectCount = 0;
-		int loadCompleteCount = 0;
-		for (const auto& socketInfo : mSocketInfos)
-		{
-			if (!socketInfo.isUsed)
-			{
-				continue;
-			}
-
-			++connectCount;
-			if (socketInfo.isLoadingComplete)
-			{
-				++loadCompleteCount;
-			}
-		}
-
-		if (loadCompleteCount == connectCount)
-		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_LOADING_COMPLETE;
-		}
+		ProcessLoadingCompletePacket(clientIndex);
 		break;
-	}
 	default:
 		break;
 	}
 
 	// HEAD와 DATA가 모두 도착해 하나의 애플리케이션 패킷이 완성된 시점에만 패킷 수를 증가시킨다.
-	RecordReceivedPacketStatistics(mSocketInfos[clientIndex]);
-	ResetReceiveState(mSocketInfos[clientIndex]);
+	SocketInfo& socketInfo = mSocketInfos[clientIndex];
+	socketInfo.networkStatistics.RecordReceivedPacket(
+		static_cast<std::uint8_t>(socketInfo.receiveHead),
+		socketInfo.currentPacketReceivedBytes);
+	ResetReceiveState(socketInfo);
 	RequestSend(clientIndex);
+}
+
+void TCPServer::ProcessGameStartPacket(int clientIndex)
+{
+	mGameState = GAME_STATE::IN_GAME;
+	mZombieCount = 0;
+	mBlueSuitCount = 0;
+	for (int i = 0; i < MAX_CLIENT; ++i)
+	{
+		if (!mSocketInfos[i].isUsed)
+		{
+			continue;
+		}
+
+		if (i == 0)
+		{
+			++mZombieCount;
+		}
+		else
+		{
+			++mBlueSuitCount;
+		}
+
+		InitializePlayerPosition(mPlayers[i], i);
+		mCollisionManager->AddCollisionPlayer(mPlayers[i], i);
+		mSocketInfos[i].sendState = SOCKET_STATE::SEND_GAME_START;
+
+		if (i != clientIndex)
+		{
+			RequestSend(i);
+		}
+	}
+}
+
+bool TCPServer::TryProcessChangeSlotPacket(SOCKET socket, int& clientIndex)
+{
+	if (!HandleReceiveResult(ReceiveData(clientIndex, sizeof(INT8)), socket))
+	{
+		return false;
+	}
+
+	INT8 selectedSlot = -1;
+	memcpy(&selectedSlot, mSocketInfos[clientIndex].receiveBuffer, sizeof(selectedSlot));
+	// 슬롯 번호는 플레이어 및 소켓 배열의 인덱스로 사용되므로 범위를 벗어난 값은 무시할 수 없다.
+	// 잘못된 연결을 종료해 이후 패킷이 비정상적인 서버 상태에 반영되는 것을 방지한다.
+	if (selectedSlot < 0 || selectedSlot >= static_cast<INT8>(MAX_CLIENT))
+	{
+		std::cerr << "Invalid selected slot: client=" << clientIndex
+			<< ", slot=" << static_cast<int>(selectedSlot) << '\n';
+		DisconnectClient(socket);
+		return false;
+	}
+
+	if (!mPlayers[selectedSlot])
+	{
+		mPlayers[selectedSlot] = make_shared<CServerBlueSuitPlayer>();
+	}
+
+	if (mPlayers[selectedSlot]->GetPlayerId() == -1)
+	{
+		mPlayers[selectedSlot]->SetPlayerId(selectedSlot);
+
+		// 소켓과 수신 진행 상태는 하나의 단위이므로 전체를 함께 이동한다.
+		mSocketInfos[selectedSlot] = mSocketInfos[clientIndex];
+		mSocketInfos[clientIndex] = SocketInfo{};
+
+		mUpdateInfo[selectedSlot].m_nClientId = selectedSlot;
+		mUpdateInfo[clientIndex].m_nClientId = -1;
+		mPlayers[clientIndex]->SetPlayerId(-1);
+	}
+	else
+	{
+		// 역할 슬롯을 교환해도 각 소켓의 수신 상태는 해당 소켓과 함께 이동해야 한다.
+		std::swap(mSocketInfos[clientIndex], mSocketInfos[selectedSlot]);
+		mUpdateInfo[selectedSlot].m_nClientId = selectedSlot;
+	}
+
+	mSocketInfos[selectedSlot].sendState = SOCKET_STATE::SEND_CHANGE_SLOT;
+	// 이후 통계, 수신 상태 초기화, 응답 전송도 이동한 소켓 슬롯을 대상으로 해야 한다.
+	clientIndex = selectedSlot;
+	return true;
+}
+
+bool TCPServer::TryProcessClientInputPacket(
+	SOCKET socket,
+	int clientIndex,
+	const std::shared_ptr<CServerPlayer>& player)
+{
+	// 소켓 슬롯과 플레이어 슬롯이 일치할 때만 입력을 해당 플레이어에게 적용한다.
+	// 포인터가 없거나 ID가 다르면 서버 내부의 연결/플레이어 상태가 이미 불일치한 것이다.
+	if (!player || player->GetPlayerId() != clientIndex)
+	{
+		const int playerId = player ? static_cast<int>(player->GetPlayerId()) : -1;
+		std::cerr << "Invalid player for input packet: client=" << clientIndex
+			<< ", playerId=" << playerId << '\n';
+		DisconnectClient(socket);
+		return false;
+	}
+
+	// KeysBuffer(WORD), viewMatrix, vecLook, vecRight, vecUp, pitch, playerInfo
+	if (!HandleReceiveResult(ReceiveData(clientIndex, CLIENT_INPUT_PAYLOAD_SIZE), socket))
+	{
+		return false;
+	}
+
+	// 수신 버퍼의 모든 필드를 지역 변수로 먼저 역직렬화한다.
+	// 검증이 끝나기 전에는 일부 값만 플레이어 상태에 반영되는 일이 없어야 한다.
+	size_t readOffset = 0;
+	auto readValue = [&socketInfo = mSocketInfos[clientIndex], &readOffset](auto& value)
+		{
+			memcpy(&value, socketInfo.receiveBuffer + readOffset, sizeof(value));
+			readOffset += sizeof(value);
+		};
+
+	ClientInputData input;
+	readValue(input.keyBuffer);
+	readValue(input.viewMatrix);
+	readValue(input.look);
+	readValue(input.right);
+	readValue(input.up);
+	readValue(input.pitch);
+	readValue(input.playerInfo);
+	assert(readOffset == CLIENT_INPUT_PAYLOAD_SIZE);
+
+	if (!IsValidKeyBuffer(input.keyBuffer))
+	{
+		std::cerr << "Invalid key buffer: client=" << clientIndex
+			<< ", value=" << input.keyBuffer << '\n';
+		DisconnectClient(socket);
+		return false;
+	}
+	if (!IsFiniteMatrix(input.viewMatrix) ||
+		!IsFiniteVector(input.look) ||
+		!IsFiniteVector(input.right) ||
+		!IsFiniteVector(input.up))
+	{
+		std::cerr << "Non-finite transform in input packet: client=" << clientIndex << '\n';
+		DisconnectClient(socket);
+		return false;
+	}
+
+	// 모든 역직렬화와 입력 검증을 통과한 뒤 서버의 플레이어 상태를 갱신한다.
+	if (!player->IsRecvData())
+	{
+		player->SetRecvData(true);
+	}
+	player->SetKeyBuffer(input.keyBuffer);
+	player->SetViewMatrix(input.viewMatrix);
+	player->SetLook(input.look);
+	player->SetRight(input.right);
+	player->SetUp(input.up);
+	mUpdateInfo[clientIndex].m_fPitch = input.pitch;
+	player->SetRightClick(input.playerInfo.m_bRightClick);
+	return true;
+}
+
+void TCPServer::ProcessLoadingCompletePacket(int clientIndex)
+{
+	mSocketInfos[clientIndex].isLoadingComplete = true;
+	int connectCount = 0;
+	int loadCompleteCount = 0;
+	for (const auto& socketInfo : mSocketInfos)
+	{
+		if (!socketInfo.isUsed)
+		{
+			continue;
+		}
+
+		++connectCount;
+		if (socketInfo.isLoadingComplete)
+		{
+			++loadCompleteCount;
+		}
+	}
+
+	if (loadCompleteCount == connectCount)
+	{
+		mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_LOADING_COMPLETE;
+	}
 }
 
 void TCPServer::ProcessWriteEvent(SOCKET socket)
@@ -617,7 +584,7 @@ void TCPServer::ProcessWriteEvent(SOCKET socket)
 
 	if (FlushSendQueue(clientIndex) == SendResult::Error)
 	{
-		err_display("send()");
+		LogSocketError("send()", WSAGetLastError());
 		DisconnectClient(socket);
 	}
 }
@@ -763,14 +730,22 @@ bool TCPServer::Initialize(HWND hWnd)
 	m_hWnd = hWnd;
 	// 윈속 초기화
 	WSADATA wsa;
-	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+	const int startupResult = WSAStartup(MAKEWORD(2, 2), &wsa);
+	if (startupResult != 0)
 	{
+		// WSAStartup은 WSAGetLastError()가 아니라 반환값 자체가 오류 코드다.
+		LogSocketError("WSAStartup", startupResult);
 		return false;
 	}
 
 	// 소켓 생성
-	SOCKET listen_sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (listen_sock == INVALID_SOCKET) err_quit("socket()");
+	const SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if (listenSocket == INVALID_SOCKET)
+	{
+		LogSocketError("socket()", WSAGetLastError());
+		WSACleanup();
+		return false;
+	}
 
 	// bind()
 	struct sockaddr_in serveraddr;
@@ -778,21 +753,36 @@ bool TCPServer::Initialize(HWND hWnd)
 	serveraddr.sin_family = AF_INET;
 	serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	serveraddr.sin_port = htons(SERVERPORT);
-	int retval = bind(listen_sock, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
-	if (retval == SOCKET_ERROR) err_quit("bind()");
-
-	// listen()
-	retval = listen(listen_sock, SOMAXCONN);
+	int retval = bind(listenSocket, reinterpret_cast<struct sockaddr*>(&serveraddr), sizeof(serveraddr));
 	if (retval == SOCKET_ERROR)
 	{
-		err_quit("listen()");
+		const int errorCode = WSAGetLastError();
+		LogSocketError("bind()", errorCode);
+		closesocket(listenSocket);
+		WSACleanup();
+		return false;
+	}
+
+	// listen()
+	retval = listen(listenSocket, SOMAXCONN);
+	if (retval == SOCKET_ERROR)
+	{
+		const int errorCode = WSAGetLastError();
+		LogSocketError("listen()", errorCode);
+		closesocket(listenSocket);
+		WSACleanup();
+		return false;
 	}
 
 	// WSAAsyncSelect()
-	retval = WSAAsyncSelect(listen_sock, hWnd, WM_SOCKET, FD_ACCEPT | FD_CLOSE);
+	retval = WSAAsyncSelect(listenSocket, hWnd, WM_SOCKET, FD_ACCEPT | FD_CLOSE);
 	if (retval == SOCKET_ERROR)
 	{
-		err_quit("WSAAsyncSelect()");
+		const int errorCode = WSAGetLastError();
+		LogSocketError("WSAAsyncSelect()", errorCode);
+		closesocket(listenSocket);
+		WSACleanup();
+		return false;
 	}
 
 	mGameState = GAME_STATE::IN_LOBBY;
@@ -876,7 +866,7 @@ void TCPServer::SimulationLoop()
 		player->UseItem(mCollisionManager);
 		player->Update(elapsedTime, mCollisionManager);
 		player->UpdatePicking(player->GetPlayerId());
-		//UpdatePlayerReplicationData(player);
+
 		mCollisionManager->Collide(elapsedTime, player);
 
 		player->OnUpdateToParent();
@@ -929,10 +919,6 @@ int TCPServer::DetermineEndGameState()
 			{
 				endGameState = GAME_STATE::BLUE_SUIT_WIN;
 			}
-			//else
-			//{
-			//	endGameState = GAME_STATE::ZOMBIE_WIN;
-			//}
 			break;
 		}
 	}
@@ -1044,7 +1030,9 @@ bool TCPServer::DisconnectClient(SOCKET clientSocket)
 	}
 
 	// SocketInfo가 초기화되기 전에 이 연결의 누적 측정값을 남긴다.
-	ReportDisconnectedClientStatistics(clientIndex, mSocketInfos[clientIndex]);
+	mNetworkStatisticsReporter.ReportDisconnected(
+		clientIndex,
+		mSocketInfos[clientIndex].networkStatistics);
 
 	INT8 nListBoxIndex = -1;
 	for (INT8 i = 0; i <= clientIndex; ++i)
@@ -1636,17 +1624,13 @@ bool TCPServer::EnqueueSendBuffer(int clientIndex, vector<char> buffer)
 	socketInfo.sendQueue.push_back(PendingSend{ std::move(buffer), 0 });
 
 	// 최고 대기량은 송신 생산 속도가 소켓 처리 속도를 앞서는지 판단하는 값이다.
-	for (NetworkStatistics* statistics : {
-		&socketInfo.totalNetworkStatistics,
-		&socketInfo.intervalNetworkStatistics })
-	{
-		statistics->peakUnsentBytes = (std::max)(statistics->peakUnsentBytes, socketInfo.unsentSendBytes);
-		statistics->peakPendingPackets = (std::max)(statistics->peakPendingPackets, socketInfo.sendQueue.size());
-	}
+	socketInfo.networkStatistics.RecordQueueState(
+		socketInfo.unsentSendBytes,
+		socketInfo.sendQueue.size());
 	if (FlushSendQueue(clientIndex) == SendResult::Error)
 	{
 		const SOCKET socket = socketInfo.socket;
-		err_display("send()");
+		LogSocketError("send()", WSAGetLastError());
 		DisconnectClient(socket);
 		return false;
 	}
@@ -1669,26 +1653,14 @@ TCPServer::SendResult TCPServer::FlushSendQueue(int clientIndex)
 		if (sentBytes > 0)
 		{
 			const std::uint8_t head = static_cast<std::uint8_t>(pending.buffer.front());
-			for (NetworkStatistics* statistics : {
-				&socketInfo.totalNetworkStatistics,
-				&socketInfo.intervalNetworkStatistics })
-			{
-				// send()가 양수를 반환한 바이트만 실제 송신 처리량으로 기록한다.
-				statistics->sentBytes += static_cast<std::uint64_t>(sentBytes);
-				statistics->sentByHead[head].bytes += static_cast<std::uint64_t>(sentBytes);
-			}
+			// send()가 양수를 반환한 바이트만 실제 송신 처리량으로 기록한다.
+			socketInfo.networkStatistics.RecordSentBytes(head, static_cast<size_t>(sentBytes));
 
 			pending.sentBytes += static_cast<size_t>(sentBytes);
 			socketInfo.unsentSendBytes -= static_cast<size_t>(sentBytes);
 			if (pending.sentBytes == pending.buffer.size())
 			{
-				for (NetworkStatistics* statistics : {
-					&socketInfo.totalNetworkStatistics,
-					&socketInfo.intervalNetworkStatistics })
-				{
-					++statistics->sentPackets;
-					++statistics->sentByHead[head].packets;
-				}
+				socketInfo.networkStatistics.RecordSentPacket(head);
 				socketInfo.pendingSendBytes -= pending.buffer.size();
 				socketInfo.sendQueue.pop_front();
 			}
@@ -1697,8 +1669,7 @@ TCPServer::SendResult TCPServer::FlushSendQueue(int clientIndex)
 
 		if (sentBytes == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
 		{
-			++socketInfo.totalNetworkStatistics.sendWouldBlockCount;
-			++socketInfo.intervalNetworkStatistics.sendWouldBlockCount;
+			socketInfo.networkStatistics.RecordSendWouldBlock();
 			return SendResult::Pending;
 		}
 		return SendResult::Error;
@@ -1748,8 +1719,7 @@ TCPServer::ReceiveResult TCPServer::ReceiveData(int clientIndex, size_t expected
 	{
 		socketInfo.receivedBytes += retval;
 		socketInfo.currentPacketReceivedBytes += static_cast<size_t>(retval);
-		socketInfo.totalNetworkStatistics.receivedBytes += static_cast<std::uint64_t>(retval);
-		socketInfo.intervalNetworkStatistics.receivedBytes += static_cast<std::uint64_t>(retval);
+		socketInfo.networkStatistics.RecordReceivedBytes(static_cast<size_t>(retval));
 	}
 	else if (retval == 0)
 	{
@@ -1764,8 +1734,7 @@ TCPServer::ReceiveResult TCPServer::ReceiveData(int clientIndex, size_t expected
 		{
 			// 아직 필요한 바이트가 도착하지 않은 정상적인 논블로킹 상태다.
 			// HEAD, 버퍼, 현재 수신 위치를 유지하고 다음 FD_READ에서 이어서 받는다.
-			++socketInfo.totalNetworkStatistics.receiveWouldBlockCount;
-			++socketInfo.intervalNetworkStatistics.receiveWouldBlockCount;
+			socketInfo.networkStatistics.RecordReceiveWouldBlock();
 			return ReceiveResult::Pending;
 		}
 
@@ -1784,146 +1753,26 @@ TCPServer::ReceiveResult TCPServer::ReceiveData(int clientIndex, size_t expected
 	return ReceiveResult::Complete;
 }
 
-void TCPServer::RecordReceivedPacketStatistics(SocketInfo& socketInfo)
-{
-	const std::uint8_t head = static_cast<std::uint8_t>(socketInfo.receiveHead);
-	for (NetworkStatistics* statistics : {
-		&socketInfo.totalNetworkStatistics,
-		&socketInfo.intervalNetworkStatistics })
-	{
-		++statistics->receivedPackets;
-		++statistics->receivedByHead[head].packets;
-		statistics->receivedByHead[head].bytes += socketInfo.currentPacketReceivedBytes;
-	}
-}
-
 void TCPServer::ReportNetworkStatisticsIfDue()
 {
-	const auto currentTime = std::chrono::steady_clock::now();
-	const auto elapsedTime = currentTime - mLastNetworkStatisticsReportTime;
-	if (elapsedTime < NETWORK_STATISTICS_INTERVAL)
+	std::array<NetworkClientStatisticsView, MAX_CLIENT> clients = {};
+	size_t clientCount = 0;
+	for (size_t clientIndex = 0; clientIndex < mSocketInfos.size(); ++clientIndex)
 	{
-		return;
-	}
-	mLastNetworkStatisticsReportTime = currentTime;
-
-	NetworkStatistics aggregateStatistics;
-	size_t currentUnsentBytes = 0;
-	size_t currentPendingPackets = 0;
-	bool hasConnectedClient = false;
-
-	for (const SocketInfo& socketInfo : mSocketInfos)
-	{
+		SocketInfo& socketInfo = mSocketInfos[clientIndex];
 		if (!socketInfo.isUsed)
 		{
 			continue;
 		}
 
-		hasConnectedClient = true;
-		AccumulateNetworkStatistics(aggregateStatistics, socketInfo.intervalNetworkStatistics);
-		currentUnsentBytes += socketInfo.unsentSendBytes;
-		currentPendingPackets += socketInfo.sendQueue.size();
+		clients[clientCount] = NetworkClientStatisticsView{
+			clientIndex,
+			socketInfo.unsentSendBytes,
+			socketInfo.sendQueue.size(),
+			&socketInfo.networkStatistics
+		};
+		++clientCount;
 	}
 
-	if (!hasConnectedClient)
-	{
-		return;
-	}
-
-	const auto elapsedMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsedTime).count();
-	std::cout << "[NET " << elapsedMilliseconds << "ms] TX="
-		<< aggregateStatistics.sentBytes << "B/"
-		<< aggregateStatistics.sentPackets << "pkt, RX="
-		<< aggregateStatistics.receivedBytes << "B/"
-		<< aggregateStatistics.receivedPackets << "pkt, Queue="
-		<< currentUnsentBytes << "B/" << currentPendingPackets
-		<< "pkt, MaxClientPeak=" << aggregateStatistics.peakUnsentBytes << "B/"
-		<< aggregateStatistics.peakPendingPackets << "pkt, WouldBlock(TX/RX)="
-		<< aggregateStatistics.sendWouldBlockCount << '/'
-		<< aggregateStatistics.receiveWouldBlockCount << '\n';
-	PrintPacketBreakdown("TX", aggregateStatistics.sentByHead, true);
-	PrintPacketBreakdown("RX", aggregateStatistics.receivedByHead, false);
-
-	for (size_t i = 0; i < mSocketInfos.size(); ++i)
-	{
-		SocketInfo& socketInfo = mSocketInfos[i];
-		if (!socketInfo.isUsed)
-		{
-			continue;
-		}
-
-		const NetworkStatistics& statistics = socketInfo.intervalNetworkStatistics;
-		std::cout << "  client[" << i << "]: TX=" << statistics.sentBytes
-			<< "B/" << statistics.sentPackets << "pkt, RX="
-			<< statistics.receivedBytes << "B/" << statistics.receivedPackets
-			<< "pkt, Queue=" << socketInfo.unsentSendBytes << "B/"
-			<< socketInfo.sendQueue.size() << "pkt, Peak="
-			<< statistics.peakUnsentBytes << "B/"
-			<< statistics.peakPendingPackets << "pkt\n";
-
-		// 다음 1초 구간은 현재 backlog를 시작점으로 삼아 새 최고치를 측정한다.
-		socketInfo.intervalNetworkStatistics = NetworkStatistics{};
-		socketInfo.intervalNetworkStatistics.peakUnsentBytes = socketInfo.unsentSendBytes;
-		socketInfo.intervalNetworkStatistics.peakPendingPackets = socketInfo.sendQueue.size();
-	}
-}
-
-void TCPServer::ReportDisconnectedClientStatistics(int clientIndex, const SocketInfo& socketInfo) const
-{
-	const NetworkStatistics& statistics = socketInfo.totalNetworkStatistics;
-	std::cout << "[NET END client=" << clientIndex << "] TX="
-		<< statistics.sentBytes << "B/" << statistics.sentPackets
-		<< "pkt, RX=" << statistics.receivedBytes << "B/"
-		<< statistics.receivedPackets << "pkt, PeakQueue="
-		<< statistics.peakUnsentBytes << "B/" << statistics.peakPendingPackets
-		<< "pkt, WouldBlock(TX/RX)=" << statistics.sendWouldBlockCount
-		<< '/' << statistics.receiveWouldBlockCount << '\n';
-	PrintPacketBreakdown("TX total", statistics.sentByHead, true);
-	PrintPacketBreakdown("RX total", statistics.receivedByHead, false);
-}
-
-// 소켓 함수 오류 출력 후 종료
-void err_quit(const char* msg)
-{
-	LPVOID lpMsgBuf;
-	FormatMessageA(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-		NULL,
-		WSAGetLastError(),
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(char*)&lpMsgBuf,
-		0,
-		NULL);
-
-	MessageBoxA(NULL, (const char*)lpMsgBuf, msg, MB_ICONERROR);
-	LocalFree(lpMsgBuf);
-	exit(1);
-}
-// 소켓 함수 오류 출력
-void err_display(const char* msg)
-{
-	LPVOID lpMsgBuf;
-	FormatMessageA(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-		NULL,
-		WSAGetLastError(),
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(char*)&lpMsgBuf, 0, NULL);
-
-	LocalFree(lpMsgBuf);
-}
-// 소켓 함수 오류 출력
-void err_display(int errcode)
-{
-	LPVOID lpMsgBuf;
-	FormatMessageA(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-		NULL,
-		errcode,
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(char*)&lpMsgBuf,
-		0,
-		NULL);
-
-	LocalFree(lpMsgBuf);
+	mNetworkStatisticsReporter.ReportIfDue(clients.data(), clientCount);
 }
