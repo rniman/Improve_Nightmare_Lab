@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
 // 특정 패킷 HEAD의 애플리케이션 데이터량과 완성 패킷 수다.
 struct NetworkPacketStatistics
@@ -40,6 +41,12 @@ struct NetworkStatistics
 class SocketNetworkStatistics
 {
 public:
+	SocketNetworkStatistics();
+	SocketNetworkStatistics(SocketNetworkStatistics&&) noexcept = default;
+	SocketNetworkStatistics& operator=(SocketNetworkStatistics&&) noexcept = default;
+	SocketNetworkStatistics(const SocketNetworkStatistics&) = delete;
+	SocketNetworkStatistics& operator=(const SocketNetworkStatistics&) = delete;
+
 	// 송신 버퍼를 큐에 추가한 직후 현재 backlog를 최고치에 반영한다.
 	void RecordQueueState(std::size_t unsentBytes, std::size_t pendingPackets);
 
@@ -51,15 +58,20 @@ public:
 	void RecordReceivedPacket(std::uint8_t head, std::size_t byteCount);
 	void RecordReceiveWouldBlock();
 
-	const NetworkStatistics& GetTotal() const { return mTotal; }
-	const NetworkStatistics& GetInterval() const { return mInterval; }
+	const NetworkStatistics& GetTotal() const { return mStorage->total; }
+	const NetworkStatistics& GetInterval() const { return mStorage->interval; }
 
 	// 현재 backlog를 시작값으로 삼아 다음 출력 구간을 시작한다.
 	void ResetInterval(std::size_t unsentBytes, std::size_t pendingPackets);
 
 private:
-	NetworkStatistics mTotal;    // 연결 전체 수명 누적값
-	NetworkStatistics mInterval; // 마지막 주기 출력 이후의 값
+	struct Storage
+	{
+		NetworkStatistics total;    // 연결 전체 수명 누적값
+		NetworkStatistics interval; // 마지막 주기 출력 이후의 값
+	};
+
+	std::unique_ptr<Storage> mStorage;
 };
 
 // TCPServer가 통계 리포터에 전달하는 비소유 연결별 스냅샷이다.

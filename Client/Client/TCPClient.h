@@ -173,7 +173,7 @@ private:
 	void UpdateSurvivorPlayer(int playerIndex);
 
 	// HEAD와 DATA가 여러 FD_READ에 나뉘어 도착할 때 이어 받기 위한 상태다.
-	char mReceiveBuffer[MAX_PACKET_PAYLOAD_SIZE];
+	std::vector<char> mReceiveBuffer = std::vector<char>(MAX_PACKET_PAYLOAD_SIZE);
 	std::size_t mExpectedPayloadBytes = 0;
 	int mReceivedBytes = 0;
 	ReceiveHead mReceiveHead = ReceiveHead::Invalid;

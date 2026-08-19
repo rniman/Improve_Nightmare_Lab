@@ -100,9 +100,13 @@ namespace
 	}
 }
 
+SocketNetworkStatistics::SocketNetworkStatistics()
+	: mStorage(std::make_unique<Storage>())
+{}
+
 void SocketNetworkStatistics::RecordQueueState(std::size_t unsentBytes, std::size_t pendingPackets)
 {
-	ForEachStatistics(mTotal, mInterval, [=](NetworkStatistics& statistics)
+	ForEachStatistics(mStorage->total, mStorage->interval, [=](NetworkStatistics& statistics)
 		{
 			statistics.peakUnsentBytes = (std::max)(statistics.peakUnsentBytes, unsentBytes);
 			statistics.peakPendingPackets = (std::max)(statistics.peakPendingPackets, pendingPackets);
@@ -111,7 +115,7 @@ void SocketNetworkStatistics::RecordQueueState(std::size_t unsentBytes, std::siz
 
 void SocketNetworkStatistics::RecordSentBytes(std::uint8_t head, std::size_t byteCount)
 {
-	ForEachStatistics(mTotal, mInterval, [=](NetworkStatistics& statistics)
+	ForEachStatistics(mStorage->total, mStorage->interval, [=](NetworkStatistics& statistics)
 		{
 			statistics.sentBytes += byteCount;
 			statistics.sentByHead[head].bytes += byteCount;
@@ -120,7 +124,7 @@ void SocketNetworkStatistics::RecordSentBytes(std::uint8_t head, std::size_t byt
 
 void SocketNetworkStatistics::RecordSentPacket(std::uint8_t head)
 {
-	ForEachStatistics(mTotal, mInterval, [=](NetworkStatistics& statistics)
+	ForEachStatistics(mStorage->total, mStorage->interval, [=](NetworkStatistics& statistics)
 		{
 			++statistics.sentPackets;
 			++statistics.sentByHead[head].packets;
@@ -129,7 +133,7 @@ void SocketNetworkStatistics::RecordSentPacket(std::uint8_t head)
 
 void SocketNetworkStatistics::RecordSendWouldBlock()
 {
-	ForEachStatistics(mTotal, mInterval, [](NetworkStatistics& statistics)
+	ForEachStatistics(mStorage->total, mStorage->interval, [](NetworkStatistics& statistics)
 		{
 			++statistics.sendWouldBlockCount;
 		});
@@ -137,7 +141,7 @@ void SocketNetworkStatistics::RecordSendWouldBlock()
 
 void SocketNetworkStatistics::RecordReceivedBytes(std::size_t byteCount)
 {
-	ForEachStatistics(mTotal, mInterval, [=](NetworkStatistics& statistics)
+	ForEachStatistics(mStorage->total, mStorage->interval, [=](NetworkStatistics& statistics)
 		{
 			statistics.receivedBytes += byteCount;
 		});
@@ -145,7 +149,7 @@ void SocketNetworkStatistics::RecordReceivedBytes(std::size_t byteCount)
 
 void SocketNetworkStatistics::RecordReceivedPacket(std::uint8_t head, std::size_t byteCount)
 {
-	ForEachStatistics(mTotal, mInterval, [=](NetworkStatistics& statistics)
+	ForEachStatistics(mStorage->total, mStorage->interval, [=](NetworkStatistics& statistics)
 		{
 			++statistics.receivedPackets;
 			++statistics.receivedByHead[head].packets;
@@ -155,7 +159,7 @@ void SocketNetworkStatistics::RecordReceivedPacket(std::uint8_t head, std::size_
 
 void SocketNetworkStatistics::RecordReceiveWouldBlock()
 {
-	ForEachStatistics(mTotal, mInterval, [](NetworkStatistics& statistics)
+	ForEachStatistics(mStorage->total, mStorage->interval, [](NetworkStatistics& statistics)
 		{
 			++statistics.receiveWouldBlockCount;
 		});
@@ -163,9 +167,9 @@ void SocketNetworkStatistics::RecordReceiveWouldBlock()
 
 void SocketNetworkStatistics::ResetInterval(std::size_t unsentBytes, std::size_t pendingPackets)
 {
-	mInterval = NetworkStatistics{};
-	mInterval.peakUnsentBytes = unsentBytes;
-	mInterval.peakPendingPackets = pendingPackets;
+	mStorage->interval = NetworkStatistics{};
+	mStorage->interval.peakUnsentBytes = unsentBytes;
+	mStorage->interval.peakPendingPackets = pendingPackets;
 }
 
 ServerNetworkStatisticsReporter::ServerNetworkStatisticsReporter()

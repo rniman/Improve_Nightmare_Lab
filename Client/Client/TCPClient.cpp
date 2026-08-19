@@ -276,7 +276,7 @@ void CTcpClient::ResetReceiveState()
 	mHasPayloadSize = false;
 	mReceiveHead = ReceiveHead::Invalid;
 	mExpectedPayloadBytes = 0;
-	memset(mReceiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+	std::fill(mReceiveBuffer.begin(), mReceiveBuffer.end(), 0);
 }
 
 bool CTcpClient::CreateSocket(HWND window, const TCHAR* ipAddress)
@@ -395,8 +395,8 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 		}
 
 		INT8 rawReceiveHead = -1;
-		memcpy(&rawReceiveHead, mReceiveBuffer, sizeof(rawReceiveHead));
-		memset(mReceiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+		memcpy(&rawReceiveHead, mReceiveBuffer.data(), sizeof(rawReceiveHead));
+		std::fill(mReceiveBuffer.begin(), mReceiveBuffer.end(), 0);
 
 		// 등록되지 않은 HEAD는 payload 크기와 형식을 결정할 수 없으므로 스트림 해석을 중단한다.
 		// 연결을 종료해 이후 바이트를 다음 패킷의 HEAD로 잘못 처리하는 상황도 방지한다.
@@ -507,10 +507,10 @@ bool CTcpClient::TryProcessChangeSlotPacket(HWND window, SOCKET socket)
 	// 이후 검증이 추가되더라도 일부 멤버만 먼저 변경되는 상황을 방지한다.
 	INT8 receivedMainClientId = -1;
 	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
-	memcpy(&receivedMainClientId, mReceiveBuffer, sizeof(receivedMainClientId));
+	memcpy(&receivedMainClientId, mReceiveBuffer.data(), sizeof(receivedMainClientId));
 	memcpy(
 		receivedClientInfo.data(),
-		mReceiveBuffer + sizeof(receivedMainClientId),
+		mReceiveBuffer.data() + sizeof(receivedMainClientId),
 		sizeof(receivedClientInfo));
 
 	if (!IsAssignedClientId(receivedMainClientId))
@@ -556,14 +556,14 @@ bool CTcpClient::TryProcessInitPacket(SOCKET socket)
 	INT8 receivedMainClientId = -1;
 	INT8 receivedClientCount = -1;
 	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
-	memcpy(&receivedMainClientId, mReceiveBuffer, sizeof(receivedMainClientId));
+	memcpy(&receivedMainClientId, mReceiveBuffer.data(), sizeof(receivedMainClientId));
 	memcpy(
 		&receivedClientCount,
-		mReceiveBuffer + sizeof(receivedMainClientId),
+		mReceiveBuffer.data() + sizeof(receivedMainClientId),
 		sizeof(receivedClientCount));
 	memcpy(
 		receivedClientInfo.data(),
-		mReceiveBuffer + sizeof(receivedMainClientId) + sizeof(receivedClientCount),
+		mReceiveBuffer.data() + sizeof(receivedMainClientId) + sizeof(receivedClientCount),
 		sizeof(receivedClientInfo));
 
 	if (!IsAssignedClientId(receivedMainClientId))
@@ -605,7 +605,7 @@ bool CTcpClient::TryProcessUpdateDataPacket(SOCKET socket)
 	}
 
 	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
-	memcpy(receivedClientInfo.data(), mReceiveBuffer, sizeof(receivedClientInfo));
+	memcpy(receivedClientInfo.data(), mReceiveBuffer.data(), sizeof(receivedClientInfo));
 	if (!ValidateClientInfoArray(receivedClientInfo) ||
 		!ValidateClientTransforms(receivedClientInfo))
 	{
@@ -627,10 +627,10 @@ bool CTcpClient::TryProcessClientCountPacket(SOCKET socket)
 
 	INT8 receivedClientCount = -1;
 	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
-	memcpy(&receivedClientCount, mReceiveBuffer, sizeof(receivedClientCount));
+	memcpy(&receivedClientCount, mReceiveBuffer.data(), sizeof(receivedClientCount));
 	memcpy(
 		receivedClientInfo.data(),
-		mReceiveBuffer + sizeof(receivedClientCount),
+		mReceiveBuffer.data() + sizeof(receivedClientCount),
 		sizeof(receivedClientInfo));
 
 	if (!IsValidClientCount(receivedClientCount))
@@ -668,7 +668,7 @@ bool CTcpClient::TryProcessBlueSuitDeadPacket(SOCKET socket)
 	}
 
 	char deadUserId = -1;
-	memcpy(&deadUserId, mReceiveBuffer, sizeof(deadUserId));
+	memcpy(&deadUserId, mReceiveBuffer.data(), sizeof(deadUserId));
 	if (deadUserId < 0 || deadUserId >= static_cast<char>(MAX_CLIENT) || !mPlayers[deadUserId])
 	{
 		CloseConnection();
@@ -691,10 +691,10 @@ bool CTcpClient::TryProcessSpaceOutObjectsPacket(SOCKET socket)
 		}
 
 		std::uint16_t bufferSize = 0;
-		memcpy(&bufferSize, mReceiveBuffer, sizeof(bufferSize));
+		memcpy(&bufferSize, mReceiveBuffer.data(), sizeof(bufferSize));
 		mExpectedPayloadBytes = bufferSize;
 		mHasPayloadSize = true;
-		memset(mReceiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+		std::fill(mReceiveBuffer.begin(), mReceiveBuffer.end(), 0);
 
 		if (mExpectedPayloadBytes == 0 ||
 			mExpectedPayloadBytes > MAX_PACKET_PAYLOAD_SIZE ||
@@ -726,7 +726,7 @@ bool CTcpClient::TryProcessSpaceOutObjectsPacket(SOCKET socket)
 	}
 
 	vector<SC_SPACEOUT_OBJECT> spaceOutObjects(objectCount);
-	memcpy(spaceOutObjects.data(), mReceiveBuffer, mExpectedPayloadBytes);
+	memcpy(spaceOutObjects.data(), mReceiveBuffer.data(), mExpectedPayloadBytes);
 
 	// 하나라도 잘못된 ID나 변환값이 있으면 일부 오브젝트만 먼저 갱신하지 않고 패킷 전체를 거부한다.
 	for (size_t objectIndex = 0; objectIndex < spaceOutObjects.size(); ++objectIndex)
@@ -1101,7 +1101,7 @@ CTcpClient::ReceiveResult CTcpClient::ReceiveData(SOCKET socket, size_t expected
 	}
 
 	const int remainingBytes = static_cast<int>(expectedBytes) - mReceivedBytes;
-	const int receivedBytes = recv(socket, mReceiveBuffer + mReceivedBytes, remainingBytes, 0);
+	const int receivedBytes = recv(socket, mReceiveBuffer.data() + mReceivedBytes, remainingBytes, 0);
 	if (receivedBytes > 0)
 	{
 		mReceivedBytes += receivedBytes;

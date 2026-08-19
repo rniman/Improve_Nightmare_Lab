@@ -345,9 +345,12 @@ void TCPServer::ProcessReadEvent(SOCKET socket)
 		INT8 rawReceiveHead = -1;
 		memcpy(
 			&rawReceiveHead,
-			mSocketInfos[clientIndex].receiveBuffer,
+			mSocketInfos[clientIndex].receiveBuffer.data(),
 			sizeof(rawReceiveHead));
-		memset(mSocketInfos[clientIndex].receiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+		std::fill(
+			mSocketInfos[clientIndex].receiveBuffer.begin(),
+			mSocketInfos[clientIndex].receiveBuffer.end(),
+			0);
 
 		// 등록되지 않은 HEAD는 payload 크기와 형식을 결정할 수 없으므로 더 이상 스트림을 해석하지 않는다.
 		// 연결을 종료해 잘못된 바이트를 다음 패킷의 HEAD로 오인하는 상황도 방지한다.
@@ -443,7 +446,7 @@ bool TCPServer::TryProcessChangeSlotPacket(SOCKET socket, int& clientIndex)
 	}
 
 	INT8 selectedSlot = -1;
-	memcpy(&selectedSlot, mSocketInfos[clientIndex].receiveBuffer, sizeof(selectedSlot));
+	memcpy(&selectedSlot, mSocketInfos[clientIndex].receiveBuffer.data(), sizeof(selectedSlot));
 	// 슬롯 번호는 플레이어 및 소켓 배열의 인덱스로 사용되므로 범위를 벗어난 값은 무시할 수 없다.
 	// 잘못된 연결을 종료해 이후 패킷이 비정상적인 서버 상태에 반영되는 것을 방지한다.
 	if (selectedSlot < 0 || selectedSlot >= static_cast<INT8>(MAX_CLIENT))
@@ -464,7 +467,7 @@ bool TCPServer::TryProcessChangeSlotPacket(SOCKET socket, int& clientIndex)
 		mPlayers[selectedSlot]->SetPlayerId(selectedSlot);
 
 		// 소켓과 수신 진행 상태는 하나의 단위이므로 전체를 함께 이동한다.
-		mSocketInfos[selectedSlot] = mSocketInfos[clientIndex];
+		mSocketInfos[selectedSlot] = std::move(mSocketInfos[clientIndex]);
 		mSocketInfos[clientIndex] = SocketInfo{};
 
 		mUpdateInfo[selectedSlot].m_nClientId = selectedSlot;
@@ -511,7 +514,7 @@ bool TCPServer::TryProcessClientInputPacket(
 	size_t readOffset = 0;
 	auto readValue = [&socketInfo = mSocketInfos[clientIndex], &readOffset](auto& value)
 		{
-			memcpy(&value, socketInfo.receiveBuffer + readOffset, sizeof(value));
+			memcpy(&value, socketInfo.receiveBuffer.data() + readOffset, sizeof(value));
 			readOffset += sizeof(value);
 		};
 
@@ -1033,7 +1036,7 @@ INT8 TCPServer::RegisterClientSocket(
 
 		// 클라이언트 정보 초기화
 		mUpdateInfo[i].m_nClientId = i;
-		mSocketInfos[i] = socketInfo;
+		mSocketInfos[i] = std::move(socketInfo);
 		clientIndex = i;
 		break;
 	}
@@ -1770,7 +1773,7 @@ void TCPServer::ResetReceiveState(SocketInfo& socketInfo)
 	socketInfo.hasReceiveHead = false;
 	socketInfo.receivedBytes = 0;
 	socketInfo.currentPacketReceivedBytes = 0;
-	memset(socketInfo.receiveBuffer, 0, MAX_PACKET_PAYLOAD_SIZE);
+	std::fill(socketInfo.receiveBuffer.begin(), socketInfo.receiveBuffer.end(), 0);
 }
 
 TCPServer::ReceiveResult TCPServer::ReceiveData(int clientIndex, size_t expectedBytes)
@@ -1795,7 +1798,11 @@ TCPServer::ReceiveResult TCPServer::ReceiveData(int clientIndex, size_t expected
 	}
 
 	const int remainRecvByte = static_cast<int>(expectedBytes) - socketInfo.receivedBytes;
-	const int retval = recv(socketInfo.socket, socketInfo.receiveBuffer + socketInfo.receivedBytes, remainRecvByte, 0);
+	const int retval = recv(
+		socketInfo.socket,
+		socketInfo.receiveBuffer.data() + socketInfo.receivedBytes,
+		remainRecvByte,
+		0);
 	if (retval > 0)
 	{
 		socketInfo.receivedBytes += retval;

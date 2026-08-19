@@ -136,7 +136,7 @@ struct SocketInfo
 	// 소켓마다 HEAD와 DATA의 partial recv 진행 상태를 함께 보존한다.
 	bool hasReceiveHead = false;
 	int receivedBytes = 0;		// 현재까지 받은 데이터의 길이
-	char receiveBuffer[MAX_PACKET_PAYLOAD_SIZE] = {};
+	std::vector<char> receiveBuffer = std::vector<char>(MAX_PACKET_PAYLOAD_SIZE);
 	std::deque<PendingSend> sendQueue;
 	// 큐가 소유한 전체 버퍼 크기와 아직 send()하지 못한 바이트를 구분한다.
 	size_t pendingSendBytes = 0;
