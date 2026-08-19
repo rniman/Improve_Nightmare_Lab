@@ -26,7 +26,7 @@
 |---|---|---|---|
 | R-003 | Lifetime | 씬 전환 및 연결 종료 수명 | 로비에서 인게임 전환, 연결 종료, 게임 종료 경로의 null 접근과 소유 관계를 확인한다. |
 | R-004 | Rendering | 렌더 상태 및 리소스 수명 결합 | 씬 전환이나 command list 재설정 시 root signature, descriptor heap, GPU 리소스 수명이 유효한지 변경 범위마다 확인한다. |
-| R-005 | Replication | 입력 주기 및 고정 크기 상태 복제량 | 변경 전 Release 1인 접속에서 `KEYS_BUFFER`와 `UPDATE_DATA`가 초당 141~144회 발생했다. 구현 후 상태 복제는 연결당 60 packet/s, 642,060 byte/s로 유지됐고 Release 2인 접속에서는 총 120 packet/s, 1,284,120 byte/s로 선형 증가했다. 로컬 2인 조건의 큐 적체는 없었지만 입력은 낮은 FPS에 제한되고 5인·느린 네트워크 전송량은 검증 전이므로 고위험으로 유지한다. |
+| R-005 | Replication | 고정 크기 상태 복제량과 오브젝트 조사 비용 | 입력 deadline을 고정 기준으로 전진시킨 뒤 Release 60/144/무제한 FPS에서 `KEYS_BUFFER`가 60 packet/s를 유지했고, 30 FPS에서는 렌더 루프 상한에 따라 30 packet/s로 측정됐다. 로컬 3인에서 `UPDATE_DATA`는 연결당 60 packet/s, 총 180 packet/s와 1,926,180 byte/s였으며 송신 큐는 0을 유지했다. 그러나 10,700 byte payload 중 약 10,200 byte가 최대 5명분의 주변 오브젝트 ID·행렬 고정 배열이고, 이 배열을 위한 주변 조사가 실제 복제 시각보다 빠른 매 `SimulationLoop()`에서 실행된다. 5인은 테스트 PC의 렌더링 자원 한계로 미검증이며, 느린 네트워크와 패킷 분리 전까지 고위험으로 유지한다. |
 
 ### Maintainability
 
@@ -63,7 +63,7 @@
 | RS-008 | Network I/O | TCP partial send 데이터 유실 및 송신 요청 혼합 | 소켓별 송신 큐와 전송 위치를 유지해 partial send 및 `WSAEWOULDBLOCK` 이후 실제 `FD_WRITE`에서 재개한다. 애플리케이션 송신 요청은 `RequestSend()`로 분리하고 Client/Server x64 Debug 빌드와 서버 실행을 확인했다. |
 | RS-009 | Protocol | 외부 패킷 값 및 버퍼 범위 미검증 | 서버는 client head, slot, key mask, transform을 검증하고, 클라이언트는 server head, payload 크기, client/object ID, 개수, transform을 검증한 뒤 상태를 적용한다. 등록되지 않은 head나 스트림을 복구할 수 없는 값은 연결을 종료한다. |
 | RS-010 | Network diagnostics | 패킷별 통신량과 큐 상태 측정 부재 | 연결별·패킷 head별 TX/RX byte와 packet, 송신 큐 최고치, `WOULDBLOCK` 횟수를 1초 구간과 연결 전체 수명으로 측정하도록 분리했다. 이 통계로 R-005의 Release 기준선을 확보했다. |
-| RS-011 | Network cadence | 입력 수신과 상태 복제 트리거 결합 | `KEYS_BUFFER`의 패킷별 `UPDATE_DATA` 응답을 제거했다. Release 1인 검증에서 입력 48 packet/s와 독립적으로 상태 복제가 60 packet/s를 유지했고 이벤트 패킷의 즉시 전송도 확인했다. |
+| RS-011 | Network cadence | 입력 수신과 상태 복제 트리거 결합 | `KEYS_BUFFER`의 패킷별 `UPDATE_DATA` 응답을 제거하고 입력 deadline을 현재 시각에서 다시 잡지 않고 고정 간격으로 전진시켰다. Release 60/144/무제한 FPS에서 입력과 상태 복제가 각각 60 packet/s를 유지했고, 30 FPS 입력은 호출 가능한 프레임 수에 따라 30 packet/s였다. 로컬 3인에서도 상태 복제는 연결당 60 packet/s, 큐 0을 유지했으며 별도 사운드 이벤트 전송을 확인했다. |
 | RS-012 | Network event | 상태 복제 분리 후 게임 종료 패킷 미전송 | 승리 상태 설정 후 `RequestSend()`가 없어 정기 복제 중단과 함께 종료 패킷도 누락됐다. 상태 전환 시 각 활성 연결에 승리 패킷을 한 번 즉시 등록하도록 수정하고 Release 2인 플레이에서 WIN 패킷 로그를 확인했다. |
 | RS-013 | Network buffer | 연결 상태의 대형 인라인 저장소 | 클라이언트와 서버의 65,535 byte 수신 배열을 `vector<char>` 소유로 옮기고 약 16.5 KiB의 소켓 통계 저장소를 `unique_ptr` 소유로 옮겼다. `SocketInfo` 이동·교환의 대형 스택 임시 객체와 관련 경고를 제거하고 Release 2인 실행에서 통신 동작을 확인했다. |
 

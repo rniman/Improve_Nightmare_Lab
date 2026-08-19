@@ -955,8 +955,10 @@ void CTcpClient::SendInputIfDue()
 	}
 
 	RequestSend();
-	// 프레임 지연으로 놓친 입력 주기를 몰아서 보내지 않고 다음 기준을 현재 시각에서 잡는다.
-	mNextInputSendTime = currentTime + INPUT_SEND_INTERVAL;
+
+	// 놓친 주기는 건너뛰되 기존 기준 시각을 유지해 프레임별 초과 시간이 누적되지 않게 한다.
+	const auto elapsedIntervals = (currentTime - mNextInputSendTime) / INPUT_SEND_INTERVAL + 1;
+	mNextInputSendTime += INPUT_SEND_INTERVAL * elapsedIntervals;
 }
 
 void CTcpClient::RequestSend()
