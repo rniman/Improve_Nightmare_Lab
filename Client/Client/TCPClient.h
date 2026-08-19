@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <deque>
 #include <memory>
@@ -100,6 +101,7 @@ public:
 
 	bool CreateSocket(HWND window, const TCHAR* ipAddress);
 	void OnProcessingSocketMessage(HWND window, UINT messageId, WPARAM wParam, LPARAM lParam);
+	void SendInputIfDue();
 	void RequestSend();
 	void SendLoadingComplete();
 
@@ -182,6 +184,7 @@ private:
 	std::array<std::shared_ptr<CPlayer>, MAX_CLIENT> mPlayers;
 	std::deque<PendingSend> mSendQueue;
 	std::size_t mPendingSendBytes = 0;
+	std::chrono::steady_clock::time_point mNextInputSendTime = {};
 
 	SOCKET_STATE mSocketState = SOCKET_STATE::SEND_GAME_START;
 	INT8 mMainClientId = -1;

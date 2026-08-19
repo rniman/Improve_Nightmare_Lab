@@ -12,6 +12,7 @@ namespace
 {
 	constexpr size_t MAX_PENDING_SEND_BYTES = 4 * 1024 * 1024;
 	constexpr UINT SERVER_PORT = 9000;
+	constexpr auto INPUT_SEND_INTERVAL = std::chrono::microseconds{ 16'667 };
 	constexpr size_t MAX_SPACEOUT_OBJECTS_PER_PACKET =
 		MAX_PACKET_PAYLOAD_SIZE / sizeof(SC_SPACEOUT_OBJECT);
 	static_assert(MAX_SPACEOUT_OBJECTS_PER_PACKET > 0);
@@ -264,6 +265,7 @@ void CTcpClient::CloseConnection()
 
 	mSendQueue.clear();
 	mPendingSendBytes = 0;
+	mNextInputSendTime = {};
 	ResetReceiveState();
 }
 
@@ -414,6 +416,7 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 	case ReceiveHead::GameStart:
 		PostMessage(window, WM_START_GAME, 0, 0);
 		mSocketState = SOCKET_STATE::SEND_KEY_BUFFER;
+		mNextInputSendTime = std::chrono::steady_clock::now();
 		break;
 	case ReceiveHead::ChangeSlot:
 		if (!TryProcessChangeSlotPacket(window, socket))
@@ -936,6 +939,24 @@ void CTcpClient::ProcessWriteEvent()
 	{
 		CloseConnection();
 	}
+}
+
+void CTcpClient::SendInputIfDue()
+{
+	if (mSocketState != SOCKET_STATE::SEND_KEY_BUFFER)
+	{
+		return;
+	}
+
+	const auto currentTime = std::chrono::steady_clock::now();
+	if (currentTime < mNextInputSendTime)
+	{
+		return;
+	}
+
+	RequestSend();
+	// 프레임 지연으로 놓친 입력 주기를 몰아서 보내지 않고 다음 기준을 현재 시각에서 잡는다.
+	mNextInputSendTime = currentTime + INPUT_SEND_INTERVAL;
 }
 
 void CTcpClient::RequestSend()

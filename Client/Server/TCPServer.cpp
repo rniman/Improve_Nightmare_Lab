@@ -11,6 +11,7 @@
 namespace
 {
 	constexpr size_t MAX_PENDING_SEND_BYTES = 4 * 1024 * 1024;
+	constexpr auto STATE_REPLICATION_INTERVAL = std::chrono::microseconds{ 16'667 };
 	constexpr WORD VALID_CLIENT_KEY_MASK =
 		KEY_W | KEY_S | KEY_A | KEY_D |
 		KEY_1 | KEY_2 | KEY_3 | KEY_4 |
@@ -362,16 +363,19 @@ void TCPServer::ProcessReadEvent(SOCKET socket)
 		mSocketInfos[clientIndex].hasReceiveHead = true;
 	}
 
+	bool shouldRequestSend = false;
 	switch (mSocketInfos[clientIndex].receiveHead)
 	{
 	case ReceiveHead::GameStart:
 		ProcessGameStartPacket(clientIndex);
+		shouldRequestSend = true;
 		break;
 	case ReceiveHead::ChangeSlot:
 		if (!TryProcessChangeSlotPacket(socket, clientIndex))
 		{
 			return;
 		}
+		shouldRequestSend = true;
 		break;
 	case ReceiveHead::KeysBuffer:
 		if (!TryProcessClientInputPacket(socket, clientIndex, player))
@@ -380,7 +384,7 @@ void TCPServer::ProcessReadEvent(SOCKET socket)
 		}
 		break;
 	case ReceiveHead::LoadingComplete:
-		ProcessLoadingCompletePacket(clientIndex);
+		shouldRequestSend = ProcessLoadingCompletePacket(clientIndex);
 		break;
 	default:
 		break;
@@ -392,12 +396,16 @@ void TCPServer::ProcessReadEvent(SOCKET socket)
 		static_cast<std::uint8_t>(socketInfo.receiveHead),
 		socketInfo.currentPacketReceivedBytes);
 	ResetReceiveState(socketInfo);
-	RequestSend(clientIndex);
+	if (shouldRequestSend)
+	{
+		RequestSend(clientIndex);
+	}
 }
 
 void TCPServer::ProcessGameStartPacket(int clientIndex)
 {
 	mGameState = GAME_STATE::IN_GAME;
+	mCanReplicateState = false;
 	mZombieCount = 0;
 	mBlueSuitCount = 0;
 	for (int i = 0; i < MAX_CLIENT; ++i)
@@ -549,11 +557,28 @@ bool TCPServer::TryProcessClientInputPacket(
 	return true;
 }
 
-void TCPServer::ProcessLoadingCompletePacket(int clientIndex)
+bool TCPServer::ProcessLoadingCompletePacket(int clientIndex)
 {
+	if (mCanReplicateState)
+	{
+		return false;
+	}
+
 	mSocketInfos[clientIndex].isLoadingComplete = true;
-	int connectCount = 0;
-	int loadCompleteCount = 0;
+	if (!AreAllClientsLoadingComplete())
+	{
+		return false;
+	}
+
+	mCanReplicateState = true;
+	mNextStateReplicationTime = std::chrono::steady_clock::now();
+	mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_LOADING_COMPLETE;
+	return true;
+}
+
+bool TCPServer::AreAllClientsLoadingComplete() const
+{
+	bool hasActiveClient = false;
 	for (const auto& socketInfo : mSocketInfos)
 	{
 		if (!socketInfo.isUsed)
@@ -561,17 +586,13 @@ void TCPServer::ProcessLoadingCompletePacket(int clientIndex)
 			continue;
 		}
 
-		++connectCount;
-		if (socketInfo.isLoadingComplete)
+		hasActiveClient = true;
+		if (!socketInfo.isLoadingComplete)
 		{
-			++loadCompleteCount;
+			return false;
 		}
 	}
-
-	if (loadCompleteCount == connectCount)
-	{
-		mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_LOADING_COMPLETE;
-	}
+	return hasActiveClient;
 }
 
 void TCPServer::ProcessWriteEvent(SOCKET socket)
@@ -840,7 +861,7 @@ void TCPServer::SimulationLoop()
 	mTimer.Tick();
 	ReportNetworkStatisticsIfDue();
 
-	if (mGameState == GAME_STATE::IN_LOBBY)
+	if (mGameState != GAME_STATE::IN_GAME)
 	{
 		return;
 	}
@@ -877,6 +898,34 @@ void TCPServer::SimulationLoop()
 
 	UpdatePlayerReplicationData();
 	ProcessObjectReplication();
+	ReplicateStateIfDue();
+}
+
+void TCPServer::ReplicateStateIfDue()
+{
+	if (!mCanReplicateState)
+	{
+		return;
+	}
+
+	const auto currentTime = std::chrono::steady_clock::now();
+	if (currentTime < mNextStateReplicationTime)
+	{
+		return;
+	}
+
+	// 지연된 복제 횟수를 몰아서 보내지 않고 가장 최근 상태 하나만 전송한다.
+	mNextStateReplicationTime = currentTime + STATE_REPLICATION_INTERVAL;
+	for (int clientIndex = 0; clientIndex < static_cast<int>(mSocketInfos.size()); ++clientIndex)
+	{
+		const SocketInfo& socketInfo = mSocketInfos[clientIndex];
+		if (!socketInfo.isUsed || socketInfo.sendState != SOCKET_STATE::SEND_UPDATE_DATA)
+		{
+			continue;
+		}
+
+		RequestSend(clientIndex);
+	}
 }
 
 int TCPServer::DetermineEndGameState()
@@ -928,8 +977,9 @@ int TCPServer::DetermineEndGameState()
 
 void TCPServer::QueueEndGameNotifications(int endGameState)
 {
-	for (auto& socketInfo : mSocketInfos)
+	for (int clientIndex = 0; clientIndex < static_cast<int>(mSocketInfos.size()); ++clientIndex)
 	{
+		SocketInfo& socketInfo = mSocketInfos[clientIndex];
 		if (!socketInfo.isUsed)
 		{
 			continue;
@@ -943,6 +993,9 @@ void TCPServer::QueueEndGameNotifications(int endGameState)
 		{
 			socketInfo.sendState = SOCKET_STATE::SEND_ZOMBIE_WIN;
 		}
+
+		// 정기 상태 복제가 종료된 뒤에도 승리 결과는 상태 전환 시 즉시 한 번 전송한다.
+		RequestSend(clientIndex);
 	}
 }
 
@@ -1078,6 +1131,26 @@ bool TCPServer::DisconnectClient(SOCKET clientSocket)
 
 			otherSocketInfo.sendState = SOCKET_STATE::SEND_NUM_OF_CLIENT;
 			RequestSend(FindClientIndex(otherSocketInfo.socket));
+		}
+	}
+
+	// 로딩 중이던 마지막 미완료 클라이언트가 나가면 남은 클라이언트의 게임을 시작한다.
+	if (mGameState == GAME_STATE::IN_GAME &&
+		!mCanReplicateState &&
+		AreAllClientsLoadingComplete())
+	{
+		for (int index = 0; index < static_cast<int>(mSocketInfos.size()); ++index)
+		{
+			if (!mSocketInfos[index].isUsed)
+			{
+				continue;
+			}
+
+			mCanReplicateState = true;
+			mNextStateReplicationTime = std::chrono::steady_clock::now();
+			mSocketInfos[index].sendState = SOCKET_STATE::SEND_LOADING_COMPLETE;
+			RequestSend(index);
+			break;
 		}
 	}
 

@@ -18,7 +18,9 @@
 
 ### Bug
 
-현재 추적 중인 재현 가능한 버그는 없다.
+| ID | 영역 | 항목 | 재현 조건 및 현재 상태 |
+|---|---|---|---|
+| B-001 | Network event | 상태 복제 분리 후 게임 종료 패킷 미전송 | 실제 2인 플레이에서 승리 조건 이후 서버 TX가 계속 `none`이고 두 클라이언트의 `KEYS_BUFFER`만 수신됐다. 정기 복제 중단 전에 승리 패킷을 각 송신 큐에 한 번 즉시 등록하도록 수정했으며 Release 실행 재검증이 필요하다. |
 
 ### Risk
 
@@ -26,7 +28,7 @@
 |---|---|---|---|
 | R-003 | Lifetime | 씬 전환 및 연결 종료 수명 | 로비에서 인게임 전환, 연결 종료, 게임 종료 경로의 null 접근과 소유 관계를 확인한다. |
 | R-004 | Rendering | 렌더 상태 및 리소스 수명 결합 | 씬 전환이나 command list 재설정 시 root signature, descriptor heap, GPU 리소스 수명이 유효한지 변경 범위마다 확인한다. |
-| R-005 | Replication | 렌더 프레임 종속 입력·상태 복제 | 현재 요청-응답 흐름은 의도대로 동작하지만 Release 1인 접속에서 `KEYS_BUFFER`와 `UPDATE_DATA`가 초당 141~144회 발생했다. 전송량은 대체로 클라이언트 수, 렌더 FPS, 패킷 크기의 곱에 비례해 증가하므로 다중 접속과 느린 네트워크에서 큐 적체·지연으로 이어질 고위험이 있다. 두 전송 트리거를 고정 네트워크 주기로 분리하고 60/144/무제한 FPS 및 다중 접속에서 packet/s와 큐를 비교한다. |
+| R-005 | Replication | 입력 주기 및 고정 크기 상태 복제량 | 변경 전 Release 1인 접속에서 `KEYS_BUFFER`와 `UPDATE_DATA`가 초당 141~144회 발생했다. 구현 후 입력 48 Hz 조건에서도 상태 복제는 60 packet/s, 642,060 byte/s로 유지되고 큐 적체는 없었다. 입력은 최대 60 Hz지만 낮은 FPS에서는 렌더 빈도에 제한되며, 고정 크기 패킷의 다중 접속 전송량도 검증 전이므로 고위험으로 유지한다. |
 
 ### Maintainability
 
@@ -37,7 +39,6 @@
 | M-003 | Network | 패킷 파싱과 상태 적용 결합 | 수신 처리에서 프로토콜 해석과 게임 객체 변경이 섞여 있다. 안정성 수정이 필요한 처리부터 두 단계를 분리한다. |
 | M-004 | Resource | 일부 raw pointer 및 수동 수명 관리 | 전체 일괄 교체는 하지 않는다. 소유권이 불명확하거나 오류가 재현되는 리소스부터 정리한다. |
 | M-005 | Source layout | 큰 클래스와 긴 함수 | 크기 자체를 문제로 보지 않는다. 반복 수정되는 함수만 동작 단계 기준으로 추출한다. |
-| M-006 | Network cadence | 입력 수신과 상태 복제 트리거 결합 | 완성된 클라이언트 패킷마다 서버 `RequestSend()`가 호출되어 일반 상태의 `UPDATE_DATA`가 입력·렌더 빈도를 따른다. wire 포맷 변경 전에 두 트리거를 고정 주기로 분리한다. |
 
 ## Deferred
 
@@ -64,6 +65,7 @@
 | RS-008 | Network I/O | TCP partial send 데이터 유실 및 송신 요청 혼합 | 소켓별 송신 큐와 전송 위치를 유지해 partial send 및 `WSAEWOULDBLOCK` 이후 실제 `FD_WRITE`에서 재개한다. 애플리케이션 송신 요청은 `RequestSend()`로 분리하고 Client/Server x64 Debug 빌드와 서버 실행을 확인했다. |
 | RS-009 | Protocol | 외부 패킷 값 및 버퍼 범위 미검증 | 서버는 client head, slot, key mask, transform을 검증하고, 클라이언트는 server head, payload 크기, client/object ID, 개수, transform을 검증한 뒤 상태를 적용한다. 등록되지 않은 head나 스트림을 복구할 수 없는 값은 연결을 종료한다. |
 | RS-010 | Network diagnostics | 패킷별 통신량과 큐 상태 측정 부재 | 연결별·패킷 head별 TX/RX byte와 packet, 송신 큐 최고치, `WOULDBLOCK` 횟수를 1초 구간과 연결 전체 수명으로 측정하도록 분리했다. 이 통계로 R-005의 Release 기준선을 확보했다. |
+| RS-011 | Network cadence | 입력 수신과 상태 복제 트리거 결합 | `KEYS_BUFFER`의 패킷별 `UPDATE_DATA` 응답을 제거했다. Release 1인 검증에서 입력 48 packet/s와 독립적으로 상태 복제가 60 packet/s를 유지했고 이벤트 패킷의 즉시 전송도 확인했다. |
 
 ## 항목 작성 규칙
 

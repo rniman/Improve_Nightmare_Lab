@@ -570,7 +570,7 @@ void CGameFramework::ProcessInput()
 	}
 
 	//if ( && m_pScene) bProcessedByScene = m_pScene->ProcessInput(m_pKeysBuffer);
-	m_pTcpClient->RequestSend();
+	m_pTcpClient->SendInputIfDue();
 
 	if (!bProcessedByScene)
 	{

@@ -202,7 +202,8 @@ private:
 		SOCKET socket,
 		int clientIndex,
 		const std::shared_ptr<CServerPlayer>& player);
-	void ProcessLoadingCompletePacket(int clientIndex);
+	bool ProcessLoadingCompletePacket(int clientIndex);
+	bool AreAllClientsLoadingComplete() const;
 
 	// 연결 종료 원인과 관계없이 소켓 및 플레이어 상태를 한 번만 정리한다.
 	bool DisconnectClient(SOCKET clientSocket);
@@ -225,6 +226,7 @@ private:
 	int DetermineEndGameState();
 	void QueueEndGameNotifications(int endGameState);
 	void UpdatePlayerReplicationData();
+	void ReplicateStateIfDue();
 
 	void LoadScene();
 	void CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4World, const vector<BoundingOrientedBox>& voobb);
@@ -238,6 +240,7 @@ private:
 	int mGameState;
 	CTimer mTimer;
 	ServerNetworkStatisticsReporter mNetworkStatisticsReporter;
+	std::chrono::steady_clock::time_point mNextStateReplicationTime = {};
 	static INT8 sClientCount;
 
 	// 접속한 클라이언트들의 정보를 저장.
@@ -257,4 +260,5 @@ private:
 	//[0509] CServerPlayer에서 초기화하던 시작위치를 옮김
 	array<XMFLOAT3, 28> mPlayerStartPositions;
 	array<int, MAX_CLIENT> mPlayerStartPositionIndices;
+	bool mCanReplicateState = false;
 };
