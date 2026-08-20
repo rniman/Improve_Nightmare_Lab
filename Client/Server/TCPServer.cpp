@@ -810,7 +810,6 @@ bool TCPServer::Initialize(HWND hWnd)
 	}
 
 	mGameState = GAME_STATE::IN_LOBBY;
-	//mGameState = GAME_STATE::IN_GAME;
 
 	mCollisionManager = make_shared<CServerCollisionManager>();
 	mCollisionManager->CreateCollision(SPACE_FLOOR, SPACE_WIDTH, SPACE_DEPTH);

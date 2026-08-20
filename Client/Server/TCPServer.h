@@ -237,7 +237,7 @@ private:
 	void UpdateNearbyObjectReplicationData();
 	void InitializePlayerPosition(shared_ptr<CServerPlayer>& serverPlayer, int index);
 
-	int mGameState;
+	int mGameState = GAME_STATE::IN_LOBBY;
 	CTimer mTimer;
 	ServerNetworkStatisticsReporter mNetworkStatisticsReporter;
 	std::chrono::steady_clock::time_point mNextStateReplicationTime = {};
@@ -255,9 +255,8 @@ private:
 
 	vector<pair<int, int>> mDrawerIds; // <ObjectCount,type>
 
-	HWND mClientListBox;
+	HWND mClientListBox = nullptr;
 
-	//[0509] CServerPlayer에서 초기화하던 시작위치를 옮김
 	array<XMFLOAT3, 28> mPlayerStartPositions;
 	array<int, MAX_CLIENT> mPlayerStartPositionIndices;
 	bool mCanReplicateState = false;
