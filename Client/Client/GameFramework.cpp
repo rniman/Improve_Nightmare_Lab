@@ -21,10 +21,7 @@ UCHAR CGameFramework::m_pKeysBuffer[256] = {};
 int CGameFramework::m_nMainClientId = -1;
 
 float textX = 0.0f, textY = 0.0f;
-/////////////////////////////////////////////////////////
-//어디서든 참조할수 있도록한다.
 std::shared_ptr<CPlayer> CGameFramework::m_pMainPlayer;
-/////////////////////////////////////////////////////////
 
 //=========================================================================
 // 생성자/소멸자
@@ -67,7 +64,6 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	return(true);
 }
-//#define _WITH_CREATE_SWAPCHAIN_FOR_HWND
 
 void CGameFramework::OnDestroy()
 {
@@ -99,8 +95,6 @@ void CGameFramework::OnDestroy()
 void CGameFramework::BuildObjects()
 {
 	gGameTimer.Reset();
-	// CGameTimer& gameTimer = CGameTimer::GetInstance();
-	// gameTimer.Reset();
 
 	m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), NULL);
 	if (m_nGameState == GAME_STATE::IN_LOBBY)
@@ -120,9 +114,6 @@ void CGameFramework::ReleaseObjects()
 		m_d3dFramework_info_Resource->Unmap(0, nullptr);
 		m_cbFramework_info = nullptr;
 	}
-
-	//if (m_pScene) m_pScene->ReleaseObjects();
-	//if (m_pScene) delete m_pScene;
 }
 
 //=========================================================================
@@ -386,7 +377,6 @@ void CGameFramework::CreateCommandQueueAndList()
 			__uuidof(ID3D12CommandAllocator),
 			(void**)m_d3dCommandAllocator[i].GetAddressOf()
 		);
-		//ThrowIfFailed(m_d3d12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_d3dCommandAllocator[i])));
 	}
 	hResult = m_d3d12Device->CreateCommandList(
 		0,
@@ -428,8 +418,7 @@ void CGameFramework::CreateRenderTargetViews()
 
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_d3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
-	// 클리어 색상 값 설정
-	float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; // 검정색 (완전 불투명)
+	float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	for (UINT i = 0; i < m_nSwapChainBuffers; i++)
 	{
 		hResult = m_dxgiSwapChain->GetBuffer(i, __uuidof(ID3D12Resource), (void**)m_d3dSwapChainBackBuffers[i].GetAddressOf());
@@ -518,12 +507,11 @@ void CGameFramework::ChangeSwapChainState()
 		}
 	}
 
-	//[0514] 백버퍼 참조 없애야함
+	// ResizeBuffers 전에 D3D11-on-12와 D2D가 소유한 백 버퍼 참조를 모두 해제해야 한다.
 	if (m_bPrepareDrawText)
 	{
 		m_d3d11DeviceContext.Reset();
 		m_d3d11On12Device.Reset();
-		//m_dWriteFactory.Reset();
 		m_wrappedBackBuffers[0].Reset();
 		m_wrappedBackBuffers[1].Reset();
 		m_d2dFactory.Reset();
@@ -533,8 +521,6 @@ void CGameFramework::ChangeSwapChainState()
 		m_d2dDeviceContext.Reset();
 
 		m_textBrush.Reset();
-		//m_textFormat.Reset();
-		//m_idwGameCountTextFormat.Reset();
 	}
 
 	hResult = m_dxgiSwapChain->ResizeBuffers(2, m_nWndClientWidth, m_nWndClientHeight, dxgiSwapChainDesc.BufferDesc.Format, dxgiSwapChainDesc.Flags);
@@ -543,7 +529,7 @@ void CGameFramework::ChangeSwapChainState()
 
 	CreateRenderTargetViews();
 
-	//[0514] 백버퍼 참조 없애야함
+	// 새 백 버퍼에 대한 D3D11-on-12 래퍼와 D2D 렌더 타겟을 다시 만든다.
 	if (m_bPrepareDrawText)
 	{
 		PrepareDrawText();
@@ -569,7 +555,7 @@ void CGameFramework::ProcessInput()
 		return;
 	}
 
-	//if ( && m_pScene) bProcessedByScene = m_pScene->ProcessInput(m_pKeysBuffer);
+	// 입력 상태는 매 프레임 갱신하지만 실제 패킷 송신은 CTcpClient의 deadline이 제한한다.
 	m_pTcpClient->SendInputIfDue();
 
 	if (!bProcessedByScene)
@@ -636,7 +622,7 @@ void CGameFramework::PreRenderTasks(shared_ptr<CMainScene>& pMainScene)
 	{
 		SetPlayerObjectOfClient(nClientId);
 	}
-	else // 에러임
+	else
 	{
 		assert("FAIL CLIENT ID");
 	}
@@ -645,8 +631,7 @@ void CGameFramework::PreRenderTasks(shared_ptr<CMainScene>& pMainScene)
 	m_pMainPlayer->Update(0.01f);
 
 	AnimateObjects();
-	// 이곳에서 렌더링 하기전에 준비작업을 시행하도록한다. ex) 쉐도우맵 베이킹
-	// buildobject함수 호출 이후 처리되어야할 작업이다. -> 모든 객체들이 렌더링되어야 그림자맵을 생성함.
+	// 씬의 모든 객체가 생성된 뒤 첫 일반 프레임에서 사용할 선행 렌더 리소스를 준비한다.
 
 	HRESULT hResult = m_d3dCommandAllocator[m_nSwapChainBufferIndex]->Reset();
 	hResult = m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), nullptr);
@@ -659,9 +644,6 @@ void CGameFramework::PreRenderTasks(shared_ptr<CMainScene>& pMainScene)
 		D3D12_RESOURCE_STATE_RENDER_TARGET);
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_d3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
-
-	/*FLOAT ClearValue[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-	m_d3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, ClearValue, 0, NULL);*/
 
 	pMainScene->PrevRenderTask(m_d3dCommandList.Get());
 
@@ -677,8 +659,7 @@ void CGameFramework::PreRenderTasks(shared_ptr<CMainScene>& pMainScene)
 	m_d3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
 
 	WaitForGpuComplete();
-
-	//m_dxgiSwapChain->Present(0, 0); // 사전 렌더링은 프레임으로 사용할 일이 없으므로 화면전환 x
+	// 이 패스는 초기 리소스 준비 전용이므로 swap chain을 화면에 표시하지 않는다.
 
 	MoveToNextFrame();
 }
@@ -694,13 +675,11 @@ void CGameFramework::FrameAdvance()
 	{
 		ProcessInput();
 		AnimateObjects();
-		//soundManager.SetVolume(sound::LOBBY_SCENE, m_fBGMVolume);
 	}
 	else if (m_nGameState == GAME_STATE::IN_LOBBY)
 	{
 		ProcessInput();
 		AnimateObjects();
-		//soundManager.SetVolume(sound::MAIN_SCENE, m_fBGMVolume);
 	}
 	else if (m_nGameState == GAME_STATE::IN_LOADING)
 	{
@@ -710,7 +689,7 @@ void CGameFramework::FrameAdvance()
 		}
 		return;
 	}
-	else // GAME_STATE::BLUE_SUIT_WIN, GAME_STATE::ZOMBIE_WIN
+	else
 	{
 		AnimateEnding();
 		m_fEndingElapsedTime += gGameTimer.GetTimeElapsed();
@@ -722,7 +701,6 @@ void CGameFramework::FrameAdvance()
 	hResult = m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), nullptr);
 	m_pScene->PrepareCommandListState(m_d3dCommandList.Get());
 
-	// 렌더링
 	switch (m_nGameState)
 	{
 	case GAME_STATE::IN_LOBBY:
@@ -738,7 +716,7 @@ void CGameFramework::FrameAdvance()
 
 		pMainScene->ShadowRender(m_d3dCommandList.Get(), m_pCamera.lock(), 0);
 
-		//그림자맵 생성이 끝났을때의 처리.
+		// 그림자 패스에서 사용한 플레이어별 렌더 상태를 본 패스 전에 원복한다.
 		for (auto& pl : m_apPlayer)
 		{
 			if (pl->GetClientId() == -1)
@@ -774,7 +752,7 @@ void CGameFramework::FrameAdvance()
 
 		pMainScene->PrepareRender(m_d3dCommandList.Get(), m_pCamera.lock());
 		UpdateFrameworkShaderVariable();
-		pMainScene->Render(m_d3dCommandList.Get(), m_pCamera.lock(), 0); // Standard Render
+		pMainScene->Render(m_d3dCommandList.Get(), m_pCamera.lock(), 0);
 		pMainScene->AmbientOcclusionRender(m_d3dCommandList.Get(), m_pCamera.lock(), d3dRtvCPUDescriptorHandle);
 		pMainScene->PostProcessingRender(m_d3dCommandList.Get(), m_pCamera.lock(), d3dRtvCPUDescriptorHandle);
 
@@ -1000,6 +978,7 @@ void CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARA
 	{
 		m_nGameState = GAME_STATE::IN_LOADING;
 
+		// 메인 씬 생성이 동기적으로 진행되므로 로딩 화면을 먼저 GPU에 제출한다.
 		RenderLoading();
 		BuildObjects();
 
@@ -1011,7 +990,7 @@ void CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARA
 
 		m_apPlayer[m_nMainClientId]->SetGameStart();
 
-		//로드 완료 메시지 Send
+		// 서버는 모든 클라이언트의 씬 생성 완료를 확인한 뒤 상태 복제를 시작한다.
 		m_pTcpClient->SendLoadingComplete();
 	}
 	break;
@@ -1157,10 +1136,6 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 		{
 		case VK_UP:
 		{
-			//sharedobject.AddParticle(CParticleMesh::FOOTPRINT, XMFLOAT3());
-			//m_pScene->SetParticleTest(gGameTimer.GetTotalTime());
-			//m_pMainPlayer->SetHitRender(true);
-			//textX += 10.f;
 			TESTBOOL = false;
 			break;
 		}
@@ -1264,10 +1239,9 @@ void CGameFramework::OnProcessingEndGameMessage(WPARAM& wParam)
 
 void CGameFramework::PrepareDrawText()
 {
-	D2D1_FACTORY_OPTIONS d2dFactoryOptions = {}; //drawText
+	D2D1_FACTORY_OPTIONS d2dFactoryOptions = {};
 	d2dFactoryOptions.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
 
-	//DrawText
 	ComPtr<ID3D11Device> d3d11Device;
 	D3D11On12CreateDevice(
 		m_d3d12Device.Get(),
@@ -1308,9 +1282,6 @@ void CGameFramework::PrepareDrawText()
 		dpiX,
 		dpiY
 	);
-
-	//[CJI 0412] 텍스트를 렌더타겟에 그리고 이를 텍스처로 바꾼이후 다른 사물에 매핑하려고 했으나 실패(시간너무 끌어서 패스).. 나중에 한번 해보자.
-	//m_pTextobject = make_unique<TextObject>(m_d3d12Device.Get(), m_d3dCommandList.Get(), m_d3dSwapChainBackBuffers);
 
 	for (UINT n = 0; n < m_nSwapChainBuffers; n++)
 	{
@@ -1392,7 +1363,7 @@ void CGameFramework::RenderTextUI()
 
 	D2D1_SIZE_F rtSize = m_d2dRenderTargets[m_nSwapChainBufferIndex]->GetSize();
 
-	// 현재 백 버퍼에 대한 래핑된 렌더 타겟 자원을 획득합니다.
+	// D3D12 백 버퍼를 D2D가 사용할 동안 wrapped resource의 상태 전환 소유권을 획득한다.
 	m_d3d11On12Device->AcquireWrappedResources(m_wrappedBackBuffers[m_nSwapChainBufferIndex].GetAddressOf(), 1);
 	m_d2dDeviceContext->SetTarget(m_d2dRenderTargets[m_nSwapChainBufferIndex].Get());
 	m_d2dDeviceContext->BeginDraw();
@@ -1400,9 +1371,8 @@ void CGameFramework::RenderTextUI()
 	m_pMainPlayer->RenderTextUI(m_d2dDeviceContext, m_textFormat, m_textBrush);
 
 	ThrowIfFailed(m_d2dDeviceContext->EndDraw());
-	// 래핑된 렌더 타겟 자원을 해제합니다. 해제하면 래핑된 자원이 생성될 때 지정된 OutState로 백 버퍼 자원이 전환됩니다
+	// 해제 시 wrapped resource가 생성 당시 지정한 D3D12 PRESENT 상태로 전환된다.
 	m_d3d11On12Device->ReleaseWrappedResources(m_wrappedBackBuffers[m_nSwapChainBufferIndex].GetAddressOf(), 1);
-	//명령 목록을 공유 명령 큐에 제출하기 위해 플러시합니다.
 	m_d3d11DeviceContext->Flush();
 }
 
@@ -1450,8 +1420,6 @@ void CGameFramework::BuildLobbyObjects()
 
 	BindPlayersToTcpClient();
 
-	// m_pCamera.lock()->CreateShaderVariables(m_d3d12Device.Get(), m_d3dCommandList.Get());
-
 	ExecuteCommandListAndWaitForGpu();
 }
 
@@ -1474,7 +1442,8 @@ void CGameFramework::BuildMainObjects()
 
 	BindPlayersToTcpClient();
 
-	UINT ncbElementBytes = ((sizeof(CB_FRAMEWORK_INFO) + 255) & ~255); //256의 배수
+	// D3D12 constant buffer view 크기는 256 byte 배수여야 한다.
+	UINT ncbElementBytes = ((sizeof(CB_FRAMEWORK_INFO) + 255) & ~255);
 	m_d3dFramework_info_Resource = ::CreateBufferResource(
 		m_d3d12Device.Get(),
 		m_d3dCommandList.Get(),
@@ -1493,7 +1462,7 @@ void CGameFramework::BuildMainObjects()
 		m_pScene->ReleaseUploadBuffers();
 	}
 
-	PreRenderTasks(pMainScene); // 사전 렌더링 작업
+	PreRenderTasks(pMainScene);
 
 	int light_id = 0;
 	auto& LightCamera = pMainScene->GetLightCamera();
@@ -1511,12 +1480,13 @@ void CGameFramework::BuildMainObjects()
 	}
 	m_pCamera = m_pMainPlayer->GetCamera();
 
-	PrepareDrawText();// Scene이 초기화 되고 나서 수행해야함 SRV를 Scene이 가지고 있음.
+	PrepareDrawText();
 }
 
 void CGameFramework::BindPlayersToTcpClient()
 {
 	int nMainClientId = m_pTcpClient->GetMainClientId();
+	// 씬을 다시 만들면 플레이어 객체도 교체되므로 TCPClient의 참조를 새 객체로 갱신한다.
 	m_pScene->BuildObjects(m_d3d12Device.Get(), m_d3dCommandList.Get(), nMainClientId);
 
 	for (int i = 0; i < MAX_CLIENT; ++i)
