@@ -2,6 +2,7 @@
 #include <array>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <memory>
 #include <vector>
@@ -57,7 +58,9 @@ enum class ReceiveHead : INT8
 	SpaceOutObjects = 12,
 	LoadingComplete = 13,
 	PlayerState = 14,
-	NearbyObjects = 15
+	NearbyObjects = 15,
+	OpenableObjectState = 16,
+	OpenableObjectSnapshot = 17
 };
 
 struct CS_PLAYER_INFO
@@ -96,6 +99,31 @@ struct CS_NEARBY_OBJECT
 };
 static_assert(sizeof(CS_NEARBY_OBJECT) == 68);
 static_assert(sizeof(CS_NEARBY_OBJECT) * MAX_NEARBY_OBJECTS <= MAX_PACKET_PAYLOAD_SIZE);
+
+enum class OpenableObjectType : std::uint8_t
+{
+	Invalid = 0,
+	Door = 1,
+	Drawer = 2,
+	Count
+};
+
+struct CS_OPENABLE_OBJECT_STATE
+{
+	std::int32_t objectId = -1;
+	OpenableObjectType objectType = OpenableObjectType::Invalid;
+	std::uint8_t opened = 0;
+	std::uint16_t padding = 0;
+
+	constexpr bool IsValidOpenableObjectType() const noexcept
+	{
+		const std::uint8_t value = static_cast<std::uint8_t>(objectType);
+		return value > static_cast<std::uint8_t>(OpenableObjectType::Invalid) &&
+			value < static_cast<std::uint8_t>(OpenableObjectType::Count);
+	}
+};
+static_assert(sizeof(OpenableObjectType) == 1);
+static_assert(sizeof(CS_OPENABLE_OBJECT_STATE) == 8);
 
 class CTcpClient
 {
@@ -152,6 +180,8 @@ private:
 	bool TryProcessInitPacket(SOCKET socket);
 	bool TryProcessPlayerStatePacket(SOCKET socket);
 	bool TryProcessNearbyObjectsPacket(SOCKET socket);
+	bool TryProcessOpenableObjectStatePacket(SOCKET socket);
+	bool TryProcessOpenableObjectSnapshotPacket(SOCKET socket);
 	bool TryProcessClientCountPacket(SOCKET socket);
 	bool TryProcessBlueSuitDeadPacket(SOCKET socket);
 	bool TryProcessSpaceOutObjectsPacket(SOCKET socket);
@@ -159,6 +189,10 @@ private:
 	// 생성 실패, 소켓 오류, FD_CLOSE 및 소멸 시 동일한 경로로 정리한다.
 	void CloseConnection();
 	bool IsValidReceiveHead(INT8 head) const;
+	bool ValidateOpenableObjectState(
+		const CS_OPENABLE_OBJECT_STATE& objectState,
+		const char* packetName) const;
+	void ApplyOpenableObjectState(const CS_OPENABLE_OBJECT_STATE& objectState);
 	void ResetReceiveState();
 	ReceiveResult ReceiveData(SOCKET socket, std::size_t expectedBytes);
 	bool TryGetCollisionObject(

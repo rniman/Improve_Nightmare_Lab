@@ -81,6 +81,8 @@ public:
 	virtual void Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager) override;
 	virtual void UpdatePicking(INT8 nClientId) override;
 
+	virtual bool ShouldReplicateNearbyTransform() const override { return false; }
+
 	bool IsOpen() const { return m_bOpened; }
 
 	shared_ptr<CServerItemObject> m_pStoredItem;
@@ -103,6 +105,10 @@ public:
 
 	virtual void Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager) override;
 	virtual void UpdatePicking(INT8 nClientId) override;
+
+	virtual bool ShouldReplicateNearbyTransform() const override { return false; }
+
+	bool IsOpen() const { return m_bOpened; }
 
 private:
 	bool m_bOpened = false;

@@ -198,6 +198,15 @@ void TCPServer::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 		RequestSend(clientIndex);
 		break;
 	}
+	case WM_OPENABLE_OBJECT_STATE:
+	{
+		const int objectId = static_cast<int>(wParam);
+		const OpenableObjectType objectType =
+			static_cast<OpenableObjectType>(LOWORD(lParam));
+		const bool opened = HIWORD(lParam) != 0;
+		BroadcastOpenableObjectState(objectId, objectType, opened);
+		break;
+	}
 	default:
 		break;
 	}
@@ -758,6 +767,7 @@ void TCPServer::RequestSend(int clientIndex)
 				mPlayers[i]->GameStartLogic();
 			}
 		}
+		BroadcastOpenableObjectSnapshot();
 		if (mSocketInfos[clientIndex].isUsed)
 		{
 			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
@@ -1026,6 +1036,92 @@ void TCPServer::QueueEndGameNotifications(int endGameState)
 
 		// 정기 상태 복제가 종료된 뒤에도 승리 결과는 상태 전환 시 즉시 한 번 전송한다.
 		RequestSend(clientIndex);
+	}
+}
+
+void TCPServer::BroadcastOpenableObjectState(
+	int objectId,
+	OpenableObjectType objectType,
+	bool opened)
+{
+	SC_OPENABLE_OBJECT_STATE objectState = {};
+	objectState.objectId = objectId;
+	objectState.objectType = objectType;
+	objectState.opened = opened ? 1 : 0;
+	if (objectState.objectId < 0 || !objectState.IsValidOpenableObjectType())
+	{
+		return;
+	}
+
+	for (int clientIndex = 0; clientIndex < static_cast<int>(mSocketInfos.size()); ++clientIndex)
+	{
+		if (!mSocketInfos[clientIndex].isUsed)
+		{
+			continue;
+		}
+
+		SubmitSendData(
+			clientIndex,
+			static_cast<INT8>(SOCKET_STATE::SEND_OPENABLE_OBJECT_STATE),
+			objectState);
+	}
+}
+
+void TCPServer::BroadcastOpenableObjectSnapshot()
+{
+	const int collisionObjectCount = CServerCollisionManager::GetNumberOfCollisionObject();
+	std::vector<SC_OPENABLE_OBJECT_STATE> objectStates;
+	objectStates.reserve(collisionObjectCount);
+
+	for (int objectId = 0; objectId < collisionObjectCount; ++objectId)
+	{
+		const shared_ptr<CServerGameObject> gameObject =
+			mCollisionManager->GetCollisionObjectWithNumber(objectId);
+
+		SC_OPENABLE_OBJECT_STATE objectState = {};
+		objectState.objectId = objectId;
+		if (const shared_ptr<CServerDoorObject> door =
+			dynamic_pointer_cast<CServerDoorObject>(gameObject))
+		{
+			objectState.objectType = OpenableObjectType::Door;
+			objectState.opened = door->IsOpen() ? 1 : 0;
+		}
+		else if (const shared_ptr<CServerDrawerObject> drawer =
+			dynamic_pointer_cast<CServerDrawerObject>(gameObject))
+		{
+			objectState.objectType = OpenableObjectType::Drawer;
+			objectState.opened = drawer->IsOpen() ? 1 : 0;
+		}
+		else
+		{
+			continue;
+		}
+
+		objectStates.push_back(objectState);
+	}
+
+	const size_t payloadBytes = sizeof(SC_OPENABLE_OBJECT_STATE) * objectStates.size();
+	if (payloadBytes > MAX_PACKET_PAYLOAD_SIZE)
+	{
+		return;
+	}
+
+	const std::uint16_t wirePayloadBytes = static_cast<std::uint16_t>(payloadBytes);
+	std::vector<char> packetBuffer;
+	packetBuffer.reserve(sizeof(INT8) + sizeof(wirePayloadBytes) + payloadBytes);
+	packetBuffer.push_back(static_cast<INT8>(SOCKET_STATE::SEND_OPENABLE_OBJECT_SNAPSHOT));
+	AppendBufferData(packetBuffer, &wirePayloadBytes, sizeof(wirePayloadBytes));
+	if (!objectStates.empty())
+	{
+		AppendBufferData(packetBuffer, objectStates.data(), payloadBytes);
+	}
+
+	for (int clientIndex = 0; clientIndex < static_cast<int>(mSocketInfos.size()); ++clientIndex)
+	{
+		if (mSocketInfos[clientIndex].isUsed)
+		{
+			EnqueueSendBuffer(clientIndex, packetBuffer);
+		}
 	}
 }
 
@@ -1665,7 +1761,7 @@ void TCPServer::UpdateNearbyObjectReplicationData()
 					widthIndex,
 					depthIndex))
 				{
-					if (!gameObject || gameObject->IsStatic())
+					if (!gameObject || !gameObject->ShouldReplicateNearbyTransform())
 					{
 						continue;
 					}

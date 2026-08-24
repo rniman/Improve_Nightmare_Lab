@@ -41,7 +41,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvCPUDescriptorStartHandle;
 D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvGPUDescriptorStartHandle;
 D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dUavCPUDescriptorStartHandle;
 D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dUavGPUDescriptorStartHandle;
- 
+
 D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvCPUDescriptorNextHandle;
 D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvGPUDescriptorNextHandle;
 D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvCPUDescriptorNextHandle;
@@ -1647,6 +1647,8 @@ void CMainScene::LoadScene(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 					else
 					{
 						InsStShader->m_vFloorObjects[n_curfloor].push_back(pLoadedModel->m_pModelRootObject);
+						// 렌더 목록과 별개로 등록해야 인스턴스 자식의 Animate()가 매 프레임 호출된다.
+						InsStShader->AddGameObject(pLoadedModel->m_pModelRootObject);
 					}
 				}
 				else if (!strcmp(pstrToken, "<Animation>:"))
@@ -2079,7 +2081,7 @@ void CMainScene::RestoreRawAmbientOcclusionResourceState(ID3D12GraphicsCommandLi
 
 namespace
 {
-	bool StreamReadString(ifstream & in, string & str)
+	bool StreamReadString(ifstream& in, string& str)
 	{
 		// 문자열의 길이 읽기
 		char strLength;
@@ -2103,7 +2105,7 @@ namespace
 	}
 
 	template<class T>
-	void StreamReadVariable(ifstream & in, T & data)
+	void StreamReadVariable(ifstream& in, T& data)
 	{
 		in.read(reinterpret_cast<char*>(&data), sizeof(T));
 	}

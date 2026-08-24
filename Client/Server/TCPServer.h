@@ -11,6 +11,7 @@
 #include "Timer.h"
 constexpr size_t MAX_CLIENT{ 5 };
 constexpr size_t MAX_NEARBY_OBJECTS{ 30 };
+constexpr UINT WM_OPENABLE_OBJECT_STATE{ WM_USER + 3 };
 
 constexpr WORD KEY_W{ 0x01 };
 constexpr WORD KEY_S{ 0x02 };
@@ -84,6 +85,31 @@ struct SC_NEARBY_OBJECT
 static_assert(sizeof(SC_NEARBY_OBJECT) == 68);
 static_assert(sizeof(SC_NEARBY_OBJECT) * MAX_NEARBY_OBJECTS <= MAX_PACKET_PAYLOAD_SIZE);
 
+enum class OpenableObjectType : std::uint8_t
+{
+	Invalid = 0,
+	Door = 1,
+	Drawer = 2,
+	Count
+};
+
+struct SC_OPENABLE_OBJECT_STATE
+{
+	std::int32_t objectId = -1;
+	OpenableObjectType objectType = OpenableObjectType::Invalid;
+	std::uint8_t opened = 0;
+	std::uint16_t padding = 0;
+
+	constexpr bool IsValidOpenableObjectType() const noexcept
+	{
+		const std::uint8_t value = static_cast<std::uint8_t>(objectType);
+		return value > static_cast<std::uint8_t>(OpenableObjectType::Invalid) &&
+			value < static_cast<std::uint8_t>(OpenableObjectType::Count);
+	}
+};
+static_assert(sizeof(OpenableObjectType) == 1);
+static_assert(sizeof(SC_OPENABLE_OBJECT_STATE) == 8);
+
 enum class SOCKET_STATE : INT8
 {
 	SEND_ID = 0,
@@ -103,7 +129,9 @@ enum class SOCKET_STATE : INT8
 	SEND_SPACEOUT_OBJECTS = 12,
 	SEND_LOADING_COMPLETE = 13,
 	SEND_PLAYER_STATE = 14,
-	SEND_NEARBY_OBJECTS = 15
+	SEND_NEARBY_OBJECTS = 15,
+	SEND_OPENABLE_OBJECT_STATE = 16,
+	SEND_OPENABLE_OBJECT_SNAPSHOT = 17
 };
 
 enum class ReceiveHead : INT8
@@ -226,6 +254,11 @@ private:
 	void QueueEndGameNotifications(int endGameState);
 	void UpdatePlayerReplicationData();
 	void ReplicateStateIfDue();
+	void BroadcastOpenableObjectState(
+		int objectId,
+		OpenableObjectType objectType,
+		bool opened);
+	void BroadcastOpenableObjectSnapshot();
 
 	void LoadScene();
 	void CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4World, const vector<BoundingOrientedBox>& voobb);

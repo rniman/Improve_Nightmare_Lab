@@ -2,6 +2,14 @@
 #include "Player.h"
 #include "EnvironmentObject.h"
 
+namespace
+{
+	constexpr float DRAWER_OPEN_DISTANCE = 0.6f;
+	constexpr float DRAWER_MOVE_SPEED = 2.0f;
+	constexpr float DOOR_OPEN_ANGLE = 150.0f;
+	constexpr float DOOR_ROTATION_SPEED = 120.0f;
+}
+
 CItemObject::CItemObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 	: CGameObject(pd3dDevice, pd3dCommandList)
 {
@@ -50,10 +58,10 @@ CDrawerObject::CDrawerObject(char* pstrFrameName, XMFLOAT4X4& xmf4x4World, CMesh
 {
 	m_nCollisionType = 2;
 
-	m_xmf3OriginPosition = XMFLOAT3(xmf4x4World._41, xmf4x4World._42, xmf4x4World._43);
 	m_xmf3Forward = XMFLOAT3(1.0f, 0.0f, 0.0f);
 	XMMATRIX mtxWorld = XMLoadFloat4x4(&m_xmf4x4World);
 	m_xmf3Forward = Vector3::TransformNormal(m_xmf3Forward, mtxWorld);
+	m_xmf4x4OriginWorld = xmf4x4World;
 
 	m_pInstanceObject = pGameObject;
 }
@@ -96,21 +104,48 @@ void CDrawerObject::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 
 void CDrawerObject::Animate(float fElapsedTime)
 {
+	if (m_bAnimate)
+	{
+		const float targetDistance = m_bOpened ? DRAWER_OPEN_DISTANCE : 0.0f;
+		const float remainingDistance = targetDistance - m_fOpenDistance;
+		const float maxMoveDistance = (std::max)(fElapsedTime, 0.0f) * DRAWER_MOVE_SPEED;
+		const float moveDistance = (std::clamp)(
+			remainingDistance,
+			-maxMoveDistance,
+			maxMoveDistance);
+
+		m_fOpenDistance += moveDistance;
+		if (std::fabs(remainingDistance) <= maxMoveDistance)
+		{
+			m_fOpenDistance = targetDistance;
+			m_bAnimate = false;
+		}
+
+		const XMFLOAT3 offset = Vector3::ScalarProduct(m_xmf3Forward, m_fOpenDistance);
+		m_xmf4x4ToParent = m_xmf4x4OriginWorld;
+		m_xmf4x4ToParent._41 += offset.x;
+		m_xmf4x4ToParent._42 += offset.y;
+		m_xmf4x4ToParent._43 += offset.z;
+		m_xmf4x4World = m_xmf4x4ToParent;
+	}
+
 	CGameObject::Animate(fElapsedTime);
 }
 
 void CDrawerObject::UpdatePicking()
 {
-	if (m_bOpened)
+	ApplyAuthoritativeState(!m_bOpened);
+}
+
+void CDrawerObject::ApplyAuthoritativeState(bool opened)
+{
+	if (m_bOpened == opened)
 	{
-		m_bOpened = false;
-		m_bAnimate = true;
+		return;
 	}
-	else
-	{
-		m_bOpened = true;
-		m_bAnimate = true;
-	}
+
+	m_bOpened = opened;
+	m_bAnimate = true;
 }
 
 /// <CGameObject - CDrawerObject>
@@ -123,6 +158,7 @@ CDoorObject::CDoorObject(char* pstrFrameName, XMFLOAT4X4& xmf4x4World, CMesh* pM
 	m_nCollisionType = 2;
 	m_pInstanceObject = pGameObject;
 	m_nInstanceNumber = dynamic_pointer_cast<CInstanceObject>(pGameObject)->GetInstanceNumber();
+	m_xmf4x4OriginWorld = xmf4x4World;
 }
 
 CDoorObject::~CDoorObject()
@@ -165,45 +201,44 @@ void CDoorObject::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 
 void CDoorObject::Animate(float fElapsedTime)
 {
-	if ((m_bOpened && m_fRotationAngle < m_fDoorAngle) || (!m_bOpened && m_fRotationAngle > m_fDoorAngle))
+	const float remainingAngle = m_fDoorAngle - m_fRotationAngle;
+	if (remainingAngle != 0.0f)
 	{
-		m_fRotationAngle += m_bOpened ? fElapsedTime * 60.0f : -fElapsedTime * 60.0f;
-		float fRotationAngle = m_bOpened ? XMConvertToRadians(fElapsedTime * 60.0f) : -XMConvertToRadians(fElapsedTime * 60.0f);
-		if ((m_bOpened && m_fRotationAngle > m_fDoorAngle) || (!m_bOpened && m_fRotationAngle < m_fDoorAngle))
+		const float maxRotationAngle = (std::max)(fElapsedTime, 0.0f) * DOOR_ROTATION_SPEED;
+		const float rotationAngle = (std::clamp)(remainingAngle, -maxRotationAngle,	maxRotationAngle);
+
+		m_fRotationAngle += rotationAngle;
+		if (std::fabs(remainingAngle) <= maxRotationAngle)
 		{
 			m_fRotationAngle = m_fDoorAngle;
 		}
-		else
-		{
-			//Z-up 모델임
-			XMMATRIX mtxRotate = XMMatrixRotationRollPitchYaw(XMConvertToRadians(0.0f), XMConvertToRadians(0.0f), fRotationAngle);
-			m_xmf4x4World = Matrix4x4::Multiply(mtxRotate, m_xmf4x4World);
 
-			// Instancing 객체는 world행렬만 수정해주면됨
-			//UpdateTransform(NULL);
-		}
+		// Z-up 모델의 원본 행렬에 현재 누적 각도를 적용해 네트워크 보정과 증분 오차가 누적되지 않게 한다.
+		XMMATRIX mtxRotate = XMMatrixRotationRollPitchYaw(
+			XMConvertToRadians(0.0f),
+			XMConvertToRadians(0.0f),
+			XMConvertToRadians(m_fRotationAngle));
+		m_xmf4x4World = Matrix4x4::Multiply(mtxRotate, m_xmf4x4OriginWorld);
+		m_xmf4x4ToParent = m_xmf4x4World;
 	}
 
-	if (m_pSkinnedAnimationController) m_pSkinnedAnimationController->AdvanceTime(fElapsedTime, this);
-
-	AnimateOOBB();
-
-	if (m_pSibling) m_pSibling->Animate(fElapsedTime);
-	if (m_pChild) m_pChild->Animate(fElapsedTime);
+	CGameObject::Animate(fElapsedTime);
 }
 
 void CDoorObject::UpdatePicking()
 {
-	if (m_bOpened)
+	ApplyAuthoritativeState(!m_bOpened);
+}
+
+void CDoorObject::ApplyAuthoritativeState(bool opened)
+{
+	if (m_bOpened == opened)
 	{
-		m_bOpened = false;
-		m_fDoorAngle = 0.0f;
+		return;
 	}
-	else
-	{
-		m_bOpened = true;
-		m_fDoorAngle = 150.0f;
-	}
+
+	m_bOpened = opened;
+	m_fDoorAngle = opened ? DOOR_OPEN_ANGLE : 0.0f;
 }
 
 /// <CGameObject - CDrawerObject>

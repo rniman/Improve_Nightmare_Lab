@@ -84,6 +84,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 	case WM_ACTIVATE:
 	case WM_SOUND:
+	case WM_OPENABLE_OBJECT_STATE:
 		OnProcessingWindowMessage(hWnd, uMsg, wParam, lParam);
 		break;
 	case WM_SOCKET: // 소켓 관련 윈도우 메시지
@@ -102,6 +103,7 @@ LRESULT CALLBACK OnProcessingWindowMessage(HWND hWnd, UINT uMsg, WPARAM wParam, 
 	{
 	case WM_ACTIVATE:
 	case WM_SOUND:
+	case WM_OPENABLE_OBJECT_STATE:
 		g_tcpServer.OnProcessingWindowMessage(hWnd, uMsg, wParam, lParam);
 		break;
 	}

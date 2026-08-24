@@ -137,8 +137,13 @@ void CServerDrawerObject::UpdatePicking(INT8 nClientId)
 		PostMessage(TCPServer::m_hWnd, WM_SOUND, (WPARAM)SOUND_MESSAGE::OPEN_DRAWER, (LPARAM)nClientId);
 	}
 
-	//소리를 알려야함
-
+	PostMessage(
+		TCPServer::m_hWnd,
+		WM_OPENABLE_OBJECT_STATE,
+		static_cast<WPARAM>(GetCollisionNum()),
+		static_cast<LPARAM>(MAKELPARAM(
+			static_cast<WORD>(OpenableObjectType::Drawer),
+			static_cast<WORD>(m_bOpened))));
 }
 
 /// <CGameObject - CDrawerObject>
@@ -192,6 +197,13 @@ void CServerDoorObject::UpdatePicking(INT8 nClientId)
 		PostMessage(TCPServer::m_hWnd, WM_SOUND, (WPARAM)SOUND_MESSAGE::OPEN_DOOR, (LPARAM)nClientId);
 	}
 
+	PostMessage(
+		TCPServer::m_hWnd,
+		WM_OPENABLE_OBJECT_STATE,
+		static_cast<WPARAM>(GetCollisionNum()),
+		static_cast<LPARAM>(MAKELPARAM(
+			static_cast<WORD>(OpenableObjectType::Door),
+			static_cast<WORD>(m_bOpened))));
 }
 
 /// <CGameObject - CDrawerObject>

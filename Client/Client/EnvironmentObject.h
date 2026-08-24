@@ -49,13 +49,16 @@ public:
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList) override;
 	virtual void Animate(float fElapsedTime) override;
 	virtual void UpdatePicking() override;
+	void ApplyAuthoritativeState(bool opened);
+
 private:
 	weak_ptr<CGameObject> m_pInstanceObject;
 
 	bool m_bOpened = false;
 	bool m_bAnimate = false;
-	XMFLOAT3 m_xmf3OriginPosition;
+	float m_fOpenDistance = 0.0f;
 	XMFLOAT3 m_xmf3Forward;
+	XMFLOAT4X4 m_xmf4x4OriginWorld;
 };
 
 /// <CGameObject - CDrawerObject>
@@ -71,6 +74,7 @@ public:
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList) override;
 	virtual void Animate(float fElapsedTime) override;
 	virtual void UpdatePicking() override;
+	void ApplyAuthoritativeState(bool opened);
 
 private:
 	int m_nInstanceNumber = 0;
@@ -79,6 +83,7 @@ private:
 	bool m_bOpened = false;
 	float m_fDoorAngle = 0.0f;
 	float m_fRotationAngle = 0.0f;
+	XMFLOAT4X4 m_xmf4x4OriginWorld;
 };
 
 /// <CGameObject - CDrawerObject>

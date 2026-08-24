@@ -1,12 +1,10 @@
 #include "stdafx.h"
 #include "TCPClient.h"
 #include "GameFramework.h"
+#include "EnvironmentObject.h"
 #include "Player.h"
 #include "SharedObject.h"
 #include "Sound.h"
-
-#include <cmath>
-#include <cstdio>
 
 namespace
 {
@@ -399,6 +397,18 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 			return;
 		}
 		break;
+	case ReceiveHead::OpenableObjectState:
+		if (!TryProcessOpenableObjectStatePacket(socket))
+		{
+			return;
+		}
+		break;
+	case ReceiveHead::OpenableObjectSnapshot:
+		if (!TryProcessOpenableObjectSnapshotPacket(socket))
+		{
+			return;
+		}
+		break;
 	case ReceiveHead::ClientCount:
 		if (!TryProcessClientCountPacket(socket))
 		{
@@ -644,6 +654,87 @@ bool CTcpClient::TryProcessNearbyObjectsPacket(SOCKET socket)
 	return true;
 }
 
+bool CTcpClient::TryProcessOpenableObjectStatePacket(SOCKET socket)
+{
+	CS_OPENABLE_OBJECT_STATE objectState = {};
+	if (!HandleReceiveResult(ReceiveData(socket, sizeof(objectState))))
+	{
+		return false;
+	}
+
+	memcpy(&objectState, mReceiveBuffer.data(), sizeof(objectState));
+	if (!ValidateOpenableObjectState(objectState, "OPENABLE_OBJECT_STATE"))
+	{
+		CloseConnection();
+		return false;
+	}
+
+	ApplyOpenableObjectState(objectState);
+	return true;
+}
+
+bool CTcpClient::TryProcessOpenableObjectSnapshotPacket(SOCKET socket)
+{
+	if (!mHasPayloadSize)
+	{
+		if (!HandleReceiveResult(ReceiveData(socket, sizeof(std::uint16_t))))
+		{
+			return false;
+		}
+
+		std::uint16_t payloadBytes = 0;
+		memcpy(&payloadBytes, mReceiveBuffer.data(), sizeof(payloadBytes));
+		mExpectedPayloadBytes = payloadBytes;
+		mHasPayloadSize = true;
+		std::fill(mReceiveBuffer.begin(), mReceiveBuffer.end(), 0);
+
+		if (mExpectedPayloadBytes % sizeof(CS_OPENABLE_OBJECT_STATE) != 0)
+		{
+			LogInvalidServerPacket(
+				"OPENABLE_OBJECT_SNAPSHOT",
+				"payloadSize",
+				static_cast<int>(mExpectedPayloadBytes));
+			CloseConnection();
+			return false;
+		}
+	}
+
+	if (!HandleReceiveResult(ReceiveData(socket, mExpectedPayloadBytes)))
+	{
+		return false;
+	}
+
+	const size_t objectCount = mExpectedPayloadBytes / sizeof(CS_OPENABLE_OBJECT_STATE);
+	const auto readObjectState = [this](size_t objectIndex)
+	{
+			CS_OPENABLE_OBJECT_STATE objectState = {};
+			memcpy(
+				&objectState,
+				mReceiveBuffer.data() + objectIndex * sizeof(CS_OPENABLE_OBJECT_STATE),
+				sizeof(objectState));
+			return objectState;
+	};
+
+	// 전체 snapshot을 먼저 검증해 잘못된 entry 앞부분만 적용되는 상황을 막는다.
+	for (size_t objectIndex = 0; objectIndex < objectCount; ++objectIndex)
+	{
+		if (!ValidateOpenableObjectState(
+			readObjectState(objectIndex),
+			"OPENABLE_OBJECT_SNAPSHOT"))
+		{
+			CloseConnection();
+			return false;
+		}
+	}
+
+	for (size_t objectIndex = 0; objectIndex < objectCount; ++objectIndex)
+	{
+		ApplyOpenableObjectState(readObjectState(objectIndex));
+	}
+
+	return true;
+}
+
 bool CTcpClient::TryProcessPlayerStatePacket(SOCKET socket)
 {
 	std::array<CS_PLAYER_STATE, MAX_CLIENT> playerStates = {};
@@ -834,10 +925,106 @@ bool CTcpClient::IsValidReceiveHead(INT8 head) const
 	case ReceiveHead::LoadingComplete:
 	case ReceiveHead::PlayerState:
 	case ReceiveHead::NearbyObjects:
+	case ReceiveHead::OpenableObjectState:
+	case ReceiveHead::OpenableObjectSnapshot:
 		return true;
 	default:
 		return false;
 	}
+}
+
+bool CTcpClient::ValidateOpenableObjectState(
+	const CS_OPENABLE_OBJECT_STATE& objectState,
+	const char* packetName) const
+{
+	if (objectState.objectId < 0)
+	{
+		LogInvalidServerPacket(
+			packetName,
+			"objectId",
+			objectState.objectId);
+		return false;
+	}
+	if (!objectState.IsValidOpenableObjectType())
+	{
+		LogInvalidServerPacket(
+			packetName,
+			"objectType",
+			static_cast<int>(objectState.objectType));
+		return false;
+	}
+	if (objectState.opened > 1)
+	{
+		LogInvalidServerPacket(
+			packetName,
+			"opened",
+			objectState.opened);
+		return false;
+	}
+
+#ifdef LOADSCENE
+	if (!IsValidObjectId(objectState.objectId))
+	{
+		// 씬 로딩 중에는 아직 충돌 오브젝트가 생성되지 않았을 수 있다.
+		if (!mLoadingCompleteReceived)
+		{
+			return true;
+		}
+
+		LogInvalidServerPacket(
+			packetName,
+			"objectId",
+			objectState.objectId);
+		return false;
+	}
+
+	const shared_ptr<CGameObject> gameObject =
+		g_collisionManager.GetCollisionObjectWithNumber(objectState.objectId).lock();
+	const bool isMatchingObjectType =
+		(objectState.objectType == OpenableObjectType::Door &&
+			dynamic_pointer_cast<CDoorObject>(gameObject)) ||
+		(objectState.objectType == OpenableObjectType::Drawer &&
+			dynamic_pointer_cast<CDrawerObject>(gameObject));
+	if (!isMatchingObjectType)
+	{
+		LogInvalidServerPacket(
+			packetName,
+			"objectType",
+			static_cast<int>(objectState.objectType));
+		return false;
+	}
+#endif
+
+	return true;
+}
+
+void CTcpClient::ApplyOpenableObjectState(
+	const CS_OPENABLE_OBJECT_STATE& objectState)
+{
+#ifdef LOADSCENE
+	if (!IsValidObjectId(objectState.objectId))
+	{
+		return;
+	}
+
+	const shared_ptr<CGameObject> gameObject =
+		g_collisionManager.GetCollisionObjectWithNumber(objectState.objectId).lock();
+	const bool opened = objectState.opened != 0;
+	if (objectState.objectType == OpenableObjectType::Door)
+	{
+		if (const shared_ptr<CDoorObject> door = dynamic_pointer_cast<CDoorObject>(gameObject))
+		{
+			door->ApplyAuthoritativeState(opened);
+		}
+	}
+	else if (objectState.objectType == OpenableObjectType::Drawer)
+	{
+		if (const shared_ptr<CDrawerObject> drawer = dynamic_pointer_cast<CDrawerObject>(gameObject))
+		{
+			drawer->ApplyAuthoritativeState(opened);
+		}
+	}
+#endif
 }
 
 bool CTcpClient::TryGetCollisionObject(

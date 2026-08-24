@@ -35,6 +35,9 @@
 #include <map>
 #include <deque>
 
+#include <cstdio>
+#include <cmath>
+
 using namespace std;
 
 #include <d3d12.h>
