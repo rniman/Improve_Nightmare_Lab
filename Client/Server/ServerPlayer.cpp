@@ -44,9 +44,6 @@ void CServerPlayer::Update(float fElapsedTime, shared_ptr<CServerCollisionManage
 	if (m_wKeyBuffer & KEY_A) dwDirection |= DIR_LEFT;
 	if (m_wKeyBuffer & KEY_D) dwDirection |= DIR_RIGHT;
 
-	//if (m_wKeyBuffer & KEY_LBUTTON) dwDirection |= PRESS_LBUTTON;
-	//if (m_wKeyBuffer & KEY_RBUTTON) dwDirection |= PRESS_RBUTTON;
-
 	if (!m_bAlive)
 	{
 		if (m_fDeathTime < 4.0f)

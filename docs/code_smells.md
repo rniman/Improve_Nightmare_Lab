@@ -26,7 +26,8 @@
 |---|---|---|---|
 | R-003 | Lifetime | 씬 전환 및 연결 종료 수명 | 로비에서 인게임 전환, 연결 종료, 게임 종료 경로의 null 접근과 소유 관계를 확인한다. |
 | R-004 | Rendering | 렌더 상태 및 리소스 수명 결합 | 씬 전환이나 command list 재설정 시 root signature, descriptor heap, GPU 리소스 수명이 유효한지 변경 범위마다 확인한다. |
-| R-005 | Replication | 고정 크기 상태 복제량과 오브젝트 조사 비용 | 입력 deadline을 고정 기준으로 전진시킨 뒤 Release 60/144/무제한 FPS에서 `KEYS_BUFFER`가 60 packet/s를 유지했고, 30 FPS에서는 렌더 루프 상한에 따라 30 packet/s로 측정됐다. 로컬 3인에서 `UPDATE_DATA`는 연결당 60 packet/s, 총 180 packet/s와 1,926,180 byte/s였으며 송신 큐는 0을 유지했다. 그러나 10,700 byte payload 중 약 10,200 byte가 최대 5명분의 주변 오브젝트 ID·행렬 고정 배열이고, 이 배열을 위한 주변 조사가 실제 복제 시각보다 빠른 매 `SimulationLoop()`에서 실행된다. 5인은 테스트 PC의 렌더링 자원 한계로 미검증이며, 느린 네트워크와 패킷 분리 전까지 고위험으로 유지한다. |
+| R-005 | Replication | 고정 크기 상태 복제량과 오브젝트 조사 비용 | Release 기준선에서 `KEYS_BUFFER`와 10,701 byte `UPDATE_DATA`는 각각 약 60 packet/s였다. 입력·플레이어·주변 오브젝트 책임과 주기를 분리하고 legacy 고정 배열을 제거했다. 최종 필드 정리 후 Release 1인에서 `KEYS_BUFFER` 108 byte × 60, `PLAYER_STATE` 461 byte × 60, `NEARBY_OBJECTS` 30 packet/s와 큐 0을 확인했다. 주변 오브젝트 4개 조건의 서버 송신은 35,910 byte/s였고 최대 패킷은 461 byte였다. 이전 Release 2인에서도 연결당 60/30 Hz, 큐 0, 상호작용과 게임 종료를 확인했다. 프레임 종속·고정 10KB 복제 위험은 해소됐으며, 최대 인원·느린 네트워크와 30개 제한 도달 여부를 확인할 때까지 잔여 위험으로 유지한다. |
+| R-006 | Protocol | 클라이언트 방향·카메라 입력 신뢰 | 서버는 `viewMatrix`, `look`, `right`, `up`, `pitch`의 유한성과 right-click action의 0/1 범위를 검사한다. 다만 방향 벡터의 정규화·직교성이나 권위 위치와의 관계는 검사하지 않으므로, 새 입력 wire 구조를 설계하기 전에 허용 범위와 서버 재구성 가능한 필드를 정한다. |
 
 ### Maintainability
 
@@ -48,6 +49,7 @@
 | D-004 | UI | D2D text UI 및 readback 비용 분석 | UI가 프레임 저하 원인으로 확인될 때 재개한다. |
 | D-005 | Structure | 디렉토리 및 대규모 API 재구성 | 모듈 경계가 안정되고 별도 작업으로 승인될 때 진행한다. |
 | D-007 | Simulation | 메시지 부하에 따른 server tick 변동 | tick 지연이나 CPU 점유 문제가 재현되면 고정 tick과 대기 방식을 검토한다. |
+| D-008 | Replication | 문·서랍 snapshot의 시각적 끊김과 관심 영역 진입 시 pop | 서버 상태와 상호작용 결과는 정상이지만 클라이언트가 30 Hz 행렬을 즉시 적용해 여닫힘이 30 FPS처럼 보인다. 또한 관심 영역 밖에서 다른 플레이어가 문·서랍을 변경하면 기존 상태로 보이다가 접근해 `NEARBY_OBJECTS`에 포함되는 순간 최종 상태로 전환된다. 문·서랍처럼 영속 상태를 가진 오브젝트는 ID·open/close·시작 시각 event를 모든 활성 클라이언트에 전달하고, 늦은 접속에는 현재 상태 snapshot을 제공한다. 클라이언트는 렌더 프레임마다 애니메이션하되 서버는 최종 상태와 충돌 권위를 유지하는 단계에서 재개한다. |
 
 ## Resolved
 

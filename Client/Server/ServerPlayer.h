@@ -1,8 +1,6 @@
 #pragma once
 #include "ServerObject.h"
 
-constexpr WORD PRESS_LBUTTON = 0x10;
-constexpr WORD PRESS_RBUTTON = 0x20;
 constexpr FLOAT ASPECT_RATIO = 1600.0f / 1024.0f;
 
 constexpr float BLUESUIT_WALK_VELCOCITY{ 5.0f };

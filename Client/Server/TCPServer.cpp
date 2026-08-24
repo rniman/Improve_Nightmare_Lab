@@ -12,16 +12,18 @@ namespace
 {
 	constexpr size_t MAX_PENDING_SEND_BYTES = 4 * 1024 * 1024;
 	constexpr auto STATE_REPLICATION_INTERVAL = std::chrono::microseconds{ 16'667 };
+	constexpr auto NEARBY_OBJECT_REPLICATION_INTERVAL = std::chrono::microseconds{ 33'333 };
 	constexpr WORD VALID_CLIENT_KEY_MASK =
 		KEY_W | KEY_S | KEY_A | KEY_D |
 		KEY_1 | KEY_2 | KEY_3 | KEY_4 |
-		KEY_E | KEY_LSHIFT | KEY_LBUTTON | KEY_RBUTTON;
+		KEY_E | KEY_LSHIFT | KEY_LBUTTON;
 	constexpr size_t CLIENT_INPUT_PAYLOAD_SIZE =
 		sizeof(WORD) +
 		sizeof(XMFLOAT4X4) +
 		sizeof(XMFLOAT3) * 3 +
 		sizeof(float) +
-		sizeof(SC_PLAYER_INFO);
+		sizeof(std::uint8_t);
+	static_assert(CLIENT_INPUT_PAYLOAD_SIZE == 107);
 
 	struct ClientInputData
 	{
@@ -31,7 +33,7 @@ namespace
 		XMFLOAT3 right = {};
 		XMFLOAT3 up = {};
 		float pitch = 0.0f;
-		SC_PLAYER_INFO playerInfo = {};
+		std::uint8_t rightClick = 0;
 	};
 
 	void LogSocketError(const char* operation, int errorCode)
@@ -39,9 +41,9 @@ namespace
 		LPSTR errorMessage = nullptr;
 		FormatMessageA(
 			FORMAT_MESSAGE_ALLOCATE_BUFFER |
-				FORMAT_MESSAGE_FROM_SYSTEM |
-				FORMAT_MESSAGE_IGNORE_INSERTS |
-				FORMAT_MESSAGE_MAX_WIDTH_MASK,
+			FORMAT_MESSAGE_FROM_SYSTEM |
+			FORMAT_MESSAGE_IGNORE_INSERTS |
+			FORMAT_MESSAGE_MAX_WIDTH_MASK,
 			nullptr,
 			errorCode,
 			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -148,6 +150,10 @@ TCPServer::TCPServer()
 	};
 
 	mPlayerStartPositionIndices = { -1, -1, -1, -1, -1 };
+	for (auto& objectSnapshot : mNearbyObjectSnapshots)
+	{
+		objectSnapshot.reserve(MAX_NEARBY_OBJECTS);
+	}
 }
 
 TCPServer::~TCPServer()
@@ -470,15 +476,15 @@ bool TCPServer::TryProcessChangeSlotPacket(SOCKET socket, int& clientIndex)
 		mSocketInfos[selectedSlot] = std::move(mSocketInfos[clientIndex]);
 		mSocketInfos[clientIndex] = SocketInfo{};
 
-		mUpdateInfo[selectedSlot].m_nClientId = selectedSlot;
-		mUpdateInfo[clientIndex].m_nClientId = -1;
+		mPlayerStates[selectedSlot].m_nClientId = selectedSlot;
+		mPlayerStates[clientIndex].m_nClientId = -1;
 		mPlayers[clientIndex]->SetPlayerId(-1);
 	}
 	else
 	{
 		// 역할 슬롯을 교환해도 각 소켓의 수신 상태는 해당 소켓과 함께 이동해야 한다.
 		std::swap(mSocketInfos[clientIndex], mSocketInfos[selectedSlot]);
-		mUpdateInfo[selectedSlot].m_nClientId = selectedSlot;
+		mPlayerStates[selectedSlot].m_nClientId = selectedSlot;
 	}
 
 	mSocketInfos[selectedSlot].sendState = SOCKET_STATE::SEND_CHANGE_SLOT;
@@ -503,7 +509,7 @@ bool TCPServer::TryProcessClientInputPacket(
 		return false;
 	}
 
-	// KeysBuffer(WORD), viewMatrix, vecLook, vecRight, vecUp, pitch, playerInfo
+	// KeysBuffer(WORD), viewMatrix, vecLook, vecRight, vecUp, pitch, rightClick
 	if (!HandleReceiveResult(ReceiveData(clientIndex, CLIENT_INPUT_PAYLOAD_SIZE), socket))
 	{
 		return false;
@@ -525,7 +531,7 @@ bool TCPServer::TryProcessClientInputPacket(
 	readValue(input.right);
 	readValue(input.up);
 	readValue(input.pitch);
-	readValue(input.playerInfo);
+	readValue(input.rightClick);
 	assert(readOffset == CLIENT_INPUT_PAYLOAD_SIZE);
 
 	if (!IsValidKeyBuffer(input.keyBuffer))
@@ -538,9 +544,17 @@ bool TCPServer::TryProcessClientInputPacket(
 	if (!IsFiniteMatrix(input.viewMatrix) ||
 		!IsFiniteVector(input.look) ||
 		!IsFiniteVector(input.right) ||
-		!IsFiniteVector(input.up))
+		!IsFiniteVector(input.up) ||
+		!std::isfinite(input.pitch))
 	{
 		std::cerr << "Non-finite transform in input packet: client=" << clientIndex << '\n';
+		DisconnectClient(socket);
+		return false;
+	}
+	if (input.rightClick > 1)
+	{
+		std::cerr << "Invalid right-click action: client=" << clientIndex
+			<< ", value=" << static_cast<int>(input.rightClick) << '\n';
 		DisconnectClient(socket);
 		return false;
 	}
@@ -555,8 +569,8 @@ bool TCPServer::TryProcessClientInputPacket(
 	player->SetLook(input.look);
 	player->SetRight(input.right);
 	player->SetUp(input.up);
-	mUpdateInfo[clientIndex].m_fPitch = input.pitch;
-	player->SetRightClick(input.playerInfo.m_bRightClick);
+	mPlayerStates[clientIndex].m_fPitch = input.pitch;
+	player->SetRightClick(input.rightClick != 0);
 	return true;
 }
 
@@ -574,7 +588,9 @@ bool TCPServer::ProcessLoadingCompletePacket(int clientIndex)
 	}
 
 	mCanReplicateState = true;
-	mNextStateReplicationTime = std::chrono::steady_clock::now();
+	const auto currentTime = std::chrono::steady_clock::now();
+	mNextStateReplicationTime = currentTime;
+	mNextNearbyObjectReplicationTime = currentTime;
 	mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_LOADING_COMPLETE;
 	return true;
 }
@@ -626,7 +642,7 @@ void TCPServer::RequestSend(int clientIndex)
 	case SOCKET_STATE::SEND_GAME_START:
 		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_GAME_START)))
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
 	case SOCKET_STATE::SEND_CHANGE_SLOT:
@@ -637,71 +653,82 @@ void TCPServer::RequestSend(int clientIndex)
 				continue;
 			}
 
-			SubmitSendData(i, static_cast<INT8>(SOCKET_STATE::SEND_CHANGE_SLOT), mUpdateInfo[i].m_nClientId, mUpdateInfo);
+			SubmitSendData(
+				i,
+				static_cast<INT8>(SOCKET_STATE::SEND_CHANGE_SLOT),
+				mPlayerStates[i].m_nClientId,
+				mPlayerStates);
 		}
 		if (mSocketInfos[clientIndex].isUsed)
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
 	case SOCKET_STATE::SEND_ID:
 		if (SubmitSendData(
 			clientIndex,
 			static_cast<INT8>(SOCKET_STATE::SEND_ID),
-			mUpdateInfo[clientIndex].m_nClientId,
+			mPlayerStates[clientIndex].m_nClientId,
 			sClientCount,
-			mUpdateInfo))
+			mPlayerStates))
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
-	case SOCKET_STATE::SEND_UPDATE_DATA:
+	case SOCKET_STATE::SEND_PLAYER_STATE:
 		if (mGameState == GAME_STATE::IN_LOBBY)
 		{
 			break;
 		}
-		SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_UPDATE_DATA), mUpdateInfo);
+		SubmitSendData(
+			clientIndex,
+			static_cast<INT8>(SOCKET_STATE::SEND_PLAYER_STATE),
+			mPlayerStates);
 		break;
 	case SOCKET_STATE::SEND_NUM_OF_CLIENT:
-		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_NUM_OF_CLIENT), sClientCount, mUpdateInfo))
+		if (SubmitSendData(
+			clientIndex,
+			static_cast<INT8>(SOCKET_STATE::SEND_NUM_OF_CLIENT),
+			sClientCount,
+			mPlayerStates))
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
 	case SOCKET_STATE::SEND_BLUE_SUIT_WIN:
 		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_BLUE_SUIT_WIN)))
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
 	case SOCKET_STATE::SEND_ZOMBIE_WIN:
 		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_ZOMBIE_WIN)))
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
 	case SOCKET_STATE::SEND_OPEN_DRAWER_SOUND:
 		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_OPEN_DRAWER_SOUND)))
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
 	case SOCKET_STATE::SEND_CLOSE_DRAWER_SOUND:
 		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_CLOSE_DRAWER_SOUND)))
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
 	case SOCKET_STATE::SEND_OPEN_DOOR_SOUND:
 		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_OPEN_DOOR_SOUND)))
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
 	case SOCKET_STATE::SEND_CLOSE_DOOR_SOUND:
 		if (SubmitSendData(clientIndex, static_cast<INT8>(SOCKET_STATE::SEND_CLOSE_DOOR_SOUND)))
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
 	case SOCKET_STATE::SEND_BLUE_SUIT_DEAD:
@@ -716,7 +743,7 @@ void TCPServer::RequestSend(int clientIndex)
 		}
 		if (mSocketInfos[clientIndex].isUsed)
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
 	}
@@ -733,7 +760,7 @@ void TCPServer::RequestSend(int clientIndex)
 		}
 		if (mSocketInfos[clientIndex].isUsed)
 		{
-			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_UPDATE_DATA;
+			mSocketInfos[clientIndex].sendState = SOCKET_STATE::SEND_PLAYER_STATE;
 		}
 		break;
 	}
@@ -844,7 +871,7 @@ bool TCPServer::Initialize(HWND hWnd)
 		if (i == random_escape_index) {
 			pElevaterDoor->SetEscapeDoor(true);
 			for (int pi = 0; pi < MAX_CLIENT; ++pi) {
-				mUpdateInfo[pi].m_playerInfo.m_iEscapeDoor = vDoor[i];
+				mPlayerStates[pi].m_playerInfo.m_iEscapeDoor = vDoor[i];
 			}
 		}
 		//pElevaterDoor->SetEscapeDoor(false); // 디버그를 위해서 모든 문을 잠금
@@ -899,7 +926,8 @@ void TCPServer::SimulationLoop()
 	mCollisionManager->Update(elapsedTime);
 
 	UpdatePlayerReplicationData();
-	ProcessObjectReplication();
+	ProcessOutOfSpaceObjectReplication();
+	UpdateNearbyObjectReplicationDataIfDue();
 	ReplicateStateIfDue();
 }
 
@@ -921,7 +949,7 @@ void TCPServer::ReplicateStateIfDue()
 	for (int clientIndex = 0; clientIndex < static_cast<int>(mSocketInfos.size()); ++clientIndex)
 	{
 		const SocketInfo& socketInfo = mSocketInfos[clientIndex];
-		if (!socketInfo.isUsed || socketInfo.sendState != SOCKET_STATE::SEND_UPDATE_DATA)
+		if (!socketInfo.isUsed || socketInfo.sendState != SOCKET_STATE::SEND_PLAYER_STATE)
 		{
 			continue;
 		}
@@ -1034,7 +1062,7 @@ INT8 TCPServer::RegisterClientSocket(
 		sClientCount++;
 
 		// 클라이언트 정보 초기화
-		mUpdateInfo[i].m_nClientId = i;
+		mPlayerStates[i].m_nClientId = i;
 		mSocketInfos[i] = std::move(socketInfo);
 		clientIndex = i;
 		break;
@@ -1118,7 +1146,7 @@ bool TCPServer::DisconnectClient(SOCKET clientSocket)
 
 	mPlayers[clientIndex].reset();
 	mPlayerStartPositionIndices[clientIndex] = -1;
-	mUpdateInfo[clientIndex] = SC_UPDATE_INFO{};
+	mPlayerStates[clientIndex] = SC_PLAYER_STATE{};
 	mSocketInfos[clientIndex] = SocketInfo{};
 	sClientCount = max<INT8>(0, sClientCount - 1);
 
@@ -1149,7 +1177,9 @@ bool TCPServer::DisconnectClient(SOCKET clientSocket)
 			}
 
 			mCanReplicateState = true;
-			mNextStateReplicationTime = std::chrono::steady_clock::now();
+			const auto currentTime = std::chrono::steady_clock::now();
+			mNextStateReplicationTime = currentTime;
+			mNextNearbyObjectReplicationTime = currentTime;
 			mSocketInfos[index].sendState = SOCKET_STATE::SEND_LOADING_COMPLETE;
 			RequestSend(index);
 			break;
@@ -1177,29 +1207,28 @@ void TCPServer::UpdatePlayerReplicationData()
 		}
 
 		const INT8 playerId = player->GetPlayerId();
-		auto& updateInfo = mUpdateInfo[playerId];
-		updateInfo.m_bAlive = player->IsAlive();
-		updateInfo.m_bRunning = player->IsRunning();
-		updateInfo.m_xmf3Position = player->GetPosition();
-		updateInfo.m_xmf3Velocity = player->GetVelocity();
-		updateInfo.m_xmf3Look = player->GetLook();
+		auto& playerState = mPlayerStates[playerId];
+		playerState.m_bAlive = player->IsAlive();
+		playerState.m_bRunning = player->IsRunning();
+		playerState.m_xmf3Position = player->GetPosition();
+		playerState.m_xmf3Velocity = player->GetVelocity();
+		playerState.m_xmf3Look = player->GetLook();
 
 		const auto pickedObject = player->GetPickedObject().lock();
-		updateInfo.m_nPickedObjectNum = pickedObject
+		playerState.m_nPickedObjectNum = pickedObject
 			? pickedObject->GetCollisionNum()
 			: -1;
 
-		// 지금은 일단 이렇게 해뒀지만 나중에는 0번이 Enemy고정일듯
-		if (playerId == ZOMBIEPLAYER)	//Enemy
+		if (playerId == ZOMBIEPLAYER)
 		{
 			shared_ptr<CServerZombiePlayer> zombiePlayer = dynamic_pointer_cast<CServerZombiePlayer>(player);
 			if (zombiePlayer)
 			{
-				updateInfo.m_nSlotObjectNum[0] = zombiePlayer->IsTracking() ? 1 : -1;		// 추적
-				updateInfo.m_nSlotObjectNum[1] = zombiePlayer->IsInterruption() ? 1 : -1;	// 시야방해
-				updateInfo.m_nSlotObjectNum[2] = zombiePlayer->IsAttack() ? 1 : -1;			// 공격
+				playerState.m_nSlotObjectNum[0] = zombiePlayer->IsTracking() ? 1 : -1;		// 추적
+				playerState.m_nSlotObjectNum[1] = zombiePlayer->IsInterruption() ? 1 : -1;	// 시야방해
+				playerState.m_nSlotObjectNum[2] = zombiePlayer->IsAttack() ? 1 : -1;			// 공격
 
-				// 지뢰충돌에 대한 데이터 로직
+				// 짧은 지뢰 충돌 상태를 복제한 뒤 서버 상태를 원래 값으로 되돌린다.
 				if (zombiePlayer->GetCollideMineRef() == -1)
 				{
 					zombiePlayer->SetExplosionDelay(0.0f);
@@ -1208,7 +1237,7 @@ void TCPServer::UpdatePlayerReplicationData()
 				{
 					zombiePlayer->SetCollideMineRef(-1);
 				}
-				updateInfo.m_playerInfo.m_iMineobjectNum = zombiePlayer->GetCollideMineRef();
+				playerState.m_playerInfo.m_iMineobjectNum = zombiePlayer->GetCollideMineRef();
 			}
 		}
 		else
@@ -1218,19 +1247,13 @@ void TCPServer::UpdatePlayerReplicationData()
 			{
 				for (int i = 0; i < 3; ++i)
 				{
-					updateInfo.m_nSlotObjectNum[i] = blueSuitPlayer->GetReferenceSlotItemNum(i);
-					updateInfo.m_nFuseObjectNum[i] = blueSuitPlayer->GetReferenceFuseItemNum(i);
+					playerState.m_nSlotObjectNum[i] = blueSuitPlayer->GetReferenceSlotItemNum(i);
+					playerState.m_nFuseObjectNum[i] = blueSuitPlayer->GetReferenceFuseItemNum(i);
 				}
-				updateInfo.m_playerInfo.m_bAttacked = blueSuitPlayer->IsAttacked();
-				updateInfo.m_playerInfo.m_selectItem = blueSuitPlayer->GetRightItem();
-				updateInfo.m_playerInfo.m_bTeleportItemUse = blueSuitPlayer->IsTeleportUse();
+				playerState.m_playerInfo.m_bAttacked = blueSuitPlayer->IsAttacked();
+				playerState.m_playerInfo.m_selectItem = blueSuitPlayer->GetRightItem();
+				playerState.m_playerInfo.m_bTeleportItemUse = blueSuitPlayer->IsTeleportUse();
 			}
-		}
-		// 업데이트 오브젝트는 리셋
-		updateInfo.m_nNumOfObject = 0;
-		for (int i = 0; i < MAX_SEND_OBJECT_INFO; ++i)
-		{
-			updateInfo.m_anObjectNum[i] = -1;
 		}
 	}
 }
@@ -1507,13 +1530,30 @@ void TCPServer::CreateItemObject()
 	}
 }
 
-void TCPServer::ProcessObjectReplication()
+void TCPServer::ProcessOutOfSpaceObjectReplication()
 {
-	// 한 번의 시뮬레이션에서 발생한 오브젝트 변경을 정해진 순서로 네트워크 상태에 반영한다.
-	// 공간 이동 알림은 별도 패킷으로 보내고, 주변 오브젝트는 다음 UPDATE_DATA에 포함한다.
+	// 시뮬레이션에서 발생한 공간 이동은 정기 snapshot을 기다리지 않고 즉시 큐에 추가한다.
 	const std::vector<SC_SPACEOUT_OBJECT> outOfSpaceObjects = CollectOutOfSpaceObjects();
 	EnqueueOutOfSpaceObjectPackets(outOfSpaceObjects);
+}
+
+void TCPServer::UpdateNearbyObjectReplicationDataIfDue()
+{
+	if (!mCanReplicateState)
+	{
+		return;
+	}
+
+	const auto currentTime = std::chrono::steady_clock::now();
+	if (currentTime < mNextNearbyObjectReplicationTime)
+	{
+		return;
+	}
+
+	// 지연된 조사를 몰아서 실행하지 않고 가장 최근 상태만 갱신한다.
+	mNextNearbyObjectReplicationTime = currentTime + NEARBY_OBJECT_REPLICATION_INTERVAL;
 	UpdateNearbyObjectReplicationData();
+	ReplicateNearbyObjectData();
 }
 
 std::vector<SC_SPACEOUT_OBJECT> TCPServer::CollectOutOfSpaceObjects()
@@ -1588,8 +1628,8 @@ void TCPServer::EnqueueOutOfSpaceObjectPackets(const std::vector<SC_SPACEOUT_OBJ
 
 void TCPServer::UpdateNearbyObjectReplicationData()
 {
-	// 고정 크기 UPDATE_DATA 패킷에 포함할 플레이어별 주변 동적 오브젝트를 갱신한다.
-	// 현재 플레이어가 속한 셀을 중심으로 3x3 셀만 탐색하고 최대 30개까지 기록한다.
+	constexpr size_t maxNearbyObjects = MAX_NEARBY_OBJECTS;
+	// 수신 플레이어가 속한 셀을 중심으로 3x3 셀만 탐색하고 최대 30개까지 기록한다.
 	for (const auto& player : mPlayers)
 	{
 		if (!player || player->GetPlayerId() == -1)
@@ -1598,11 +1638,12 @@ void TCPServer::UpdateNearbyObjectReplicationData()
 		}
 
 		const INT8 playerId = player->GetPlayerId();
-		int objectCount = 0;
+		auto& objectSnapshot = mNearbyObjectSnapshots[playerId];
+		objectSnapshot.clear();
 
 		// 현재는 플레이어와 같은 층만 검사한다. 계단 주변의 인접 층 검사는 별도 게임 규칙이다.
 		for (int widthIndex = player->GetWidth() - 1;
-			widthIndex <= player->GetWidth() + 1 && objectCount < MAX_SEND_OBJECT_INFO;
+			widthIndex <= player->GetWidth() + 1 && objectSnapshot.size() < maxNearbyObjects;
 			++widthIndex)
 		{
 			if (widthIndex < 0 || widthIndex >= mCollisionManager->GetWidth())
@@ -1611,7 +1652,7 @@ void TCPServer::UpdateNearbyObjectReplicationData()
 			}
 
 			for (int depthIndex = player->GetDepth() - 1;
-				depthIndex <= player->GetDepth() + 1 && objectCount < MAX_SEND_OBJECT_INFO;
+				depthIndex <= player->GetDepth() + 1 && objectSnapshot.size() < maxNearbyObjects;
 				++depthIndex)
 			{
 				if (depthIndex < 0 || depthIndex >= mCollisionManager->GetDepth())
@@ -1629,18 +1670,52 @@ void TCPServer::UpdateNearbyObjectReplicationData()
 						continue;
 					}
 
-					mUpdateInfo[playerId].m_anObjectNum[objectCount] = gameObject->GetCollisionNum();
-					mUpdateInfo[playerId].m_axmf4x4World[objectCount] = gameObject->GetWorldMatrix();
+					const int objectId = gameObject->GetCollisionNum();
+					const bool alreadyIncluded = std::any_of(
+						objectSnapshot.begin(),
+						objectSnapshot.end(),
+						[objectId](const SC_NEARBY_OBJECT& objectInfo)
+						{
+							return objectInfo.m_nObjectId == objectId;
+						});
+					if (alreadyIncluded)
+					{
+						continue;
+					}
 
-					++objectCount;
-					if (objectCount == MAX_SEND_OBJECT_INFO)
+					objectSnapshot.push_back(SC_NEARBY_OBJECT{ objectId, gameObject->GetWorldMatrix() });
+					if (objectSnapshot.size() == maxNearbyObjects)
 					{
 						break;
 					}
 				}
 			}
 		}
-		mUpdateInfo[playerId].m_nNumOfObject = objectCount;
+	}
+}
+
+void TCPServer::ReplicateNearbyObjectData()
+{
+	for (int clientIndex = 0; clientIndex < static_cast<int>(mSocketInfos.size()); ++clientIndex)
+	{
+		if (!mSocketInfos[clientIndex].isUsed)
+		{
+			continue;
+		}
+
+		const auto& objectSnapshot = mNearbyObjectSnapshots[clientIndex];
+		const size_t payloadBytes = sizeof(SC_NEARBY_OBJECT) * objectSnapshot.size();
+		const std::uint16_t wirePayloadBytes = static_cast<std::uint16_t>(payloadBytes);
+
+		std::vector<char> packetBuffer;
+		packetBuffer.reserve(sizeof(INT8) + sizeof(wirePayloadBytes) + payloadBytes);
+		packetBuffer.push_back(static_cast<INT8>(SOCKET_STATE::SEND_NEARBY_OBJECTS));
+		AppendBufferData(packetBuffer, &wirePayloadBytes, sizeof(wirePayloadBytes));
+		if (!objectSnapshot.empty())
+		{
+			AppendBufferData(packetBuffer, objectSnapshot.data(), payloadBytes);
+		}
+		EnqueueSendBuffer(clientIndex, std::move(packetBuffer));
 	}
 }
 

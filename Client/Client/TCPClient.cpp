@@ -22,8 +22,8 @@ namespace
 		LPSTR errorMessage = nullptr;
 		FormatMessageA(
 			FORMAT_MESSAGE_ALLOCATE_BUFFER |
-				FORMAT_MESSAGE_FROM_SYSTEM |
-				FORMAT_MESSAGE_IGNORE_INSERTS,
+			FORMAT_MESSAGE_FROM_SYSTEM |
+			FORMAT_MESSAGE_IGNORE_INSERTS,
 			nullptr,
 			errorCode,
 			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -88,23 +88,6 @@ namespace
 		OutputDebugStringA(message);
 	}
 
-	void LogInvalidServerPacketElement(
-		const char* packetName,
-		const char* fieldName,
-		size_t index,
-		size_t elementIndex)
-	{
-		char message[256] = {};
-		sprintf_s(
-			message,
-			"[Network] Invalid server packet: packet=%s, field=%s, index=%zu, elementIndex=%zu\n",
-			packetName,
-			fieldName,
-			index,
-			elementIndex);
-		OutputDebugStringA(message);
-	}
-
 	void LogInvalidServerPacketAtIndex(
 		const char* packetName,
 		const char* fieldName,
@@ -158,86 +141,60 @@ namespace
 		return true;
 	}
 
-	bool ValidateClientInfoArray(const std::array<CS_CLIENTS_INFO, MAX_CLIENT>& clientInfo)
+	bool ValidateRosterPlayerStates(const std::array<CS_PLAYER_STATE, MAX_CLIENT>& playerStates)
 	{
-		for (size_t index = 0; index < clientInfo.size(); ++index)
+		for (size_t index = 0; index < playerStates.size(); ++index)
 		{
-			const CS_CLIENTS_INFO& info = clientInfo[index];
+			const CS_PLAYER_STATE& playerState = playerStates[index];
 			const bool hasValidClientId =
-				info.m_nClientId == -1 || IsAssignedClientId(info.m_nClientId);
+				playerState.m_nClientId == -1 || IsAssignedClientId(playerState.m_nClientId);
 			if (!hasValidClientId)
 			{
 				LogInvalidServerPacket(
 					"CLIENT_INFO",
 					"clientId",
 					index,
-					static_cast<int>(info.m_nClientId));
-				return false;
-			}
-
-			// -1은 아직 주변 오브젝트 정보가 설정되지 않은 슬롯을 의미한다.
-			if (info.m_nNumOfObject < -1 ||
-				info.m_nNumOfObject > static_cast<int>(MAX_RECV_OBJECT_INFO))
-			{
-				LogInvalidServerPacket(
-					"CLIENT_INFO",
-					"nearbyObjectCount",
-					index,
-					info.m_nNumOfObject);
+					static_cast<int>(playerState.m_nClientId));
 				return false;
 			}
 		}
 		return true;
 	}
 
-	bool ValidateClientTransforms(const std::array<CS_CLIENTS_INFO, MAX_CLIENT>& clientInfo)
+	bool ValidateReplicatedPlayerStates(const std::array<CS_PLAYER_STATE, MAX_CLIENT>& playerStates)
 	{
-		// 로비 초기 패킷에는 아직 사용하지 않는 변환값이 포함될 수 있으므로
-		// 실제 게임 상태를 적용하는 UPDATE_DATA에서 활성 슬롯만 검사한다.
-		for (size_t index = 0; index < clientInfo.size(); ++index)
+		for (size_t playerIndex = 0; playerIndex < playerStates.size(); ++playerIndex)
 		{
-			const CS_CLIENTS_INFO& info = clientInfo[index];
-			if (info.m_nClientId == -1)
+			const CS_PLAYER_STATE& state = playerStates[playerIndex];
+			if (state.m_nClientId == -1)
 			{
 				continue;
 			}
 
-			if (!IsFiniteVector(info.m_xmf3Position))
+			if (!IsAssignedClientId(state.m_nClientId))
 			{
-				LogInvalidServerPacketAtIndex("CLIENT_INFO", "position", index);
+				LogInvalidServerPacket(
+					"PLAYER_STATE",
+					"clientId",
+					playerIndex,
+					static_cast<int>(state.m_nClientId));
 				return false;
 			}
-			if (!IsFiniteVector(info.m_xmf3Velocity))
+			if (!IsFiniteVector(state.m_xmf3Position) ||
+				!IsFiniteVector(state.m_xmf3Velocity) ||
+				!IsFiniteVector(state.m_xmf3Look) ||
+				!std::isfinite(state.m_fPitch))
 			{
-				LogInvalidServerPacketAtIndex("CLIENT_INFO", "velocity", index);
+				LogInvalidServerPacketAtIndex(
+					"PLAYER_STATE",
+					"transform",
+					playerIndex);
 				return false;
-			}
-			if (!IsFiniteVector(info.m_xmf3Look))
-			{
-				LogInvalidServerPacketAtIndex("CLIENT_INFO", "look", index);
-				return false;
-			}
-			if (!std::isfinite(info.m_fPitch))
-			{
-				LogInvalidServerPacketAtIndex("CLIENT_INFO", "pitch", index);
-				return false;
-			}
-
-			for (int objectIndex = 0; objectIndex < info.m_nNumOfObject; ++objectIndex)
-			{
-				if (!IsFiniteMatrix(info.m_axmf4x4World[objectIndex]))
-				{
-					LogInvalidServerPacketElement(
-						"CLIENT_INFO",
-						"nearbyObjectTransform",
-						index,
-						static_cast<size_t>(objectIndex));
-					return false;
-				}
 			}
 		}
 		return true;
 	}
+
 }
 
 CTcpClient::CTcpClient()
@@ -430,8 +387,14 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 			return;
 		}
 		break;
-	case ReceiveHead::UpdateData:
-		if (!TryProcessUpdateDataPacket(socket))
+	case ReceiveHead::PlayerState:
+		if (!TryProcessPlayerStatePacket(socket))
+		{
+			return;
+		}
+		break;
+	case ReceiveHead::NearbyObjects:
+		if (!TryProcessNearbyObjectsPacket(socket))
 		{
 			return;
 		}
@@ -506,7 +469,7 @@ bool CTcpClient::TryProcessChangeSlotPacket(HWND window, SOCKET socket)
 	// 고정 패킷 전체를 지역 변수에 먼저 역직렬화한다.
 	// 이후 검증이 추가되더라도 일부 멤버만 먼저 변경되는 상황을 방지한다.
 	INT8 receivedMainClientId = -1;
-	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
+	std::array<CS_PLAYER_STATE, MAX_CLIENT> receivedClientInfo = {};
 	memcpy(&receivedMainClientId, mReceiveBuffer.data(), sizeof(receivedMainClientId));
 	memcpy(
 		receivedClientInfo.data(),
@@ -522,7 +485,7 @@ bool CTcpClient::TryProcessChangeSlotPacket(HWND window, SOCKET socket)
 		CloseConnection();
 		return false;
 	}
-	if (!ValidateClientInfoArray(receivedClientInfo))
+	if (!ValidateRosterPlayerStates(receivedClientInfo))
 	{
 		CloseConnection();
 		return false;
@@ -555,7 +518,7 @@ bool CTcpClient::TryProcessInitPacket(SOCKET socket)
 
 	INT8 receivedMainClientId = -1;
 	INT8 receivedClientCount = -1;
-	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
+	std::array<CS_PLAYER_STATE, MAX_CLIENT> receivedClientInfo = {};
 	memcpy(&receivedMainClientId, mReceiveBuffer.data(), sizeof(receivedMainClientId));
 	memcpy(
 		&receivedClientCount,
@@ -584,7 +547,7 @@ bool CTcpClient::TryProcessInitPacket(SOCKET socket)
 		CloseConnection();
 		return false;
 	}
-	if (!ValidateClientInfoArray(receivedClientInfo))
+	if (!ValidateRosterPlayerStates(receivedClientInfo))
 	{
 		CloseConnection();
 		return false;
@@ -597,23 +560,106 @@ bool CTcpClient::TryProcessInitPacket(SOCKET socket)
 	return true;
 }
 
-bool CTcpClient::TryProcessUpdateDataPacket(SOCKET socket)
+bool CTcpClient::TryProcessNearbyObjectsPacket(SOCKET socket)
 {
-	if (!HandleReceiveResult(ReceiveData(socket, sizeof(mClientInfo))))
+	if (!mHasPayloadSize)
+	{
+		if (!HandleReceiveResult(ReceiveData(socket, sizeof(std::uint16_t))))
+		{
+			return false;
+		}
+
+		std::uint16_t payloadBytes = 0;
+		memcpy(&payloadBytes, mReceiveBuffer.data(), sizeof(payloadBytes));
+		mExpectedPayloadBytes = payloadBytes;
+		mHasPayloadSize = true;
+		std::fill(mReceiveBuffer.begin(), mReceiveBuffer.end(), 0);
+
+		if (mExpectedPayloadBytes > sizeof(CS_NEARBY_OBJECT) * MAX_NEARBY_OBJECTS ||
+			mExpectedPayloadBytes % sizeof(CS_NEARBY_OBJECT) != 0)
+		{
+			LogInvalidServerPacket(
+				"NEARBY_OBJECTS",
+				"payloadSize",
+				static_cast<int>(mExpectedPayloadBytes));
+			CloseConnection();
+			return false;
+		}
+	}
+
+	if (!HandleReceiveResult(ReceiveData(socket, mExpectedPayloadBytes)))
 	{
 		return false;
 	}
 
-	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
-	memcpy(receivedClientInfo.data(), mReceiveBuffer.data(), sizeof(receivedClientInfo));
-	if (!ValidateClientInfoArray(receivedClientInfo) ||
-		!ValidateClientTransforms(receivedClientInfo))
+	const size_t objectCount = mExpectedPayloadBytes / sizeof(CS_NEARBY_OBJECT);
+	const auto readNearbyObject = [this](size_t objectIndex)
+		{
+			CS_NEARBY_OBJECT objectInfo = {};
+			memcpy(
+				&objectInfo,
+				mReceiveBuffer.data() + objectIndex * sizeof(CS_NEARBY_OBJECT),
+				sizeof(objectInfo));
+			return objectInfo;
+		};
+
+	// 전체 entry를 먼저 검증해 잘못된 패킷이 게임 상태에 일부만 적용되지 않게 한다.
+	for (size_t objectIndex = 0; objectIndex < objectCount; ++objectIndex)
+	{
+		const CS_NEARBY_OBJECT objectInfo = readNearbyObject(objectIndex);
+		if (!IsValidObjectId(objectInfo.m_nObjectId))
+		{
+			LogInvalidServerPacket(
+				"NEARBY_OBJECTS",
+				"objectId",
+				objectIndex,
+				objectInfo.m_nObjectId);
+			CloseConnection();
+			return false;
+		}
+		if (!IsFiniteMatrix(objectInfo.m_xmf4x4World))
+		{
+			LogInvalidServerPacketAtIndex(
+				"NEARBY_OBJECTS",
+				"worldTransform",
+				objectIndex);
+			CloseConnection();
+			return false;
+		}
+	}
+
+#ifdef LOADSCENE
+	for (size_t objectIndex = 0; objectIndex < objectCount; ++objectIndex)
+	{
+		const CS_NEARBY_OBJECT objectInfo = readNearbyObject(objectIndex);
+		shared_ptr<CGameObject> gameObject =
+			g_collisionManager.GetCollisionObjectWithNumber(objectInfo.m_nObjectId).lock();
+		if (gameObject)
+		{
+			gameObject->m_xmf4x4World = objectInfo.m_xmf4x4World;
+			gameObject->m_xmf4x4ToParent = objectInfo.m_xmf4x4World;
+		}
+	}
+#endif // LOADSCENE
+	return true;
+}
+
+bool CTcpClient::TryProcessPlayerStatePacket(SOCKET socket)
+{
+	std::array<CS_PLAYER_STATE, MAX_CLIENT> playerStates = {};
+	if (!HandleReceiveResult(ReceiveData(socket, sizeof(playerStates))))
+	{
+		return false;
+	}
+
+	memcpy(playerStates.data(), mReceiveBuffer.data(), sizeof(playerStates));
+	if (!ValidateReplicatedPlayerStates(playerStates))
 	{
 		CloseConnection();
 		return false;
 	}
 
-	mClientInfo = receivedClientInfo;
+	mClientInfo = playerStates;
 	ApplyServerUpdate();
 	return true;
 }
@@ -626,7 +672,7 @@ bool CTcpClient::TryProcessClientCountPacket(SOCKET socket)
 	}
 
 	INT8 receivedClientCount = -1;
-	std::array<CS_CLIENTS_INFO, MAX_CLIENT> receivedClientInfo = {};
+	std::array<CS_PLAYER_STATE, MAX_CLIENT> receivedClientInfo = {};
 	memcpy(&receivedClientCount, mReceiveBuffer.data(), sizeof(receivedClientCount));
 	memcpy(
 		receivedClientInfo.data(),
@@ -642,7 +688,7 @@ bool CTcpClient::TryProcessClientCountPacket(SOCKET socket)
 		CloseConnection();
 		return false;
 	}
-	if (!ValidateClientInfoArray(receivedClientInfo))
+	if (!ValidateRosterPlayerStates(receivedClientInfo))
 	{
 		CloseConnection();
 		return false;
@@ -774,7 +820,6 @@ bool CTcpClient::IsValidReceiveHead(INT8 head) const
 	switch (static_cast<ReceiveHead>(head))
 	{
 	case ReceiveHead::Init:
-	case ReceiveHead::UpdateData:
 	case ReceiveHead::ClientCount:
 	case ReceiveHead::BlueSuitWin:
 	case ReceiveHead::ZombieWin:
@@ -787,6 +832,8 @@ bool CTcpClient::IsValidReceiveHead(INT8 head) const
 	case ReceiveHead::BlueSuitDead:
 	case ReceiveHead::SpaceOutObjects:
 	case ReceiveHead::LoadingComplete:
+	case ReceiveHead::PlayerState:
+	case ReceiveHead::NearbyObjects:
 		return true;
 	default:
 		return false;
@@ -877,27 +924,6 @@ void CTcpClient::ApplyServerUpdate()
 			UpdateSurvivorPlayer(playerIndex);
 		}
 
-		const int nearbyObjectCount = clientInfo.m_nNumOfObject;
-		for (int objectIndex = 0; objectIndex < nearbyObjectCount; ++objectIndex)
-		{
-			const int objectId = clientInfo.m_anObjectNum[objectIndex];
-
-			if (!IsValidObjectId(objectId))
-			{
-				LogInvalidServerPacket("CLIENT_INFO", "nearbyObjectId", objectId);
-				CloseConnection();
-				return;
-			}
-#ifdef LOADSCENE
-			shared_ptr<CGameObject> gameObject =
-				g_collisionManager.GetCollisionObjectWithNumber(objectId).lock();
-			if (gameObject)
-			{
-				gameObject->m_xmf4x4World = clientInfo.m_axmf4x4World[objectIndex];
-				gameObject->m_xmf4x4ToParent = clientInfo.m_axmf4x4World[objectIndex];
-			}
-#endif // LOADSCENE
-		}
 	}
 }
 
@@ -974,10 +1000,6 @@ void CTcpClient::RequestSend()
 		return;
 	}
 
-	mClientInfo[mMainClientId].m_fPitch = mPlayers[mMainClientId]->GetPitch();
-	mClientInfo[mMainClientId].m_playerInfo.m_bRightClick = mPlayers[mMainClientId]->IsRightClick();
-	mPlayers[mMainClientId]->SetRightClick(false);
-
 	switch (mSocketState)
 	{
 	case SOCKET_STATE::SEND_GAME_START:
@@ -991,35 +1013,29 @@ void CTcpClient::RequestSend()
 		break;
 	case SOCKET_STATE::SEND_KEY_BUFFER:
 	{
+		const shared_ptr<CPlayer>& player = mPlayers[mMainClientId];
+		const shared_ptr<CCamera> camera = player->GetCamera();
 		const UCHAR* keysBuffer = CGameFramework::GetKeysBuffer();
 		const WORD keyMask = BuildKeyBitMask(keysBuffer);
+		const bool usesPlayerBasis = player->m_pSkinnedAnimationController->IsAnimation();
+		const XMFLOAT3 look = usesPlayerBasis ? player->GetLook() : camera->GetLookVector();
+		const XMFLOAT3 right = usesPlayerBasis ? player->GetRight() : camera->GetRightVector();
+		const XMFLOAT3 up = usesPlayerBasis ? player->GetUp() : camera->GetUpVector();
+		const float pitch = player->GetPitch();
+		const std::uint8_t rightClick = player->IsRightClick() ? 1 : 0;
 
-		if (mPlayers[mMainClientId]->m_pSkinnedAnimationController->IsAnimation())
-		{
-			SubmitSendData(
-				static_cast<INT8>(SOCKET_STATE::SEND_KEY_BUFFER),
-				keyMask,
-				mPlayers[mMainClientId]->GetCamera()->GetViewMatrix(),
-				mPlayers[mMainClientId]->GetLook(),
-				mPlayers[mMainClientId]->GetRight(),
-				mPlayers[mMainClientId]->GetUp(),
-				mClientInfo[mMainClientId].m_fPitch,
-				mClientInfo[mMainClientId].m_playerInfo
-			);
-		}
-		else
-		{
-			SubmitSendData(
-				static_cast<INT8>(SOCKET_STATE::SEND_KEY_BUFFER),
-				keyMask,
-				mPlayers[mMainClientId]->GetCamera()->GetViewMatrix(),
-				mPlayers[mMainClientId]->GetCamera()->GetLookVector(),
-				mPlayers[mMainClientId]->GetCamera()->GetRightVector(),
-				mPlayers[mMainClientId]->GetCamera()->GetUpVector(),
-				mClientInfo[mMainClientId].m_fPitch,
-				mClientInfo[mMainClientId].m_playerInfo
-			);
-		}
+		mClientInfo[mMainClientId].m_fPitch = pitch;
+		player->SetRightClick(false);
+		SubmitSendData(
+			static_cast<INT8>(SOCKET_STATE::SEND_KEY_BUFFER),
+			keyMask,
+			camera->GetViewMatrix(),
+			look,
+			right,
+			up,
+			pitch,
+			rightClick
+		);
 		break;
 	}
 	default:
@@ -1145,7 +1161,6 @@ WORD CTcpClient::BuildKeyBitMask(const UCHAR* keysBuffer) const
 	if (keysBuffer['E'] & 0xF0) { keyMask |= KEY_E; }
 	if (keysBuffer[VK_LSHIFT] & 0xF0) { keyMask |= KEY_LSHIFT; }
 	if (keysBuffer[VK_LBUTTON] & 0xF0) { keyMask |= KEY_LBUTTON; }
-	if (keysBuffer[VK_RBUTTON] & 0xF0) { keyMask |= KEY_RBUTTON; }
 	return keyMask;
 }
 

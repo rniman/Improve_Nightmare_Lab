@@ -51,14 +51,21 @@
    - 이동/업데이트/충돌 처리
 4. 충돌 관리자/월드 오브젝트 업데이트.
 5. `UpdatePlayerReplicationData()`가 플레이어 상태를 갱신한다.
-6. `ProcessObjectReplication()`이 다음 두 작업을 수행한다.
-   - 플레이어별 주변 동적 오브젝트를 `SC_UPDATE_INFO`에 기록한다. 이 단계에서는 즉시 송신하지 않는다.
-   - 영역에서 이탈한 오브젝트가 있으면 가변 길이 `SEND_SPACEOUT_OBJECTS` 패킷을 직렬화해 각 소켓의 송신 큐에 등록한다.
-7. `ReplicateStateIfDue()`가 로딩 완료 후 최신 `UPDATE_DATA`를 최대 60 Hz로 각 활성 연결에 등록한다.
+6. `ProcessOutOfSpaceObjectReplication()`이 영역을 이탈한 오브젝트를
+   가변 길이 `SEND_SPACEOUT_OBJECTS` 패킷으로 직렬화해 즉시 송신 큐에 등록한다.
+7. `UpdateNearbyObjectReplicationDataIfDue()`가 플레이어별 주변 동적 오브젝트를
+	최대 30 Hz로 조사한다. 수신자 자신의 3x3 셀에 있는 중복 제거된
+	오브젝트만 `NEARBY_OBJECTS`에 가변 길이로 담아 송신한다.
+8. `ReplicateStateIfDue()`가 로딩 완료 후 오브젝트 배열을 제외한
+	`PLAYER_STATE`를 최대 60 Hz로 각 활성 연결에 등록한다.
 
-일반 `UPDATE_DATA`는 `KEYS_BUFFER` 수신에 대한 응답으로 생성하지 않는다. 서버가 모든
-활성 클라이언트의 로딩 완료를 확인한 뒤 `steady_clock` 기준의 독립 60 Hz 주기에서
-가장 최근에 작성된 상태를 직렬화한다. 루프가 지연돼도 놓친 횟수만큼 몰아서 보내지 않는다.
+기존 `UPDATE_DATA` head와 고정 오브젝트 배열은 제거됐다. 서버가 모든 활성
+클라이언트의 로딩 완료를 확인한 뒤 `steady_clock` 기준의 독립 60 Hz 주기에서
+가장 최근 플레이어 상태를 `PLAYER_STATE`로 직렬화한다. 루프가 지연돼도
+놓친 횟수만큼 몰아서 보내지 않는다.
+주변 오브젝트 조사도 같은 방식의 독립 30 Hz deadline을 사용하며 놓친 조사를
+몰아서 실행하지 않는다. `NEARBY_OBJECTS`는 `uint16_t` payload 크기 뒤에
+오브젝트 ID와 4x4 행렬 entry를 실제 개수만 직렬화한다.
 
 ## 5) 네트워킹 이벤트 흐름 (요약)
 
@@ -74,7 +81,7 @@
 
 애플리케이션에서 새 패킷이 필요한 일반 경로는 `RequestSend()`이며, 현재 소켓
 상태에 맞는 패킷을 직렬화해 큐에 추가한다. 예외적으로 시뮬레이션에서 발생한 영역
-이탈 오브젝트 이벤트는 `ProcessObjectReplication()`이 가변 길이 패킷을 직접 직렬화해
+이탈 오브젝트 이벤트는 `ProcessOutOfSpaceObjectReplication()`이 가변 길이 패킷을 직접 직렬화해
 `EnqueueSendBuffer()`로 전달한다. 두 경로 모두 같은 소켓별 큐와
 `FlushSendQueue()`를 사용한다.
 
@@ -107,9 +114,9 @@
 |---|---|---|
 | 게임 시작, 슬롯 변경, 로딩 완료 및 서버 상태 이벤트 | `RequestSend()` → `SubmitSendData()` | 이벤트 패킷을 즉시 직렬화하고 송신 큐에 등록 |
 | 게임 종료 상태 전환 | `QueueEndGameNotifications()` → `RequestSend()` | 승리 패킷을 각 활성 연결에 한 번 등록한 뒤 정기 상태 복제를 종료 |
-| 로딩 완료 후 상태 복제 주기 도달 | `ReplicateStateIfDue()` → `RequestSend()` | 최신 `UPDATE_DATA`를 최대 60 Hz로 각 활성 연결에 등록 |
-| `SimulationLoop()`에서 영역 이탈 오브젝트 발견 | `ProcessObjectReplication()` → 가변 패킷 직렬화 | 완성된 패킷을 송신 큐에 등록 |
-| `SimulationLoop()`에서 플레이어 주변 오브젝트 갱신 | `ProcessObjectReplication()` → `SC_UPDATE_INFO` 갱신 | 데이터만 기록하며 즉시 송신하지 않음 |
+| 로딩 완료 후 플레이어 복제 주기 도달 | `ReplicateStateIfDue()` → `RequestSend()` | 최신 `PLAYER_STATE`를 최대 60 Hz로 각 활성 연결에 등록 |
+| `SimulationLoop()`에서 영역 이탈 오브젝트 발견 | `ProcessOutOfSpaceObjectReplication()` → 가변 패킷 직렬화 | 완성된 패킷을 송신 큐에 등록 |
+| 주변 오브젝트 조사 30 Hz 주기 도달 | `UpdateNearbyObjectReplicationDataIfDue()` → `NEARBY_OBJECTS` | 수신자 관심 영역의 실제 개수만 가변 길이로 송신 |
 | Winsock의 실제 `FD_WRITE` 알림 | `FlushSendQueue()` | 새 패킷을 만들지 않고 저장된 전송 위치부터 재개 |
 
 패킷이 송신 큐에 등록된 뒤에는 생성 경로와 관계없이 동일하게 처리한다.
@@ -134,8 +141,10 @@
   구조체 정의에 의존한다.
 - 패킷 파싱과 게임 상태 적용, 서버 시뮬레이션 책임은 여전히 `TCPServer`에 집중되어 있다.
 - 입력 송신은 렌더 루프 안에서 최대 60 Hz로 제한하며, 고정 deadline을 전진시켜 60 FPS 이상에서 프레임별 초과 시간이 누적되지 않게 한다. 상태 복제는 입력 수신 횟수와 분리된 최대 60 Hz 주기를 사용한다.
-- 현재 `UPDATE_DATA`는 최대 5명분의 고정 크기 상태 배열을 각 연결에 전송한다. 10,700 byte payload 중 약 10,200 byte는 플레이어별 주변 오브젝트 ID와 행렬 배열이다.
-- 네트워크 복제용 주변 오브젝트 조사는 실제 상태 복제 주기 도달 여부를 확인하기 전의 매 `SimulationLoop()`에서 실행된다.
+- 정기 인게임 복제는 `PLAYER_STATE` 60 Hz와 수신자별 `NEARBY_OBJECTS`
+  30 Hz로 분리됐다. 다만 로비·접속 초기 패킷은 아직 기존 통합 구조체를 사용한다.
+- 수신자 관심 영역 밖의 오브젝트는 정기 snapshot에서 제외되므로 진입·재진입 시
+  상태 수렴과 `SPACEOUT_OBJECTS` 순서를 계속 검증해야 한다.
 - IOCP 또는 다중 스레드 전환은 현재 범위에 포함하지 않는다.
 
 네트워크 partial I/O 안정화 변경 당시 Client/Server x64 Debug 빌드가 성공했고 서버
@@ -161,7 +170,7 @@ byte 수는 TCP/IP 헤더를 제외한 애플리케이션 데이터량이다.
 다만 전체 송신량이 대체로 클라이언트 수, 렌더 FPS, 패킷 크기의 곱에 비례해 증가하므로
 다중 접속과 느린 네트워크에서 큐 적체와 지연을 일으킬 수 있는 고위험으로 관리한다.
 
-현재 구현은 패킷 포맷을 유지하면서 클라이언트 입력의 상한과 서버 상태 복제 주기를 각각
+당시 1차 구현은 패킷 포맷을 유지하면서 클라이언트 입력의 상한과 서버 상태 복제 주기를 각각
 60 Hz로 제한했다. 입력 deadline 보정 후 2026-08-19 Release 60/144/무제한 FPS에서
 `KEYS_BUFFER`가 60 packet/s를 유지했고, 30 FPS에서는 30 packet/s였다. `UPDATE_DATA`는
 모든 조건에서 연결당 60 packet/s와 642,060 byte/s를 유지했다.
@@ -172,5 +181,21 @@ Release 로컬 3인에서는 `UPDATE_DATA`가 총 180 packet/s와 1,926,180 byte
 낮추고 보간하기보다, 약 500 byte의 플레이어 상태와 약 10,200 byte의 주변 오브젝트
 배열을 분리하고 오브젝트를 가변 길이·낮은 주기로 전송하는 방향을 우선한다. 구체적인
 실행 순서는 `refactoring_plan.md`, 문제 상태와 측정 근거는 `code_smells.md`에서 관리한다.
+
+2026-08-23 Release 로컬 2인에서는 고정 `UPDATE_DATA`를 제거한 새 경로가 연결당
+`PLAYER_STATE` 약 60 packet/s와 `NEARBY_OBJECTS` 30 packet/s를 유지했다.
+두 연결의 서버 송신 합계는 측정 구간에 따라 78,436~84,964 byte/s였고 송신 큐는
+0 byte/0 packet, 최대 단일 송신 패킷은 615 byte였다. 입력은 연결당 약
+60 packet/s였으며 상호작용과 게임 종료도 정상 동작했다.
+
+다만 다른 클라이언트가 관심 영역 밖의 문·서랍을 변경하면 기존 상태로 보이다가
+접근해 `NEARBY_OBJECTS`에 포함되는 순간 최종 상태로 전환된다. 서버 상태 불일치는
+아니며, 영속 환경 상태 event와 늦은 접속용 snapshot을 분리하는 후속 과제로 관리한다.
+
+같은 날 필드 단위 정리 후 Release 1인에서는 `KEYS_BUFFER`가 108 byte × 60으로
+6,480 byte/s, `PLAYER_STATE`가 461 byte × 60으로 27,660 byte/s를 유지했다.
+주변 오브젝트 4개 조건의 `NEARBY_OBJECTS`는 275 byte × 30으로 8,250 byte/s였고,
+서버 전체 송신은 35,910 byte/s, 큐는 0 byte/0 packet이었다. 이후 코드 정리는
+wire 크기와 주기를 변경하지 않았다.
 
 구체적인 결함과 개선 후보는 `code_smells.md`, 작업 순서는 `refactoring_plan.md`에서 관리한다.

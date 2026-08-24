@@ -10,7 +10,7 @@
 #include "NetworkStatistics.h"
 #include "Timer.h"
 constexpr size_t MAX_CLIENT{ 5 };
-constexpr size_t MAX_SEND_OBJECT_INFO{ 30 };
+constexpr size_t MAX_NEARBY_OBJECTS{ 30 };
 
 constexpr WORD KEY_W{ 0x01 };
 constexpr WORD KEY_S{ 0x02 };
@@ -23,7 +23,6 @@ constexpr WORD KEY_4{ 0x80 };
 constexpr WORD KEY_E{ 0x100 };
 constexpr WORD KEY_LSHIFT{ 0x200 };
 constexpr WORD KEY_LBUTTON{ 0x400 };
-constexpr WORD KEY_RBUTTON{ 0x800 };
 
 // 소켓 정보 저장을 위한 구조체와 변수
 class CServerGameObject;
@@ -50,8 +49,7 @@ enum GAME_STATE
 
 struct SC_PLAYER_INFO
 {
-	RightItem m_selectItem;
-	bool m_bRightClick = false;
+	RightItem m_selectItem = NONE;
 
 	int m_iMineobjectNum = -1;
 	bool m_bAttacked = false;
@@ -61,50 +59,51 @@ struct SC_PLAYER_INFO
 	bool m_bTeleportItemUse = false;
 };
 
-struct SC_UPDATE_INFO
+struct SC_PLAYER_STATE
 {
-	//BYTE m_boolCollection;
-
 	INT8 m_nClientId = -1;
 	bool m_bAlive = true;
-	bool m_bRunning = false;	// BLUESUIT PLAYER가 달리는 상태
-	XMFLOAT3 m_xmf3Position;
-	XMFLOAT3 m_xmf3Velocity;
-	XMFLOAT3 m_xmf3Look;
+	bool m_bRunning = false;
+	XMFLOAT3 m_xmf3Position = {};
+	XMFLOAT3 m_xmf3Velocity = {};
+	XMFLOAT3 m_xmf3Look = {};
 	int m_nPickedObjectNum = -1;
-
-	// 각 슬롯에 포함된 오브젝트 번호(없으면 -1)
-	// 적 플레이어는 스킬 사용시 1로, 스킬 끝나거나 사용X시 0 (추적, 시야방해, 공격)
-	// 달리기의 경우 아직 정하지 않음(나중에 추가할꺼면 m_bShiftRun활용하면 될듯)
 	int m_nSlotObjectNum[3] = { -1, -1, -1 };
-	int m_nFuseObjectNum[3] = { -1, -1, -1 };	// 퓨즈 오브젝트 번호(없으면 -1)
-
-	int m_nNumOfObject = -1;
-	std::array<int, MAX_SEND_OBJECT_INFO> m_anObjectNum;
-	std::array<XMFLOAT4X4, MAX_SEND_OBJECT_INFO> m_axmf4x4World;
-
+	int m_nFuseObjectNum[3] = { -1, -1, -1 };
 	float m_fPitch = 1.0f;
 	SC_PLAYER_INFO m_playerInfo;
 };
+static_assert(sizeof(SC_PLAYER_INFO) == 20);
+static_assert(sizeof(SC_PLAYER_STATE) == 92);
 
-enum class SOCKET_STATE
+struct SC_NEARBY_OBJECT
 {
-	SEND_ID,
-	SEND_UPDATE_DATA,			 // 클라이언트에 보내는 응답
-	SEND_NUM_OF_CLIENT,
-	SEND_BLUE_SUIT_WIN,
-	SEND_ZOMBIE_WIN,
-	SEND_GAME_START,
-	SEND_CHANGE_SLOT,
+	int m_nObjectId = -1;
+	XMFLOAT4X4 m_xmf4x4World;
+};
+static_assert(sizeof(SC_NEARBY_OBJECT) == 68);
+static_assert(sizeof(SC_NEARBY_OBJECT) * MAX_NEARBY_OBJECTS <= MAX_PACKET_PAYLOAD_SIZE);
 
-	SEND_OPEN_DRAWER_SOUND,
-	SEND_CLOSE_DRAWER_SOUND,
-	SEND_OPEN_DOOR_SOUND,
-	SEND_CLOSE_DOOR_SOUND,
+enum class SOCKET_STATE : INT8
+{
+	SEND_ID = 0,
+	// wire 값 1은 폐기된 head이므로 재사용하지 않는다.
+	SEND_NUM_OF_CLIENT = 2,
+	SEND_BLUE_SUIT_WIN = 3,
+	SEND_ZOMBIE_WIN = 4,
+	SEND_GAME_START = 5,
+	SEND_CHANGE_SLOT = 6,
 
-	SEND_BLUE_SUIT_DEAD,
-	SEND_SPACEOUT_OBJECTS,
-	SEND_LOADING_COMPLETE
+	SEND_OPEN_DRAWER_SOUND = 7,
+	SEND_CLOSE_DRAWER_SOUND = 8,
+	SEND_OPEN_DOOR_SOUND = 9,
+	SEND_CLOSE_DOOR_SOUND = 10,
+
+	SEND_BLUE_SUIT_DEAD = 11,
+	SEND_SPACEOUT_OBJECTS = 12,
+	SEND_LOADING_COMPLETE = 13,
+	SEND_PLAYER_STATE = 14,
+	SEND_NEARBY_OBJECTS = 15
 };
 
 enum class ReceiveHead : INT8
@@ -231,16 +230,19 @@ private:
 	void LoadScene();
 	void CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4World, const vector<BoundingOrientedBox>& voobb);
 	void CreateItemObject();
-	void ProcessObjectReplication();
+	void ProcessOutOfSpaceObjectReplication();
 	std::vector<SC_SPACEOUT_OBJECT> CollectOutOfSpaceObjects();
 	void EnqueueOutOfSpaceObjectPackets(const std::vector<SC_SPACEOUT_OBJECT>& objectUpdates);
+	void UpdateNearbyObjectReplicationDataIfDue();
 	void UpdateNearbyObjectReplicationData();
+	void ReplicateNearbyObjectData();
 	void InitializePlayerPosition(shared_ptr<CServerPlayer>& serverPlayer, int index);
 
 	int mGameState = GAME_STATE::IN_LOBBY;
 	CTimer mTimer;
 	ServerNetworkStatisticsReporter mNetworkStatisticsReporter;
 	std::chrono::steady_clock::time_point mNextStateReplicationTime = {};
+	std::chrono::steady_clock::time_point mNextNearbyObjectReplicationTime = {};
 	static INT8 sClientCount;
 
 	// 접속한 클라이언트들의 정보를 저장.
@@ -249,7 +251,8 @@ private:
 	int mZombieCount = 0;
 	int mBlueSuitCount = 0;
 	std::array<std::shared_ptr<CServerPlayer>, MAX_CLIENT> mPlayers;
-	std::array<SC_UPDATE_INFO, MAX_CLIENT> mUpdateInfo;
+	std::array<SC_PLAYER_STATE, MAX_CLIENT> mPlayerStates = {};
+	std::array<std::vector<SC_NEARBY_OBJECT>, MAX_CLIENT> mNearbyObjectSnapshots = {};
 	std::vector<shared_ptr<CServerGameObject>> mGameObjects;
 	std::shared_ptr<CServerCollisionManager> mCollisionManager;
 

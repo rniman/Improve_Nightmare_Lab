@@ -12,7 +12,7 @@ constexpr UINT WM_SOCKET{ WM_USER + 1 };
 
 constexpr std::size_t MAX_CLIENT{ 5 };
 constexpr std::size_t MAX_SURVIVOR{ 4 };
-constexpr std::size_t MAX_RECV_OBJECT_INFO{ 30 };
+constexpr std::size_t MAX_NEARBY_OBJECTS{ 30 };
 
 constexpr WORD KEY_W{ 0x01 };
 constexpr WORD KEY_S{ 0x02 };
@@ -25,7 +25,6 @@ constexpr WORD KEY_4{ 0x80 };
 constexpr WORD KEY_E{ 0x100 };
 constexpr WORD KEY_LSHIFT{ 0x200 };
 constexpr WORD KEY_LBUTTON{ 0x400 };
-constexpr WORD KEY_RBUTTON{ 0x800 };
 
 class CGameObject;
 class CPlayer;
@@ -42,7 +41,7 @@ enum class ReceiveHead : INT8
 {
 	Invalid = -1,
 	Init = 0,
-	UpdateData = 1,
+	// wire 값 1은 폐기된 head이므로 재사용하지 않는다.
 	ClientCount = 2,
 	BlueSuitWin = 3,
 	ZombieWin = 4,
@@ -56,13 +55,14 @@ enum class ReceiveHead : INT8
 
 	BlueSuitDead = 11,
 	SpaceOutObjects = 12,
-	LoadingComplete = 13
+	LoadingComplete = 13,
+	PlayerState = 14,
+	NearbyObjects = 15
 };
 
 struct CS_PLAYER_INFO
 {
-	RightItem m_selectItem;
-	bool m_bRightClick = false;
+	RightItem m_selectItem = NONE;
 
 	int m_iMineobjectNum = -1;
 	bool m_bAttacked = false;
@@ -72,26 +72,30 @@ struct CS_PLAYER_INFO
 	bool m_bTeleportItemUse = false;
 };
 
-struct CS_CLIENTS_INFO
+struct CS_PLAYER_STATE
 {
 	INT8 m_nClientId = -1;
 	bool m_bAlive = true;
 	bool m_bRunning = false;
-	XMFLOAT3 m_xmf3Position;
-	XMFLOAT3 m_xmf3Velocity;
-	XMFLOAT3 m_xmf3Look;
+	XMFLOAT3 m_xmf3Position = {};
+	XMFLOAT3 m_xmf3Velocity = {};
+	XMFLOAT3 m_xmf3Look = {};
 	int m_nPickedObjectNum = -1;
-
-	int m_nSlotObjectNum[3];	// 각 슬롯에 포함된 오브젝트 번호(없으면 -1)
-	int m_nFuseObjectNum[3];	// 퓨즈 오브젝트 번호(없으면 -1)
-
-	int m_nNumOfObject = -1;
-	std::array<int, MAX_RECV_OBJECT_INFO> m_anObjectNum;
-	std::array<XMFLOAT4X4, MAX_RECV_OBJECT_INFO> m_axmf4x4World;
-
+	int m_nSlotObjectNum[3] = { -1, -1, -1 };
+	int m_nFuseObjectNum[3] = { -1, -1, -1 };
 	float m_fPitch = 0.0f;
 	CS_PLAYER_INFO m_playerInfo;
 };
+static_assert(sizeof(CS_PLAYER_INFO) == 20);
+static_assert(sizeof(CS_PLAYER_STATE) == 92);
+
+struct CS_NEARBY_OBJECT
+{
+	int m_nObjectId = -1;
+	XMFLOAT4X4 m_xmf4x4World;
+};
+static_assert(sizeof(CS_NEARBY_OBJECT) == 68);
+static_assert(sizeof(CS_NEARBY_OBJECT) * MAX_NEARBY_OBJECTS <= MAX_PACKET_PAYLOAD_SIZE);
 
 class CTcpClient
 {
@@ -146,7 +150,8 @@ private:
 	void ProcessWriteEvent();
 	bool TryProcessChangeSlotPacket(HWND window, SOCKET socket);
 	bool TryProcessInitPacket(SOCKET socket);
-	bool TryProcessUpdateDataPacket(SOCKET socket);
+	bool TryProcessPlayerStatePacket(SOCKET socket);
+	bool TryProcessNearbyObjectsPacket(SOCKET socket);
 	bool TryProcessClientCountPacket(SOCKET socket);
 	bool TryProcessBlueSuitDeadPacket(SOCKET socket);
 	bool TryProcessSpaceOutObjectsPacket(SOCKET socket);
@@ -180,7 +185,7 @@ private:
 	bool mHasReceiveHead = false;
 	bool mHasPayloadSize = false;
 
-	std::array<CS_CLIENTS_INFO, MAX_CLIENT> mClientInfo;
+	std::array<CS_PLAYER_STATE, MAX_CLIENT> mClientInfo = {};
 	std::array<std::shared_ptr<CPlayer>, MAX_CLIENT> mPlayers;
 	std::deque<PendingSend> mSendQueue;
 	std::size_t mPendingSendBytes = 0;

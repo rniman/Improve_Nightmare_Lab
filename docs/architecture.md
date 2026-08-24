@@ -79,8 +79,8 @@ Server.cpp
    - 애플리케이션 송신 요청과 `FD_WRITE` 알림은 분리했지만, 패킷 선택을 위한 소켓 상태와 Win32 비동기 이벤트의 시퀀싱은 여전히 `TCPServer` 내부에 함께 존재한다.
 
 6. **상태 복제 주기와 패킷 크기**
-   - 입력은 렌더 루프에서 `steady_clock` 기준 최대 60 Hz로 제한하고, 서버 상태 복제는 입력 수신과 분리된 `steady_clock` 기준 최대 60 Hz로 실행한다. 서버는 모든 활성 클라이언트의 로딩 완료 이후에만 최신 상태를 복제한다.
-   - 각 `UPDATE_DATA`는 여전히 최대 5명분의 고정 크기 `SC_UPDATE_INFO` 배열을 직렬화하므로, 주기 분리 후에도 패킷 크기와 다중 접속 전송량을 검증해야 한다.
+   - 입력은 108 byte `KEYS_BUFFER`로 렌더 루프에서 `steady_clock` 기준 최대 60 Hz로 제한하고, 서버 상태 복제는 입력 수신과 분리된 `steady_clock` 기준 최대 60 Hz로 실행한다. 서버는 모든 활성 클라이언트의 로딩 완료 이후에만 최신 상태를 복제한다.
+   - 플레이어 상태는 461 byte `PLAYER_STATE`로 최대 60 Hz, 주변 오브젝트는 수신자 관심 영역의 실제 개수만 `NEARBY_OBJECTS`로 최대 30 Hz 전송한다. 기존 `UPDATE_DATA` head와 고정 오브젝트 배열은 제거됐다.
 
 ## 의존성 고위험 영역
 1. **GameFramework ↔ Scene ↔ TCPClient 경계**
