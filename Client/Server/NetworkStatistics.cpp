@@ -8,37 +8,37 @@ namespace
 
 	const char* GetSendPacketName(std::uint8_t head)
 	{
-		switch (static_cast<SOCKET_STATE>(head))
+		switch (static_cast<ServerPacketType>(head))
 		{
-		case SOCKET_STATE::SEND_ID: return "ID";
-		case SOCKET_STATE::SEND_NUM_OF_CLIENT: return "NUM_OF_CLIENT";
-		case SOCKET_STATE::SEND_BLUE_SUIT_WIN: return "BLUE_SUIT_WIN";
-		case SOCKET_STATE::SEND_ZOMBIE_WIN: return "ZOMBIE_WIN";
-		case SOCKET_STATE::SEND_GAME_START: return "GAME_START";
-		case SOCKET_STATE::SEND_CHANGE_SLOT: return "CHANGE_SLOT";
-		case SOCKET_STATE::SEND_OPEN_DRAWER_SOUND: return "OPEN_DRAWER_SOUND";
-		case SOCKET_STATE::SEND_CLOSE_DRAWER_SOUND: return "CLOSE_DRAWER_SOUND";
-		case SOCKET_STATE::SEND_OPEN_DOOR_SOUND: return "OPEN_DOOR_SOUND";
-		case SOCKET_STATE::SEND_CLOSE_DOOR_SOUND: return "CLOSE_DOOR_SOUND";
-		case SOCKET_STATE::SEND_BLUE_SUIT_DEAD: return "BLUE_SUIT_DEAD";
-		case SOCKET_STATE::SEND_SPACEOUT_OBJECTS: return "SPACEOUT_OBJECTS";
-		case SOCKET_STATE::SEND_LOADING_COMPLETE: return "LOADING_COMPLETE";
-		case SOCKET_STATE::SEND_PLAYER_STATE: return "PLAYER_STATE";
-		case SOCKET_STATE::SEND_NEARBY_OBJECTS: return "NEARBY_OBJECTS";
-		case SOCKET_STATE::SEND_OPENABLE_OBJECT_STATE: return "OPENABLE_OBJECT_STATE";
-		case SOCKET_STATE::SEND_OPENABLE_OBJECT_SNAPSHOT: return "OPENABLE_OBJECT_SNAPSHOT";
+		case ServerPacketType::Init: return "ID";
+		case ServerPacketType::ClientCount: return "NUM_OF_CLIENT";
+		case ServerPacketType::BlueSuitWin: return "BLUE_SUIT_WIN";
+		case ServerPacketType::ZombieWin: return "ZOMBIE_WIN";
+		case ServerPacketType::GameStart: return "GAME_START";
+		case ServerPacketType::ChangeSlot: return "CHANGE_SLOT";
+		case ServerPacketType::OpenDrawerSound: return "OPEN_DRAWER_SOUND";
+		case ServerPacketType::CloseDrawerSound: return "CLOSE_DRAWER_SOUND";
+		case ServerPacketType::OpenDoorSound: return "OPEN_DOOR_SOUND";
+		case ServerPacketType::CloseDoorSound: return "CLOSE_DOOR_SOUND";
+		case ServerPacketType::BlueSuitDead: return "BLUE_SUIT_DEAD";
+		case ServerPacketType::SpaceOutObjects: return "SPACEOUT_OBJECTS";
+		case ServerPacketType::LoadingComplete: return "LOADING_COMPLETE";
+		case ServerPacketType::PlayerState: return "PLAYER_STATE";
+		case ServerPacketType::NearbyObjects: return "NEARBY_OBJECTS";
+		case ServerPacketType::OpenableObjectState: return "OPENABLE_OBJECT_STATE";
+		case ServerPacketType::OpenableObjectSnapshot: return "OPENABLE_OBJECT_SNAPSHOT";
 		default: return "UNKNOWN";
 		}
 	}
 
 	const char* GetReceivePacketName(std::uint8_t head)
 	{
-		switch (static_cast<ReceiveHead>(head))
+		switch (static_cast<ClientPacketType>(head))
 		{
-		case ReceiveHead::KeysBuffer: return "KEYS_BUFFER";
-		case ReceiveHead::GameStart: return "GAME_START";
-		case ReceiveHead::ChangeSlot: return "CHANGE_SLOT";
-		case ReceiveHead::LoadingComplete: return "LOADING_COMPLETE";
+		case ClientPacketType::KeysBuffer: return "KEYS_BUFFER";
+		case ClientPacketType::GameStart: return "GAME_START";
+		case ClientPacketType::ChangeSlot: return "CHANGE_SLOT";
+		case ClientPacketType::LoadingComplete: return "LOADING_COMPLETE";
 		default: return "UNKNOWN";
 		}
 	}

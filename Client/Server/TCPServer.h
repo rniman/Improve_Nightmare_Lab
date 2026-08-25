@@ -30,60 +30,60 @@ class CServerGameObject;
 class CServerPlayer;
 class CServerCollisionManager;
 
-enum SOUND_MESSAGE
+enum class SoundMessage
 {
-	OPEN_DRAWER,
-	CLOSE_DRAWER,
-	OPEN_DOOR,
-	CLOSE_DOOR,
-	BLUE_SUIT_DEAD,
+	OpenDrawer,
+	CloseDrawer,
+	OpenDoor,
+	CloseDoor,
+	BlueSuitDead,
 };
 
-enum GAME_STATE
+enum class GameState
 {
-	IN_LOBBY = 0,
-	IN_GAME,
-	BLUE_SUIT_WIN,
-	ZOMBIE_WIN,
-	IN_LODING
+	InLobby = 0,
+	InGame,
+	BlueSuitWin,
+	ZombieWin,
+	Loading
 };
 
-struct SC_PLAYER_INFO
+struct PlayerReplicationInfo
 {
-	RightItem m_selectItem = NONE;
+	RightItem selectedItem = NONE;
 
-	int m_iMineobjectNum = -1;
-	bool m_bAttacked = false;
+	int mineObjectId = -1;
+	bool attacked = false;
 
-	int m_iEscapeDoor = -1;
+	int escapeDoorId = -1;
 
-	bool m_bTeleportItemUse = false;
+	bool teleportItemUsed = false;
 };
 
-struct SC_PLAYER_STATE
+struct PlayerReplicationState
 {
-	INT8 m_nClientId = -1;
-	bool m_bAlive = true;
-	bool m_bRunning = false;
-	XMFLOAT3 m_xmf3Position = {};
-	XMFLOAT3 m_xmf3Velocity = {};
-	XMFLOAT3 m_xmf3Look = {};
-	int m_nPickedObjectNum = -1;
-	int m_nSlotObjectNum[3] = { -1, -1, -1 };
-	int m_nFuseObjectNum[3] = { -1, -1, -1 };
-	float m_fPitch = 1.0f;
-	SC_PLAYER_INFO m_playerInfo;
+	INT8 clientId = -1;
+	bool alive = true;
+	bool running = false;
+	XMFLOAT3 position = {};
+	XMFLOAT3 velocity = {};
+	XMFLOAT3 look = {};
+	int pickedObjectId = -1;
+	int slotObjectIds[3] = { -1, -1, -1 };
+	int fuseObjectIds[3] = { -1, -1, -1 };
+	float pitch = 1.0f;
+	PlayerReplicationInfo playerInfo;
 };
-static_assert(sizeof(SC_PLAYER_INFO) == 20);
-static_assert(sizeof(SC_PLAYER_STATE) == 92);
+static_assert(sizeof(PlayerReplicationInfo) == 20);
+static_assert(sizeof(PlayerReplicationState) == 92);
 
-struct SC_NEARBY_OBJECT
+struct NearbyObjectState
 {
-	int m_nObjectId = -1;
-	XMFLOAT4X4 m_xmf4x4World;
+	int objectId = -1;
+	XMFLOAT4X4 world;
 };
-static_assert(sizeof(SC_NEARBY_OBJECT) == 68);
-static_assert(sizeof(SC_NEARBY_OBJECT) * MAX_NEARBY_OBJECTS <= MAX_PACKET_PAYLOAD_SIZE);
+static_assert(sizeof(NearbyObjectState) == 68);
+static_assert(sizeof(NearbyObjectState) * MAX_NEARBY_OBJECTS <= MAX_PACKET_PAYLOAD_SIZE);
 
 enum class OpenableObjectType : std::uint8_t
 {
@@ -93,7 +93,7 @@ enum class OpenableObjectType : std::uint8_t
 	Count
 };
 
-struct SC_OPENABLE_OBJECT_STATE
+struct OpenableObjectState
 {
 	std::int32_t objectId = -1;
 	OpenableObjectType objectType = OpenableObjectType::Invalid;
@@ -108,33 +108,33 @@ struct SC_OPENABLE_OBJECT_STATE
 	}
 };
 static_assert(sizeof(OpenableObjectType) == 1);
-static_assert(sizeof(SC_OPENABLE_OBJECT_STATE) == 8);
+static_assert(sizeof(OpenableObjectState) == 8);
 
-enum class SOCKET_STATE : INT8
+enum class ServerPacketType : INT8
 {
-	SEND_ID = 0,
+	Init = 0,
 	// wire 값 1은 폐기된 head이므로 재사용하지 않는다.
-	SEND_NUM_OF_CLIENT = 2,
-	SEND_BLUE_SUIT_WIN = 3,
-	SEND_ZOMBIE_WIN = 4,
-	SEND_GAME_START = 5,
-	SEND_CHANGE_SLOT = 6,
+	ClientCount = 2,
+	BlueSuitWin = 3,
+	ZombieWin = 4,
+	GameStart = 5,
+	ChangeSlot = 6,
 
-	SEND_OPEN_DRAWER_SOUND = 7,
-	SEND_CLOSE_DRAWER_SOUND = 8,
-	SEND_OPEN_DOOR_SOUND = 9,
-	SEND_CLOSE_DOOR_SOUND = 10,
+	OpenDrawerSound = 7,
+	CloseDrawerSound = 8,
+	OpenDoorSound = 9,
+	CloseDoorSound = 10,
 
-	SEND_BLUE_SUIT_DEAD = 11,
-	SEND_SPACEOUT_OBJECTS = 12,
-	SEND_LOADING_COMPLETE = 13,
-	SEND_PLAYER_STATE = 14,
-	SEND_NEARBY_OBJECTS = 15,
-	SEND_OPENABLE_OBJECT_STATE = 16,
-	SEND_OPENABLE_OBJECT_SNAPSHOT = 17
+	BlueSuitDead = 11,
+	SpaceOutObjects = 12,
+	LoadingComplete = 13,
+	PlayerState = 14,
+	NearbyObjects = 15,
+	OpenableObjectState = 16,
+	OpenableObjectSnapshot = 17
 };
 
-enum class ReceiveHead : INT8
+enum class ClientPacketType : INT8
 {
 	Invalid = -1,
 	KeysBuffer = 0,
@@ -149,7 +149,7 @@ struct PendingSend
 	size_t sentBytes = 0;
 };
 
-struct SocketInfo
+struct ClientConnectionState
 {
 	bool isUsed = false;
 	SOCKET socket = INVALID_SOCKET;
@@ -158,10 +158,10 @@ struct SocketInfo
 	int clientAddressLength = 0;
 	char ipAddress[INET_ADDRSTRLEN] = {};
 
-	ReceiveHead receiveHead = ReceiveHead::Invalid;
+	ClientPacketType receivePacketType = ClientPacketType::Invalid;
 
 	// 소켓마다 HEAD와 DATA의 partial recv 진행 상태를 함께 보존한다.
-	bool hasReceiveHead = false;
+	bool hasReceivePacketType = false;
 	int receivedBytes = 0;		// 현재까지 받은 데이터의 길이
 	std::vector<char> receiveBuffer = std::vector<char>(MAX_PACKET_PAYLOAD_SIZE);
 	std::deque<PendingSend> sendQueue;
@@ -172,7 +172,7 @@ struct SocketInfo
 
 	SocketNetworkStatistics networkStatistics;
 
-	SOCKET_STATE sendState = SOCKET_STATE::SEND_ID;
+	ServerPacketType pendingPacketType = ServerPacketType::Init;
 
 	bool isLoadingComplete = false;
 };
@@ -183,14 +183,14 @@ public:
 	TCPServer();
 	~TCPServer();
 
-	bool Initialize(HWND hWnd);
-	void SimulationLoop();
+	bool Initialize(HWND window);
+	void RunSimulationTick();
 
 	// Win32 진입점에서 전달되는 메시지만 외부에 공개한다.
-	void OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	void OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void HandleWindowMessage(HWND window, UINT messageId, WPARAM wParam, LPARAM lParam);
+	void HandleSocketMessage(HWND window, UINT messageId, WPARAM wParam, LPARAM lParam);
 
-	void SetGameState(int gameState) { mGameState = gameState; }
+	void SetGameState(GameState gameState) { mGameState = gameState; }
 	void SetZombieCount(int zombieCount) { mZombieCount = zombieCount; }
 	void SetBlueSuitCount(int blueSuitCount) { mBlueSuitCount = blueSuitCount; }
 	void SetClientListBox(HWND clientListBox) { mClientListBox = clientListBox; }
@@ -198,9 +198,8 @@ public:
 	int GetZombieCount() const { return mZombieCount; }
 	int GetBlueSuitCount() const { return mBlueSuitCount; }
 	shared_ptr<CServerPlayer> GetPlayer(int index) { return mPlayers[index]; }
-
-	static default_random_engine m_mt19937Gen;
-	static HWND m_hWnd;
+	default_random_engine& GetRandomEngine() { return mRandomEngine; }
+	HWND GetWindowHandle() const { return mWindowHandle; }
 
 private:
 	// recv() 결과를 호출부가 임의의 정수값으로 해석하지 않도록 의미를 고정한다.
@@ -219,81 +218,98 @@ private:
 		Error
 	};
 
-	void ProcessAcceptEvent(HWND hWnd, SOCKET listenSocket);
-	void ProcessReadEvent(SOCKET socket);
-	void ProcessWriteEvent(SOCKET socket);
-	void ProcessCloseEvent(SOCKET socket);
-	void ProcessGameStartPacket(int clientIndex);
-	bool TryProcessChangeSlotPacket(SOCKET socket, int& clientIndex);
-	bool TryProcessClientInputPacket(
+	// Socket events
+	void HandleAcceptEvent(HWND window, SOCKET listenSocket);
+	void HandleReadEvent(SOCKET socket);
+	void HandleWriteEvent(SOCKET socket);
+	void HandleCloseEvent(SOCKET socket);
+
+	// Receive
+	bool HandleReceiveResult(ReceiveResult result, SOCKET socket);
+	bool IsValidClientPacketType(INT8 packetType) const;
+	ReceiveResult ReceiveData(int clientIndex, size_t expectedBytes);
+	void ResetReceiveState(ClientConnectionState& socketInfo);
+
+	// Client packets
+	void HandleGameStartPacket(int clientIndex);
+	bool TryHandleChangeSlotPacket(SOCKET socket, int& clientIndex);
+	bool TryHandleClientInputPacket(
 		SOCKET socket,
 		int clientIndex,
 		const std::shared_ptr<CServerPlayer>& player);
-	bool ProcessLoadingCompletePacket(int clientIndex);
+	bool HandleLoadingCompletePacket(int clientIndex);
 	bool AreAllClientsLoadingComplete() const;
 
+	// Connections
+	INT8 RegisterClientConnection(SOCKET clientSocket, struct sockaddr_in clientAddress, int clientAddressLength);
+	INT8 FindClientIndex(SOCKET clientSocket) const;
 	// 연결 종료 원인과 관계없이 소켓 및 플레이어 상태를 한 번만 정리한다.
 	bool DisconnectClient(SOCKET clientSocket);
-	INT8 RegisterClientSocket(SOCKET clientSocket, struct sockaddr_in clientAddress, int clientAddressLength);
-	INT8 FindClientIndex(SOCKET clientSocket) const;
-	bool IsValidReceiveHead(INT8 head) const;
-	bool HandleReceiveResult(ReceiveResult result, SOCKET socket);
-	void ResetReceiveState(SocketInfo& socketInfo);
-	ReceiveResult ReceiveData(int clientIndex, size_t expectedBytes);
-	void ReportNetworkStatisticsIfDue();
 
+	// Send
 	template<class... Args>
-	bool SubmitSendData(int clientIndex, Args&&... args);
-	bool EnqueueSendBuffer(int clientIndex, vector<char> buffer);
+	bool EnqueuePacketFields(int clientIndex, Args&&... args);
+	bool EnqueuePacketBuffer(int clientIndex, vector<char> buffer);
 	// partial send와 WSAEWOULDBLOCK 이후에도 소켓별 전송 위치를 유지한다.
 	SendResult FlushSendQueue(int clientIndex);
-	void RequestSend(int clientIndex);
-	void AppendBufferData(vector<char>& buffer, const void* data, size_t size);
+	void EnqueuePendingPacket(int clientIndex);
+	void AppendBytes(vector<char>& buffer, const void* data, size_t size);
 
-	int DetermineEndGameState();
-	void QueueEndGameNotifications(int endGameState);
-	void UpdatePlayerReplicationData();
+	// Game session
+	GameState DetermineGameOutcome();
+	void EnqueueGameOutcomePackets(GameState gameState);
+
+	// Replication
+	void BuildPlayerReplicationStates();
 	void ReplicateStateIfDue();
 	void BroadcastOpenableObjectState(
 		int objectId,
 		OpenableObjectType objectType,
 		bool opened);
 	void BroadcastOpenableObjectSnapshot();
-
-	void LoadScene();
-	void CreateSceneObject(char* pstrFrameName, const XMFLOAT4X4& xmf4x4World, const vector<BoundingOrientedBox>& voobb);
-	void CreateItemObject();
-	void ProcessOutOfSpaceObjectReplication();
+	void ReplicateOutOfSpaceObjects();
 	std::vector<SC_SPACEOUT_OBJECT> CollectOutOfSpaceObjects();
 	void EnqueueOutOfSpaceObjectPackets(const std::vector<SC_SPACEOUT_OBJECT>& objectUpdates);
-	void UpdateNearbyObjectReplicationDataIfDue();
-	void UpdateNearbyObjectReplicationData();
-	void ReplicateNearbyObjectData();
-	void InitializePlayerPosition(shared_ptr<CServerPlayer>& serverPlayer, int index);
+	void ReplicateNearbyObjectsIfDue();
+	void BuildNearbyObjectSnapshots();
+	void EnqueueNearbyObjectSnapshots();
 
-	int mGameState = GAME_STATE::IN_LOBBY;
+	// World initialization
+	void LoadServerScene();
+	void CreateObjectFromSceneFrame(char* frameName, const XMFLOAT4X4& world, const vector<BoundingOrientedBox>& boundingBoxes);
+	void PopulateSceneItems();
+	void AssignUniquePlayerSpawnPosition(shared_ptr<CServerPlayer>& serverPlayer, int index);
+
+	// Diagnostics
+	void ReportNetworkStatisticsIfDue();
+
+	GameState mGameState = GameState::InLobby;
 	CTimer mTimer;
 	ServerNetworkStatisticsReporter mNetworkStatisticsReporter;
 	std::chrono::steady_clock::time_point mNextStateReplicationTime = {};
 	std::chrono::steady_clock::time_point mNextNearbyObjectReplicationTime = {};
-	static INT8 sClientCount;
+	default_random_engine mRandomEngine;
 
 	// 접속한 클라이언트들의 정보를 저장.
-	std::array<SocketInfo, MAX_CLIENT> mSocketInfos;	// 소켓 인덱스는 순차적으로 배정받는다
+	std::array<ClientConnectionState, MAX_CLIENT> mConnections;	// 소켓 인덱스는 순차적으로 배정받는다
 
 	int mZombieCount = 0;
 	int mBlueSuitCount = 0;
 	std::array<std::shared_ptr<CServerPlayer>, MAX_CLIENT> mPlayers;
-	std::array<SC_PLAYER_STATE, MAX_CLIENT> mPlayerStates = {};
-	std::array<std::vector<SC_NEARBY_OBJECT>, MAX_CLIENT> mNearbyObjectSnapshots = {};
+	std::array<PlayerReplicationState, MAX_CLIENT> mPlayerReplicationStates = {};
+	std::array<std::vector<NearbyObjectState>, MAX_CLIENT> mNearbyObjectSnapshots = {};
 	std::vector<shared_ptr<CServerGameObject>> mGameObjects;
 	std::shared_ptr<CServerCollisionManager> mCollisionManager;
 
-	vector<pair<int, int>> mDrawerIds; // <ObjectCount,type>
+	vector<pair<int, int>> mDrawerEntries; // <ObjectCount,type>
 
+	HWND mWindowHandle = nullptr;
 	HWND mClientListBox = nullptr;
+	INT8 mClientCount = 0;
 
 	array<XMFLOAT3, 28> mPlayerStartPositions;
 	array<int, MAX_CLIENT> mPlayerStartPositionIndices;
 	bool mCanReplicateState = false;
 };
+
+extern TCPServer gTcpServer;

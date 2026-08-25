@@ -1,13 +1,13 @@
 #include "stdafx.h"
 #include "TCPServer.h"
 
-TCPServer g_tcpServer;
+TCPServer gTcpServer;
 HINSTANCE hInst;
 
 // 윈도우 메시지 처리 함수
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK OnProcessingWindowMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-LRESULT CALLBACK OnProcessingSocketMessage(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK HandleWindowMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK HandleSocketMessage(HWND, UINT, WPARAM, LPARAM);
 
 INT_PTR CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 
@@ -46,12 +46,12 @@ int main()
 	);
 
 	//소켓 준비작업
-	if (!g_tcpServer.Initialize(hWnd))
+	if (!gTcpServer.Initialize(hWnd))
 	{
 		DestroyWindow(hWnd);
 		return 1;
 	}
-	g_tcpServer.SetClientListBox(hListBox);
+	gTcpServer.SetClientListBox(hListBox);
 
 	MSG msg;
 	// 메시지 루프
@@ -68,7 +68,7 @@ int main()
 		}
 		else
 		{
-			g_tcpServer.SimulationLoop();
+			gTcpServer.RunSimulationTick();
 		}
 	}
 
@@ -85,10 +85,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	case WM_ACTIVATE:
 	case WM_SOUND:
 	case WM_OPENABLE_OBJECT_STATE:
-		OnProcessingWindowMessage(hWnd, uMsg, wParam, lParam);
+		HandleWindowMessage(hWnd, uMsg, wParam, lParam);
 		break;
 	case WM_SOCKET: // 소켓 관련 윈도우 메시지
-		return OnProcessingSocketMessage(hWnd, uMsg, wParam, lParam);
+		return HandleSocketMessage(hWnd, uMsg, wParam, lParam);
 		break;
 	case WM_DESTROY:
 		PostQuitMessage(0);
@@ -97,20 +97,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
-LRESULT CALLBACK OnProcessingWindowMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK HandleWindowMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)
 	{
 	case WM_ACTIVATE:
 	case WM_SOUND:
 	case WM_OPENABLE_OBJECT_STATE:
-		g_tcpServer.OnProcessingWindowMessage(hWnd, uMsg, wParam, lParam);
+		gTcpServer.HandleWindowMessage(hWnd, uMsg, wParam, lParam);
 		break;
 	}
 	return 0;
 }
 // 소켓 관련 메시지 처리
-LRESULT CALLBACK OnProcessingSocketMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK HandleSocketMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	// 메시지 처리
 	switch (WSAGETSELECTEVENT(lParam))
@@ -119,7 +119,7 @@ LRESULT CALLBACK OnProcessingSocketMessage(HWND hWnd, UINT uMsg, WPARAM wParam, 
 	case FD_READ:
 	case FD_WRITE:
 	case FD_CLOSE:
-		g_tcpServer.OnProcessingSocketMessage(hWnd, uMsg, wParam, lParam);
+		gTcpServer.HandleSocketMessage(hWnd, uMsg, wParam, lParam);
 		break;
 	default:
 		break;

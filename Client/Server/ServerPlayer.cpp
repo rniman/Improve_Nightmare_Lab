@@ -2,6 +2,7 @@
 #include "ServerPlayer.h"
 #include "ServerCollision.h"
 #include "ServerEnvironmentObject.h"
+#include "TCPServer.h"
 
 CServerPlayer::CServerPlayer()
 	: CServerGameObject()
@@ -473,7 +474,7 @@ void CServerPlayer::SetPickedObject(const shared_ptr<CServerCollisionManager> pC
 					shared_ptr<CServerDrawerObject> pDrawer = dynamic_pointer_cast<CServerDrawerObject>(pCollisionObject);
 					if (pDrawer)	// 서랍의 경우 내부에 아이템을 고려해야함
 					{
-						if (!pDrawer->IsOpen() || !pDrawer->m_pStoredItem)	// 닫혀있거나 내부에 아이템이 없으면 
+						if (!pDrawer->IsOpen() || !pDrawer->m_pStoredItem)	// 닫혀있거나 내부에 아이템이 없으면
 						{
 							if (fHitDistance < fNearestHitDistance)
 							{
@@ -662,8 +663,6 @@ void CServerBlueSuitPlayer::Hit()
 		m_bCollision = false;
 		m_bAlive = false;
 		m_xmf3OldPosition = m_xmf3Position;
-
-		//PostMessage(TCPServer::m_hWnd, WM_SOUND, (WPARAM)SOUND_MESSAGE::BLUE_SUIT_DEAD, (LPARAM)m_nPlayerId);
 	}
 }
 
@@ -794,7 +793,7 @@ void CServerBlueSuitPlayer::TeleportRandomPosition()
 	// 후보지를 두고 int 값에 따라 그곳에 가도록 해야할듯
 	uniform_int_distribution<int> disFloatPosition(0, axmf3Positions.size() - 1);
 
-	m_xmf3Position = axmf3Positions[disFloatPosition(TCPServer::m_mt19937Gen)];
+	m_xmf3Position = axmf3Positions[disFloatPosition(gTcpServer.GetRandomEngine())];
 	m_xmf3OldPosition = m_xmf3Position;
 }
 

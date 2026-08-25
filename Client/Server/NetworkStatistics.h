@@ -94,7 +94,7 @@ public:
 	// 1초마다 활성 연결 통계를 집계·출력하고 구간 통계를 초기화한다.
 	void ReportIfDue(NetworkClientStatisticsView* clients, std::size_t clientCount);
 
-	// SocketInfo 초기화 전에 해당 연결의 전체 누적 통계를 출력한다.
+	// ClientConnectionState 초기화 전에 해당 연결의 전체 누적 통계를 출력한다.
 	void ReportDisconnected(int clientIndex, const SocketNetworkStatistics& statistics) const;
 
 private:

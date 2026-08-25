@@ -128,17 +128,17 @@ void CServerDrawerObject::UpdatePicking(INT8 nClientId)
 	{
 		m_bOpened = false;
 		m_bAnimate = true;
-		PostMessage(TCPServer::m_hWnd, WM_SOUND, (WPARAM)SOUND_MESSAGE::CLOSE_DRAWER, (LPARAM)nClientId);
+		PostMessage(gTcpServer.GetWindowHandle(), WM_SOUND, (WPARAM)SoundMessage::CloseDrawer, (LPARAM)nClientId);
 	}
 	else
 	{
 		m_bOpened = true;
 		m_bAnimate = true;
-		PostMessage(TCPServer::m_hWnd, WM_SOUND, (WPARAM)SOUND_MESSAGE::OPEN_DRAWER, (LPARAM)nClientId);
+		PostMessage(gTcpServer.GetWindowHandle(), WM_SOUND, (WPARAM)SoundMessage::OpenDrawer, (LPARAM)nClientId);
 	}
 
 	PostMessage(
-		TCPServer::m_hWnd,
+		gTcpServer.GetWindowHandle(),
 		WM_OPENABLE_OBJECT_STATE,
 		static_cast<WPARAM>(GetCollisionNum()),
 		static_cast<LPARAM>(MAKELPARAM(
@@ -188,17 +188,17 @@ void CServerDoorObject::UpdatePicking(INT8 nClientId)
 	{
 		m_bOpened = false;
 		m_fDoorAngle = 0.0f;
-		PostMessage(TCPServer::m_hWnd, WM_SOUND, (WPARAM)SOUND_MESSAGE::CLOSE_DOOR, (LPARAM)nClientId);
+		PostMessage(gTcpServer.GetWindowHandle(), WM_SOUND, (WPARAM)SoundMessage::CloseDoor, (LPARAM)nClientId);
 	}
 	else
 	{
 		m_bOpened = true;
 		m_fDoorAngle = 150.0f;
-		PostMessage(TCPServer::m_hWnd, WM_SOUND, (WPARAM)SOUND_MESSAGE::OPEN_DOOR, (LPARAM)nClientId);
+		PostMessage(gTcpServer.GetWindowHandle(), WM_SOUND, (WPARAM)SoundMessage::OpenDoor, (LPARAM)nClientId);
 	}
 
 	PostMessage(
-		TCPServer::m_hWnd,
+		gTcpServer.GetWindowHandle(),
 		WM_OPENABLE_OBJECT_STATE,
 		static_cast<WPARAM>(GetCollisionNum()),
 		static_cast<LPARAM>(MAKELPARAM(
@@ -358,7 +358,7 @@ void CServerTeleportObject::SetRandomPosition(shared_ptr<CServerCollisionManager
 	uniform_real_distribution<float> pos_dis(-0.2f, 0.2f);
 	while (true)
 	{
-		int rd_num = dis(TCPServer::m_mt19937Gen);
+		int rd_num = dis(gTcpServer.GetRandomEngine());
 		int nDrawerNum = m_vDrawerId[rd_num].first;
 		shared_ptr<CServerDrawerObject> pDrawerObject = dynamic_pointer_cast<CServerDrawerObject>(pCollisionManager->GetCollisionObjectWithNumber(nDrawerNum));
 
@@ -373,8 +373,8 @@ void CServerTeleportObject::SetRandomPosition(shared_ptr<CServerCollisionManager
 
 		XMFLOAT4X4 xmf4x4World = pCollisionManager->GetCollisionObjectWithNumber(nDrawerNum)->GetWorldMatrix();
 
-		XMFLOAT3 xmf3RandOffset = XMFLOAT3(pos_dis(TCPServer::m_mt19937Gen), 0.0f, pos_dis(TCPServer::m_mt19937Gen));
-		XMFLOAT3 xmf3RandRotation = XMFLOAT3(0.0f, 0.0f, (float)rotation_dis(TCPServer::m_mt19937Gen));
+		XMFLOAT3 xmf3RandOffset = XMFLOAT3(pos_dis(gTcpServer.GetRandomEngine()), 0.0f, pos_dis(gTcpServer.GetRandomEngine()));
+		XMFLOAT3 xmf3RandRotation = XMFLOAT3(0.0f, 0.0f, (float)rotation_dis(gTcpServer.GetRandomEngine()));
 
 		SetDrawerNumber(nDrawerNum);
 		SetDrawer(pDrawerObject);
@@ -511,7 +511,7 @@ void CServerMineObject::SetRandomPosition(shared_ptr<CServerCollisionManager>& p
 	uniform_real_distribution<float> pos_dis(-0.2f, 0.2f);
 	while (true)
 	{
-		int rd_num = dis(TCPServer::m_mt19937Gen);
+		int rd_num = dis(gTcpServer.GetRandomEngine());
 		int nDrawerNum = m_vDrawerId[rd_num].first;
 		shared_ptr<CServerDrawerObject> pDrawerObject = dynamic_pointer_cast<CServerDrawerObject>(pCollisionManager->GetCollisionObjectWithNumber(nDrawerNum));
 
@@ -528,7 +528,7 @@ void CServerMineObject::SetRandomPosition(shared_ptr<CServerCollisionManager>& p
 
 		XMFLOAT4X4 xmf4x4World = pCollisionManager->GetCollisionObjectWithNumber(nDrawerNum)->GetWorldMatrix();
 
-		XMFLOAT3 xmf3RandOffset = XMFLOAT3(pos_dis(TCPServer::m_mt19937Gen), 0.0f, pos_dis(TCPServer::m_mt19937Gen));
+		XMFLOAT3 xmf3RandOffset = XMFLOAT3(pos_dis(gTcpServer.GetRandomEngine()), 0.0f, pos_dis(gTcpServer.GetRandomEngine()));
 		XMFLOAT3 xmf3RandRotation = XMFLOAT3(90.0f, 0.0f, 0.0f);
 
 		SetDrawerNumber(nDrawerNum);
@@ -625,7 +625,7 @@ void CServerFuseObject::SetRandomPosition(shared_ptr<CServerCollisionManager>& p
 	uniform_real_distribution<float> pos_dis(-0.2f, 0.2f);
 	while (true)
 	{
-		int rd_num = dis(TCPServer::m_mt19937Gen);
+		int rd_num = dis(gTcpServer.GetRandomEngine());
 		int nDrawerNum = m_vDrawerId[rd_num].first;
 		shared_ptr<CServerDrawerObject> pDrawerObject = dynamic_pointer_cast<CServerDrawerObject>(pCollisionManager->GetCollisionObjectWithNumber(nDrawerNum));
 
@@ -642,8 +642,8 @@ void CServerFuseObject::SetRandomPosition(shared_ptr<CServerCollisionManager>& p
 
 		XMFLOAT4X4 xmf4x4World = pCollisionManager->GetCollisionObjectWithNumber(nDrawerNum)->GetWorldMatrix();
 
-		XMFLOAT3 xmf3RandOffset = XMFLOAT3(pos_dis(TCPServer::m_mt19937Gen), 0.0f, pos_dis(TCPServer::m_mt19937Gen));
-		XMFLOAT3 xmf3RandRotation = XMFLOAT3(0.0f, 0.0f, (float)rotation_dis(TCPServer::m_mt19937Gen));
+		XMFLOAT3 xmf3RandOffset = XMFLOAT3(pos_dis(gTcpServer.GetRandomEngine()), 0.0f, pos_dis(gTcpServer.GetRandomEngine()));
+		XMFLOAT3 xmf3RandRotation = XMFLOAT3(0.0f, 0.0f, (float)rotation_dis(gTcpServer.GetRandomEngine()));
 
 		SetDrawerNumber(nDrawerNum);
 		SetDrawer(pDrawerObject);
