@@ -265,7 +265,7 @@ void CBlurComputeShader::PassFirst(ID3D12GraphicsCommandList* pd3dCommandList, i
 		pd3dCommandList->Dispatch(m_cxThreadGroups, m_cyThreadGroups, m_czThreadGroups);
 
 		ID3D12Resource* pd3dTargetSource = m_pTextureFirPassUav->GetResource(0);
-		::SynchronizeResourceTransition(pd3dCommandList, pd3dTargetSource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dTargetSource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 		ID3D12Resource* pd3dIdleSource = m_pTextureCompositeUav->GetResource(0);
 		::SynchronizeResourceTransition(pd3dCommandList, pd3dIdleSource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -298,10 +298,10 @@ void CBlurComputeShader::PassSecond(ID3D12GraphicsCommandList* pd3dCommandList, 
 		pd3dCommandList->Dispatch(m_cxThreadGroups, m_cyThreadGroups, m_czThreadGroups);
 
 		ID3D12Resource* pd3dTargetSource = m_pTextureSecPassUav->GetResource(0);
-		::SynchronizeResourceTransition(pd3dCommandList, pd3dTargetSource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dTargetSource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 		ID3D12Resource* pd3dIdleSource = m_pTextureFirPassUav->GetResource(0);
-		::SynchronizeResourceTransition(pd3dCommandList, pd3dIdleSource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dIdleSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	}
 }
 
@@ -334,6 +334,6 @@ void CBlurComputeShader::PassComposite(ID3D12GraphicsCommandList* pd3dCommandLis
 		::SynchronizeResourceTransition(pd3dCommandList, pd3dTargetSource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		ID3D12Resource* pd3dIdleSource = m_pTextureSecPassUav->GetResource(0);
-		::SynchronizeResourceTransition(pd3dCommandList, pd3dIdleSource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		::SynchronizeResourceTransition(pd3dCommandList, pd3dIdleSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	}
 }

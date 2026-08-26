@@ -31,12 +31,12 @@ void CSBlurVertical(uint3 n3DispatchThreadID : SV_DispatchThreadID)
     float4 blurredColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
     
     const int radius = 15;
-    for(int x = -radius; x <= radius; x++)
+    for(int y = -radius; y <= radius; y++)
     {
-        int2 samplePos = int2(n3DispatchThreadID.xy) + int2(x, 0);
+        int2 samplePos = int2(n3DispatchThreadID.xy) + int2(0, y);
         samplePos = clamp(samplePos, int2(0, 0), int2(FRAME_BUFFER_WIDTH - 1, FRAME_BUFFER_HEIGHT - 1));
         
-        blurredColor += DFTextureEmissive[samplePos] * weight[abs(x)];
+        blurredColor += DFTextureEmissive[samplePos] * weight[abs(y)];
     }
                   
     gOutputTexture[n3DispatchThreadID.xy] = blurredColor;

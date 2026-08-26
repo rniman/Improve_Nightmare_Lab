@@ -1,5 +1,8 @@
 #include "Common.hlsl"
 
+// t14: output from the first blur pass
+Texture2D<float4> gInputTexture : register(t14);
+
 // 출력 리소스
 // u0: 수평 블러 결과를 쓸 RWTexture (UAV)
 RWTexture2D<float4> gOutputTexture : register(u0);
@@ -32,12 +35,12 @@ void CSBlurHorizontal(uint3 n3DispatchThreadID : SV_DispatchThreadID)
     
 	const int radius = 15;
         
-	for (int y = -radius; y <= radius; y++)
+	for (int x = -radius; x <= radius; x++)
 	{
-		int2 samplePos = int2(n3DispatchThreadID.xy) + int2(0, y);
+		int2 samplePos = int2(n3DispatchThreadID.xy) + int2(x, 0);
 		samplePos = clamp(samplePos, int2(0, 0), int2(FRAME_BUFFER_WIDTH - 1, FRAME_BUFFER_HEIGHT - 1));
 
-		blurredColor += DFTextureEmissive[samplePos] * weight[abs(y)];
+		blurredColor += gInputTexture[samplePos] * weight[abs(x)];
 	}
               
 	gOutputTexture[n3DispatchThreadID.xy] = blurredColor;
