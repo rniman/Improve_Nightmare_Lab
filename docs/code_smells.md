@@ -37,7 +37,7 @@
 | M-002 | Scene/Network | `Scene`과 `TCPClient` 직접 의존 | 렌더링 씬과 네트워크 정의의 결합이 변경 범위를 넓힌다. 게임 상태 전달 경계를 확인한 뒤 점진적으로 완화한다. |
 | M-003 | Network | 패킷 파싱과 상태 적용 결합 | 수신 처리에서 프로토콜 해석과 게임 객체 변경이 섞여 있다. 안정성 수정이 필요한 처리부터 두 단계를 분리한다. |
 | M-004 | Resource | 일부 raw pointer 및 수동 수명 관리 | 전체 일괄 교체는 하지 않는다. 소유권이 불명확하거나 오류가 재현되는 리소스부터 정리한다. |
-| M-005 | Source layout | 큰 클래스와 긴 함수 | 크기 자체를 문제로 보지 않는다. 반복 수정되는 함수만 동작 단계 기준으로 추출한다. |
+| M-005 | Source layout | 큰 클래스와 긴 함수 | 월드 구성은 `ServerWorldBuilder`로 분리했다. 크기 자체를 문제로 보지 않고, `TCPServer`에 남은 패킷 처리·연결/송신·복제·세션 책임 중 반복 수정되는 경로만 동작 단계 기준으로 추출한다. |
 
 ## Deferred
 
@@ -61,13 +61,15 @@
 | RS-005 | Network | 연결 종료 및 접속 실패 정리 분산 | 소켓 오류, `FD_CLOSE`, 접속 등록 실패를 중복 호출에 안전한 단일 정리 경로로 통합하고 Client/Server x64 Debug 빌드를 확인했다. |
 | RS-006 | Network | 슬롯 변경 시 수신 상태 누락 및 입력 인덱스 미검증 | `SocketInfo` 전체 이동·교환으로 수신 상태를 보존하고 slot 범위를 검증했다. 클라이언트 수신 헤더도 객체 멤버로 이동하고 Client/Server x64 Debug 빌드를 확인했다. |
 | RS-007 | Network I/O | TCP partial recv 상태 소실 및 미완료 패킷 해석 | 수신 결과를 완료·대기·종료·오류로 구분하고 소켓별 헤더와 누적 바이트를 보존한다. 가변 길이 패킷은 크기와 구조 단위를 검증하며, 완성된 페이로드만 해석하도록 수정하고 Client/Server x64 Debug 빌드를 확인했다. |
-| RS-008 | Network I/O | TCP partial send 데이터 유실 및 송신 요청 혼합 | 소켓별 송신 큐와 전송 위치를 유지해 partial send 및 `WSAEWOULDBLOCK` 이후 실제 `FD_WRITE`에서 재개한다. 애플리케이션 송신 요청은 `RequestSend()`로 분리하고 Client/Server x64 Debug 빌드와 서버 실행을 확인했다. |
+| RS-008 | Network I/O | TCP partial send 데이터 유실 및 송신 요청 혼합 | 소켓별 송신 큐와 전송 위치를 유지해 partial send 및 `WSAEWOULDBLOCK` 이후 실제 `FD_WRITE`에서 재개한다. 애플리케이션 송신 요청은 `EnqueuePendingPacket()`로 분리하고 Client/Server x64 Debug 빌드와 서버 실행을 확인했다. |
 | RS-009 | Protocol | 외부 패킷 값 및 버퍼 범위 미검증 | 서버는 client head, slot, key mask, transform을 검증하고, 클라이언트는 server head, payload 크기, client/object ID, 개수, transform을 검증한 뒤 상태를 적용한다. 등록되지 않은 head나 스트림을 복구할 수 없는 값은 연결을 종료한다. |
 | RS-010 | Network diagnostics | 패킷별 통신량과 큐 상태 측정 부재 | 연결별·패킷 head별 TX/RX byte와 packet, 송신 큐 최고치, `WOULDBLOCK` 횟수를 1초 구간과 연결 전체 수명으로 측정하도록 분리했다. 이 통계로 R-005의 Release 기준선을 확보했다. |
 | RS-011 | Network cadence | 입력 수신과 상태 복제 트리거 결합 | `KEYS_BUFFER`의 패킷별 `UPDATE_DATA` 응답을 제거하고 입력 deadline을 현재 시각에서 다시 잡지 않고 고정 간격으로 전진시켰다. Release 60/144/무제한 FPS에서 입력과 상태 복제가 각각 60 packet/s를 유지했고, 30 FPS 입력은 호출 가능한 프레임 수에 따라 30 packet/s였다. 로컬 3인에서도 상태 복제는 연결당 60 packet/s, 큐 0을 유지했으며 별도 사운드 이벤트 전송을 확인했다. |
-| RS-012 | Network event | 상태 복제 분리 후 게임 종료 패킷 미전송 | 승리 상태 설정 후 `RequestSend()`가 없어 정기 복제 중단과 함께 종료 패킷도 누락됐다. 상태 전환 시 각 활성 연결에 승리 패킷을 한 번 즉시 등록하도록 수정하고 Release 2인 플레이에서 WIN 패킷 로그를 확인했다. |
+| RS-012 | Network event | 상태 복제 분리 후 게임 종료 패킷 미전송 | 승리 상태 설정 후 `EnqueuePendingPacket()`가 없어 정기 복제 중단과 함께 종료 패킷도 누락됐다. 상태 전환 시 각 활성 연결에 승리 패킷을 한 번 즉시 등록하도록 수정하고 Release 2인 플레이에서 WIN 패킷 로그를 확인했다. |
 | RS-013 | Network buffer | 연결 상태의 대형 인라인 저장소 | 클라이언트와 서버의 65,535 byte 수신 배열을 `vector<char>` 소유로 옮기고 약 16.5 KiB의 소켓 통계 저장소를 `unique_ptr` 소유로 옮겼다. `SocketInfo` 이동·교환의 대형 스택 임시 객체와 관련 경고를 제거하고 Release 2인 실행에서 통신 동작을 확인했다. |
 | RS-014 | Replication | 문·서랍의 30 Hz 애니메이션과 관심 영역 진입 시 상태 pop | 문·서랍을 `NEARBY_OBJECTS`에서 제외하고 상태 변경 event를 모든 활성 클라이언트에 전달하며, 모든 클라이언트 로딩 완료 후 현재 상태 snapshot을 한 번 전송한다. 클라이언트는 서버 최종 상태를 적용해 렌더 프레임마다 애니메이션하고 서버의 행렬·충돌 권위는 유지한다. Release 실행에서 자신과 다른 클라이언트의 문·서랍 상태 및 서랍 애니메이션을 확인했다. |
+| RS-015 | Server structure | TCPServer의 월드 구성 책임 집중 | 초기화를 네트워크와 월드 단계로 나누고, 씬 로딩·오브젝트 생성·탈출문 선택·아이템 배치와 `mDrawerEntries`를 `ServerWorldBuilder`로 이동했다. 프로젝트 XML 및 diff 정적 검사는 통과했으며 빌드·실행 검증은 후속 대상이다. |
+| RS-016 | Server initialization | 월드 구성 실패가 초기화 결과에 반영되지 않음 | `InitializeWorld()`가 성공 여부를 반환하고 `TCPServer::Initialize()`가 이를 전달하도록 정리했다. 월드를 네트워크보다 먼저 구성해 실패 시 리슨 소켓을 열지 않으며, 호출부는 기존대로 창을 닫고 서버 시작을 중단한다. 정적 검사를 수행했으며 빌드·실행 검증은 후속 대상이다. |
 
 ## 항목 작성 규칙
 

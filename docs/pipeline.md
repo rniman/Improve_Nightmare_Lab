@@ -11,8 +11,14 @@
 
 ### 서버 시작
 1. `main`이 메시지 기반 소켓 처리를 위한 Win32 윈도우를 생성한다.
-2. `TCPServer::Initialize()`가 WinSock을 초기화하고, 리슨 소켓을 생성하며, 바인드/리슨 후 `WSAAsyncSelect`를 등록한다.
-3. 서버가 충돌/월드 데이터를 로드하고 클라이언트를 대기한다.
+2. `TCPServer::Initialize()`가 난수 엔진을 초기화한 뒤 수명주기 단계를 호출한다.
+   - `InitializeWorld()`가 충돌 관리자를 생성하고 `ServerWorldBuilder`에 월드 구성을 위임한다.
+     월드 구성 실패 시 `Initialize()`도 실패해 서버 시작을 중단한다.
+   - 월드 구성이 성공하면 `InitializeNetworking()`이 WinSock 초기화, 리슨 소켓 생성,
+     바인드/리슨과 `WSAAsyncSelect` 등록을 담당한다.
+3. `ServerWorldBuilder::Build()`가 `ServerScene.bin`을 검증하며 읽고, 프레임별 서버
+   오브젝트 생성, 탈출문 선택과 초기 아이템 배치를 순서대로 수행한다.
+4. 월드 구성이 끝나면 서버가 클라이언트를 대기한다.
 
 ## 2) 메인 루프
 
@@ -22,7 +28,7 @@
 
 ### 서버 메인 루프
 - 메시지 펌프가 `FD_ACCEPT/FD_READ/FD_WRITE/FD_CLOSE`를 처리한다.
-- 유휴 시, `TCPServer::SimulationLoop()`이 권한 있는 게임 시뮬레이션을 실행한다.
+- 유휴 시, `TCPServer::RunSimulationTick()`이 권한 있는 게임 시뮬레이션을 실행한다.
 
 ## 3) 클라이언트 프레임 파이프라인
 
@@ -42,7 +48,7 @@
 
 ## 4) 서버 시뮬레이션 루프
 
-틱별 (게임 활성 시 `TCPServer::SimulationLoop()`):
+틱별 (게임 활성 시 `TCPServer::RunSimulationTick()`):
 1. 서버 타이머 틱.
 2. 게임 종료 조건 확인.
 3. 각 활성 플레이어 업데이트:
@@ -52,10 +58,10 @@
 4. 충돌 관리자/월드 오브젝트 업데이트.
    - 문·서랍 상태가 변경되면 Win32 메시지로 서버 네트워크 계층에 전달하고
      `OPENABLE_OBJECT_STATE`를 모든 활성 클라이언트의 송신 큐에 등록한다.
-5. `UpdatePlayerReplicationData()`가 플레이어 상태를 갱신한다.
-6. `ProcessOutOfSpaceObjectReplication()`이 영역을 이탈한 오브젝트를
+5. `BuildPlayerReplicationStates()`가 플레이어 상태를 갱신한다.
+6. `ReplicateOutOfSpaceObjects()`이 영역을 이탈한 오브젝트를
    가변 길이 `SEND_SPACEOUT_OBJECTS` 패킷으로 직렬화해 즉시 송신 큐에 등록한다.
-7. `UpdateNearbyObjectReplicationDataIfDue()`가 플레이어별 주변 동적 오브젝트를
+7. `ReplicateNearbyObjectsIfDue()`가 플레이어별 주변 동적 오브젝트를
 	최대 30 Hz로 조사한다. 수신자 자신의 3x3 셀에 있는 중복 제거된
 	오브젝트만 `NEARBY_OBJECTS`에 가변 길이로 담아 송신한다.
 8. `ReplicateStateIfDue()`가 로딩 완료 후 오브젝트 배열을 제외한
@@ -84,10 +90,10 @@
 시작된 뒤에는 승패 상태를 포함해 마지막 클라이언트의 정리가 완료되면 서버가
 `WM_CLOSE`를 게시하고, 기존 `WM_DESTROY` → `WM_QUIT` 경로로 정상 종료한다.
 
-애플리케이션에서 새 패킷이 필요한 일반 경로는 `RequestSend()`이며, 현재 소켓
+애플리케이션에서 새 패킷이 필요한 일반 경로는 `EnqueuePendingPacket()`이며, 현재 소켓
 상태에 맞는 패킷을 직렬화해 큐에 추가한다. 예외적으로 시뮬레이션에서 발생한 영역
-이탈 오브젝트 이벤트는 `ProcessOutOfSpaceObjectReplication()`이 가변 길이 패킷을 직접 직렬화해
-`EnqueueSendBuffer()`로 전달한다. 두 경로 모두 같은 소켓별 큐와
+이탈 오브젝트 이벤트는 `ReplicateOutOfSpaceObjects()`이 가변 길이 패킷을 직접 직렬화해
+`EnqueuePacketBuffer()`로 전달한다. 두 경로 모두 같은 소켓별 큐와
 `FlushSendQueue()`를 사용한다.
 
 큐는 패킷 순서와 각 패킷의 전송 위치를 보존하며 즉시 보낼 수 있는 범위까지
@@ -107,8 +113,8 @@
 | 수신 대기 | 미완성 데이터와 `WSAEWOULDBLOCK`의 의미가 호출부마다 불명확함 | `Pending`, `Closed`, `Error`를 구분하고 `Pending`이면 다음 `FD_READ`에서 이어 받음 |
 | 송신 버퍼 수명 | 임시 버퍼를 한 번 `send()`한 직후 해제해 partial send의 나머지 데이터를 잃을 수 있음 | 각 소켓의 송신 큐가 버퍼와 전송 위치를 소유하며 완료될 때까지 보존함 |
 | 송신 대기 | partial send와 `WSAEWOULDBLOCK` 이후 재개할 상태가 없음 | 보내지 못한 위치부터 실제 `FD_WRITE` 이벤트에서 재개함 |
-| 송신 요청 | 새 패킷 요청을 인위적인 `FD_WRITE` 메시지로 전달해 Winsock 알림과 의미가 섞임 | 일반 패킷은 `RequestSend()`, 시뮬레이션 이벤트는 명시적인 큐 등록, `FD_WRITE`는 대기 중인 큐 재개만 담당함 |
-| 패킷 생성과 전송 | 패킷별 직렬화 함수가 직접 `send()`를 호출해 오류 및 큐 처리가 반복됨 | 고정 필드는 `SubmitSendData()`, 가변 데이터는 호출부에서 직렬화하고 모두 `EnqueueSendBuffer()`로 큐 등록을 통합함 |
+| 송신 요청 | 새 패킷 요청을 인위적인 `FD_WRITE` 메시지로 전달해 Winsock 알림과 의미가 섞임 | 일반 패킷은 `EnqueuePendingPacket()`, 시뮬레이션 이벤트는 명시적인 큐 등록, `FD_WRITE`는 대기 중인 큐 재개만 담당함 |
+| 패킷 생성과 전송 | 패킷별 직렬화 함수가 직접 `send()`를 호출해 오류 및 큐 처리가 반복됨 | 고정 필드는 `EnqueuePacketFields()`, 가변 데이터는 호출부에서 직렬화하고 모두 `EnqueuePacketBuffer()`로 큐 등록을 통합함 |
 | 대기 데이터 제한 | 명시적인 소켓별 송신 대기량 제한이 없음 | 연결별 대기 송신량을 4 MiB로 제한하고 초과 시 연결을 정리함 |
 
 ### 현재 송신 경로
@@ -117,13 +123,13 @@
 
 | 발생 조건 | 처리 경로 | 결과 |
 |---|---|---|
-| 게임 시작, 슬롯 변경, 로딩 완료 및 서버 상태 이벤트 | `RequestSend()` → `SubmitSendData()` | 이벤트 패킷을 즉시 직렬화하고 송신 큐에 등록 |
-| 게임 종료 상태 전환 | `QueueEndGameNotifications()` → `RequestSend()` | 승리 패킷을 각 활성 연결에 한 번 등록한 뒤 정기 상태 복제를 종료 |
+| 게임 시작, 슬롯 변경, 로딩 완료 및 서버 상태 이벤트 | `EnqueuePendingPacket()` → `EnqueuePacketFields()` | 이벤트 패킷을 즉시 직렬화하고 송신 큐에 등록 |
+| 게임 종료 상태 전환 | `EnqueueGameOutcomePackets()` → `EnqueuePendingPacket()` | 승리 패킷을 각 활성 연결에 한 번 등록한 뒤 정기 상태 복제를 종료 |
 | 문·서랍 상태 변경 | `BroadcastOpenableObjectState()` | ID·타입·open/close 상태를 모든 활성 연결에 즉시 등록 |
 | 모든 클라이언트 로딩 완료 | `BroadcastOpenableObjectSnapshot()` | 현재 문·서랍 상태 전체를 각 활성 연결에 한 번 등록 |
-| 로딩 완료 후 플레이어 복제 주기 도달 | `ReplicateStateIfDue()` → `RequestSend()` | 최신 `PLAYER_STATE`를 최대 60 Hz로 각 활성 연결에 등록 |
-| `SimulationLoop()`에서 영역 이탈 오브젝트 발견 | `ProcessOutOfSpaceObjectReplication()` → 가변 패킷 직렬화 | 완성된 패킷을 송신 큐에 등록 |
-| 주변 오브젝트 조사 30 Hz 주기 도달 | `UpdateNearbyObjectReplicationDataIfDue()` → `NEARBY_OBJECTS` | 수신자 관심 영역의 실제 개수만 가변 길이로 송신 |
+| 로딩 완료 후 플레이어 복제 주기 도달 | `ReplicateStateIfDue()` → `EnqueuePendingPacket()` | 최신 `PLAYER_STATE`를 최대 60 Hz로 각 활성 연결에 등록 |
+| `RunSimulationTick()`에서 영역 이탈 오브젝트 발견 | `ReplicateOutOfSpaceObjects()` → 가변 패킷 직렬화 | 완성된 패킷을 송신 큐에 등록 |
+| 주변 오브젝트 조사 30 Hz 주기 도달 | `ReplicateNearbyObjectsIfDue()` → `NEARBY_OBJECTS` | 수신자 관심 영역의 실제 개수만 가변 길이로 송신 |
 | Winsock의 실제 `FD_WRITE` 알림 | `FlushSendQueue()` | 새 패킷을 만들지 않고 저장된 전송 위치부터 재개 |
 
 패킷이 송신 큐에 등록된 뒤에는 생성 경로와 관계없이 동일하게 처리한다.
@@ -133,7 +139,7 @@
 서버의 연결별 전체·구간 통계 저장소는 `unique_ptr`가 소유해 `SocketInfo` 이동과 교환에서
 대형 통계 배열이 스택 임시 객체에 포함되지 않게 한다.
 
-1. `EnqueueSendBuffer()`가 소켓과 대기 용량을 검사한다.
+1. `EnqueuePacketBuffer()`가 소켓과 대기 용량을 검사한다.
 2. 패킷 버퍼를 해당 소켓의 큐에 넣고 `FlushSendQueue()`를 호출한다.
 3. 전송 결과에 따라 다음과 같이 처리한다.
    - `Complete`: 전송을 마친 패킷을 큐에서 제거한다.
@@ -146,7 +152,11 @@
 - 최대 5명과 기존 wire 패킷 값은 유지한다.
 - 구조체 메모리를 그대로 복사하는 패킹 방식은 컴파일러 ABI, 정렬 및 양 끝의 동일한
   구조체 정의에 의존한다.
-- 패킷 파싱과 게임 상태 적용, 서버 시뮬레이션 책임은 여전히 `TCPServer`에 집중되어 있다.
+- 씬 로딩, 서버 오브젝트 생성과 초기 아이템 배치는 `ServerWorldBuilder`로 분리됐다.
+  패킷 파싱과 게임 상태 적용, 연결/송신, 복제 및 게임 세션 오케스트레이션은 여전히
+  `TCPServer`에 집중되어 있다.
+- 월드 구성은 네트워크 초기화보다 먼저 수행하며, 씬 파일 누락·탈출문 후보 없음·아이템
+  배치 실패를 `TCPServer::Initialize()`의 실패 결과로 전달한다.
 - 입력 송신은 렌더 루프 안에서 최대 60 Hz로 제한하며, 고정 deadline을 전진시켜 60 FPS 이상에서 프레임별 초과 시간이 누적되지 않게 한다. 상태 복제는 입력 수신 횟수와 분리된 최대 60 Hz 주기를 사용한다.
 - 정기 인게임 복제는 `PLAYER_STATE` 60 Hz와 수신자별 `NEARBY_OBJECTS`
   30 Hz로 분리됐다. 다만 로비·접속 초기 패킷은 아직 기존 통합 구조체를 사용한다.
@@ -158,7 +168,8 @@
 네트워크 partial I/O 안정화 변경 당시 Client/Server x64 Debug 빌드가 성공했고 서버
 실행도 확인했다. 이후 Release 로컬 3인 접속까지 실행을 확인했다. 다만 partial send/recv와
 `WSAEWOULDBLOCK`을 의도적으로 발생시키는 네트워크 부하 테스트 및 5인 장시간 접속
-검증은 아직 별도 수행 대상이다.
+검증은 아직 별도 수행 대상이다. `ServerWorldBuilder` 분리와 후속 인덱스 검증 변경은
+프로젝트 XML 및 diff 정적 검사만 수행했으며 빌드와 실행 회귀 검증은 아직 수행하지 않았다.
 
 ## 7) 변경 전 측정된 복제 주기 위험
 

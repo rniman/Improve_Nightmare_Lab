@@ -220,7 +220,7 @@ private:
 
 	// Lifecycle
 	bool InitializeNetworking(HWND window);
-	void InitializeWorld();
+	bool InitializeWorld();
 
 	// Socket events
 	void HandleAcceptEvent(HWND window, SOCKET listenSocket);

@@ -160,13 +160,12 @@ bool TCPServer::Initialize(HWND window)
 {
 	mRandomEngine = default_random_engine(random_device()());
 
-	if (!InitializeNetworking(window))
+	if (!InitializeWorld())
 	{
 		return false;
 	}
 
-	InitializeWorld();
-	return true;
+	return InitializeNetworking(window);
 }
 
 void TCPServer::RunSimulationTick()
@@ -386,7 +385,7 @@ bool TCPServer::InitializeNetworking(HWND window)
 	return true;
 }
 
-void TCPServer::InitializeWorld()
+bool TCPServer::InitializeWorld()
 {
 	mGameState = GameState::InLobby;
 
@@ -397,18 +396,20 @@ void TCPServer::InitializeWorld()
 	const ServerWorldBuildResult buildResult = worldBuilder.Build();
 	if (!buildResult.succeeded)
 	{
-		return;
+		return false;
 	}
 
 	if (buildResult.escapeDoorId < 0)
 	{
-		return;
+		return false;
 	}
 
 	for (PlayerReplicationState& playerState : mPlayerReplicationStates)
 	{
 		playerState.playerInfo.escapeDoorId = buildResult.escapeDoorId;
 	}
+
+	return true;
 }
 
 // Socket events

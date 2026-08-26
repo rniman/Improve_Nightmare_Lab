@@ -63,6 +63,11 @@ ServerWorldBuildResult ServerWorldBuilder::Build()
 	}
 
 	const int escapeDoorId = SelectEscapeDoor();
+	if (escapeDoorId < 0)
+	{
+		return {};
+	}
+
 	if (!PopulateItems())
 	{
 		return {};
