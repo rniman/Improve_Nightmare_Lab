@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <iterator>
 
 namespace
 {
@@ -106,6 +107,34 @@ namespace
 			destination,
 			destinationSize);
 	}
+
+	bool ReadExact(
+		FILE* inputFile,
+		void* destination,
+		std::size_t elementSize,
+		std::size_t elementCount)
+	{
+		return ::fread(destination, elementSize, elementCount, inputFile) == elementCount;
+	}
+
+	bool ReadLengthPrefixedString(FILE* inputFile, char* destination, std::size_t destinationSize)
+	{
+		BYTE stringLength = 0;
+		if (!ReadExact(inputFile, &stringLength, sizeof(stringLength), 1) ||
+			stringLength == 0 ||
+			static_cast<std::size_t>(stringLength) >= destinationSize)
+		{
+			return false;
+		}
+
+		if (!ReadExact(inputFile, destination, sizeof(char), stringLength))
+		{
+			return false;
+		}
+
+		destination[stringLength] = '\0';
+		return true;
+	}
 }
 
 TCPServer::TCPServer()
@@ -159,111 +188,12 @@ bool TCPServer::Initialize(HWND window)
 {
 	mRandomEngine = default_random_engine(random_device()());
 
-	mWindowHandle = window;
-	// 윈속 초기화
-	WSADATA wsa;
-	const int startupResult = WSAStartup(MAKEWORD(2, 2), &wsa);
-	if (startupResult != 0)
+	if (!InitializeNetworking(window))
 	{
-		// WSAStartup은 WSAGetLastError()가 아니라 반환값 자체가 오류 코드다.
-		LogSocketError("WSAStartup", startupResult);
 		return false;
 	}
 
-	// 소켓 생성
-	const SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if (listenSocket == INVALID_SOCKET)
-	{
-		LogSocketError("socket()", WSAGetLastError());
-		WSACleanup();
-		return false;
-	}
-
-	// bind()
-	struct sockaddr_in serverAddress;
-	memset(&serverAddress, 0, sizeof(serverAddress));
-	serverAddress.sin_family = AF_INET;
-	serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-	serverAddress.sin_port = htons(SERVERPORT);
-	int result = bind(listenSocket, reinterpret_cast<struct sockaddr*>(&serverAddress), sizeof(serverAddress));
-	if (result == SOCKET_ERROR)
-	{
-		const int errorCode = WSAGetLastError();
-		LogSocketError("bind()", errorCode);
-		closesocket(listenSocket);
-		WSACleanup();
-		return false;
-	}
-
-	// listen()
-	result = listen(listenSocket, SOMAXCONN);
-	if (result == SOCKET_ERROR)
-	{
-		const int errorCode = WSAGetLastError();
-		LogSocketError("listen()", errorCode);
-		closesocket(listenSocket);
-		WSACleanup();
-		return false;
-	}
-
-	// WSAAsyncSelect()
-	result = WSAAsyncSelect(listenSocket, window, WM_SOCKET, FD_ACCEPT | FD_CLOSE);
-	if (result == SOCKET_ERROR)
-	{
-		const int errorCode = WSAGetLastError();
-		LogSocketError("WSAAsyncSelect()", errorCode);
-		closesocket(listenSocket);
-		WSACleanup();
-		return false;
-	}
-
-	mGameState = GameState::InLobby;
-
-	mCollisionManager = make_shared<CServerCollisionManager>();
-	mCollisionManager->CreateCollision(SPACE_FLOOR, SPACE_WIDTH, SPACE_DEPTH);
-
-	// 씬 생성
-	LoadServerScene();
-	vector<int> elevatorDoorIds;
-	for (int i = 0; i < mCollisionManager->GetNumberOfCollisionObject(); ++i) {
-		shared_ptr<CServerGameObject> object = mCollisionManager->GetCollisionObjectWithNumber(i);
-		auto elevatorDoor = dynamic_pointer_cast<CServerElevatorDoorObject>(object);
-
-		if (elevatorDoor) {
-			if (strcmp(elevatorDoor->m_pstrFrameName, "Door1")) {
-				continue;
-			}
-			elevatorDoorIds.push_back(i);
-		}
-	}
-	int elevatorDoorCount = static_cast<int>(elevatorDoorIds.size());
-
-	uniform_int_distribution<int> elevatorDoorDistribution(0, elevatorDoorCount - 1);
-
-	int escapeDoorIndex = elevatorDoorDistribution(mRandomEngine);
-	for (int i = 0; i < elevatorDoorCount; ++i) {
-		shared_ptr<CServerGameObject> object = mCollisionManager->GetCollisionObjectWithNumber(elevatorDoorIds[i]);
-		auto elevatorDoor = dynamic_pointer_cast<CServerElevatorDoorObject>(object);
-		if (!elevatorDoor) {
-			//std::cout << "엘리베이터 문이 아닙니다.!" << std::endl;
-			assert(0); //반드시 CServerElevatorDoorObject 일것임. 아니면 시스템 종료 씬 오브젝트 정렬의 문제 발생
-		}
-
-		if (i == escapeDoorIndex) {
-			elevatorDoor->SetEscapeDoor(true);
-			for (int playerIndex = 0; playerIndex < MAX_CLIENT; ++playerIndex) {
-				mPlayerReplicationStates[playerIndex].playerInfo.escapeDoorId = elevatorDoorIds[i];
-			}
-		}
-		//elevatorDoor->SetEscapeDoor(false); // 디버그를 위해서 모든 문을 잠금
-	}
-
-	//std::cout << "생성된 충돌객체 = " << mCollisionManager->GetNumberOfCollisionObject() << std::endl;
-	// 아이템 생성
-	PopulateSceneItems();
-	//std::cout << "아이템 생성후 생성된 충돌객체 = " << mCollisionManager->GetNumberOfCollisionObject() << std::endl;
-
-
+	InitializeWorld();
 	return true;
 }
 
@@ -403,6 +333,114 @@ void TCPServer::HandleSocketMessage(HWND window, UINT messageId, WPARAM wParam, 
 	}
 
 	return;
+}
+
+// Lifecycle
+bool TCPServer::InitializeNetworking(HWND window)
+{
+	mWindowHandle = window;
+	// 윈속 초기화
+	WSADATA wsa;
+	const int startupResult = WSAStartup(MAKEWORD(2, 2), &wsa);
+	if (startupResult != 0)
+	{
+		// WSAStartup은 WSAGetLastError()가 아니라 반환값 자체가 오류 코드다.
+		LogSocketError("WSAStartup", startupResult);
+		return false;
+	}
+
+	// 소켓 생성
+	const SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if (listenSocket == INVALID_SOCKET)
+	{
+		LogSocketError("socket()", WSAGetLastError());
+		WSACleanup();
+		return false;
+	}
+
+	// bind()
+	struct sockaddr_in serverAddress;
+	memset(&serverAddress, 0, sizeof(serverAddress));
+	serverAddress.sin_family = AF_INET;
+	serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+	serverAddress.sin_port = htons(SERVERPORT);
+	int result = bind(listenSocket, reinterpret_cast<struct sockaddr*>(&serverAddress), sizeof(serverAddress));
+	if (result == SOCKET_ERROR)
+	{
+		const int errorCode = WSAGetLastError();
+		LogSocketError("bind()", errorCode);
+		closesocket(listenSocket);
+		WSACleanup();
+		return false;
+	}
+
+	// listen()
+	result = listen(listenSocket, SOMAXCONN);
+	if (result == SOCKET_ERROR)
+	{
+		const int errorCode = WSAGetLastError();
+		LogSocketError("listen()", errorCode);
+		closesocket(listenSocket);
+		WSACleanup();
+		return false;
+	}
+
+	// WSAAsyncSelect()
+	result = WSAAsyncSelect(listenSocket, window, WM_SOCKET, FD_ACCEPT | FD_CLOSE);
+	if (result == SOCKET_ERROR)
+	{
+		const int errorCode = WSAGetLastError();
+		LogSocketError("WSAAsyncSelect()", errorCode);
+		closesocket(listenSocket);
+		WSACleanup();
+		return false;
+	}
+
+	return true;
+}
+
+void TCPServer::InitializeWorld()
+{
+	mGameState = GameState::InLobby;
+
+	mCollisionManager = make_shared<CServerCollisionManager>();
+	mCollisionManager->CreateCollision(SPACE_FLOOR, SPACE_WIDTH, SPACE_DEPTH);
+
+	if (!LoadServerScene())
+	{
+		return;
+	}
+	vector<pair<int, shared_ptr<CServerElevatorDoorObject>>> escapeDoorCandidates;
+	for (int objectId = 0; objectId < mCollisionManager->GetNumberOfCollisionObject(); ++objectId)
+	{
+		shared_ptr<CServerGameObject> object = mCollisionManager->GetCollisionObjectWithNumber(objectId);
+		auto elevatorDoor = dynamic_pointer_cast<CServerElevatorDoorObject>(object);
+		if (!elevatorDoor || strcmp(elevatorDoor->m_pstrFrameName, "Door1") != 0)
+		{
+			continue;
+		}
+
+		escapeDoorCandidates.emplace_back(objectId, std::move(elevatorDoor));
+	}
+
+	if (escapeDoorCandidates.empty())
+	{
+		LogServerNotice("No escape door candidate was found in the server scene.");
+	}
+	else
+	{
+		uniform_int_distribution<size_t> candidateDistribution(0, escapeDoorCandidates.size() - 1);
+		const auto& [escapeDoorId, escapeDoor] =
+			escapeDoorCandidates[candidateDistribution(mRandomEngine)];
+		escapeDoor->SetEscapeDoor(true);
+
+		for (auto& playerState : mPlayerReplicationStates)
+		{
+			playerState.playerInfo.escapeDoorId = escapeDoorId;
+		}
+	}
+
+	PopulateSceneItems();
 }
 
 // Socket events
@@ -1134,21 +1172,26 @@ TCPServer::SendResult TCPServer::FlushSendQueue(int clientIndex)
 
 void TCPServer::EnqueuePendingPacket(int clientIndex)
 {
-	if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()) ||
-		!mConnections[clientIndex].isUsed)
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()))
 	{
 		return;
 	}
 
-	switch (mConnections[clientIndex].pendingPacketType)
+	const std::size_t connectionIndex = static_cast<std::size_t>(clientIndex);
+	ClientConnectionState& connection = mConnections.at(connectionIndex);
+	if (!connection.isUsed)
+	{
+		return;
+	}
+
+	switch (connection.pendingPacketType)
 	{
 	case ServerPacketType::GameStart:
-		if (EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::GameStart)))
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
+		connection.pendingPacketType = ServerPacketType::PlayerState;
+		EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::GameStart));
 		break;
 	case ServerPacketType::ChangeSlot:
+		connection.pendingPacketType = ServerPacketType::PlayerState;
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
 			if (!mConnections[i].isUsed)
@@ -1162,21 +1205,15 @@ void TCPServer::EnqueuePendingPacket(int clientIndex)
 				mPlayerReplicationStates[i].clientId,
 				mPlayerReplicationStates);
 		}
-		if (mConnections[clientIndex].isUsed)
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
 		break;
 	case ServerPacketType::Init:
-		if (EnqueuePacketFields(
+		connection.pendingPacketType = ServerPacketType::PlayerState;
+		EnqueuePacketFields(
 			clientIndex,
 			static_cast<INT8>(ServerPacketType::Init),
-			mPlayerReplicationStates[clientIndex].clientId,
+			mPlayerReplicationStates.at(connectionIndex).clientId,
 			mClientCount,
-			mPlayerReplicationStates))
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
+			mPlayerReplicationStates);
 		break;
 	case ServerPacketType::PlayerState:
 		if (mGameState == GameState::InLobby)
@@ -1189,53 +1226,40 @@ void TCPServer::EnqueuePendingPacket(int clientIndex)
 			mPlayerReplicationStates);
 		break;
 	case ServerPacketType::ClientCount:
-		if (EnqueuePacketFields(
+		connection.pendingPacketType = ServerPacketType::PlayerState;
+		EnqueuePacketFields(
 			clientIndex,
 			static_cast<INT8>(ServerPacketType::ClientCount),
 			mClientCount,
-			mPlayerReplicationStates))
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
+			mPlayerReplicationStates);
 		break;
 	case ServerPacketType::BlueSuitWin:
-		if (EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::BlueSuitWin)))
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
+		connection.pendingPacketType = ServerPacketType::PlayerState;
+		EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::BlueSuitWin));
 		break;
 	case ServerPacketType::ZombieWin:
-		if (EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::ZombieWin)))
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
+		connection.pendingPacketType = ServerPacketType::PlayerState;
+		EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::ZombieWin));
 		break;
 	case ServerPacketType::OpenDrawerSound:
-		if (EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::OpenDrawerSound)))
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
+		connection.pendingPacketType = ServerPacketType::PlayerState;
+		EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::OpenDrawerSound));
 		break;
 	case ServerPacketType::CloseDrawerSound:
-		if (EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::CloseDrawerSound)))
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
+		connection.pendingPacketType = ServerPacketType::PlayerState;
+		EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::CloseDrawerSound));
 		break;
 	case ServerPacketType::OpenDoorSound:
-		if (EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::OpenDoorSound)))
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
+		connection.pendingPacketType = ServerPacketType::PlayerState;
+		EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::OpenDoorSound));
 		break;
 	case ServerPacketType::CloseDoorSound:
-		if (EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::CloseDoorSound)))
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
+		connection.pendingPacketType = ServerPacketType::PlayerState;
+		EnqueuePacketFields(clientIndex, static_cast<INT8>(ServerPacketType::CloseDoorSound));
 		break;
 	case ServerPacketType::BlueSuitDead:
 	{
+		connection.pendingPacketType = ServerPacketType::PlayerState;
 		const char deadUserId = static_cast<char>(clientIndex);
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
@@ -1244,14 +1268,11 @@ void TCPServer::EnqueuePendingPacket(int clientIndex)
 				EnqueuePacketFields(i, static_cast<INT8>(ServerPacketType::BlueSuitDead), deadUserId);
 			}
 		}
-		if (mConnections[clientIndex].isUsed)
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
 		break;
 	}
 	case ServerPacketType::LoadingComplete:
 	{
+		connection.pendingPacketType = ServerPacketType::PlayerState;
 		for (int i = 0; i < MAX_CLIENT; ++i)
 		{
 			if (mConnections[i].isUsed &&
@@ -1262,10 +1283,6 @@ void TCPServer::EnqueuePendingPacket(int clientIndex)
 			}
 		}
 		BroadcastOpenableObjectSnapshot();
-		if (mConnections[clientIndex].isUsed)
-		{
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::PlayerState;
-		}
 		break;
 	}
 	default:
@@ -1716,97 +1733,139 @@ void TCPServer::EnqueueNearbyObjectSnapshots()
 }
 
 // World initialization
-void TCPServer::LoadServerScene()
+bool TCPServer::LoadServerScene()
 {
-	FILE* inputFile = NULL;
-	::fopen_s(&inputFile, (char*)"ServerScene.bin", "rb");
-	::rewind(inputFile);
-	int reachedSceneEnd{};
-	int readCount;
-	while (true)
+	FILE* inputFile = nullptr;
+	const errno_t openResult = ::fopen_s(&inputFile, "ServerScene.bin", "rb");
+	if (openResult != 0 || inputFile == nullptr)
+	{
+		std::cerr << "Failed to open server scene file: error=" << openResult << '\n';
+		return false;
+	}
+
+	std::unique_ptr<FILE, decltype(&::fclose)> inputFileGuard(inputFile, &::fclose);
+	const auto reportReadFailure = [](const char* message)
+	{
+		LogServerNotice(message);
+		return false;
+	};
+
+	bool reachedSceneEnd = false;
+	while (!reachedSceneEnd)
 	{
 		char token[128] = { '\0' };
 		for (; ; )
 		{
-			if (::ReadStringFromFile(inputFile, token))
+			if (!ReadLengthPrefixedString(inputFile, token, std::size(token)))
 			{
-				if (!strcmp(token, "<Hierarchy>:"))
+				return reportReadFailure("Failed to read a server scene token.");
+			}
+
+			if (!strcmp(token, "<Hierarchy>:"))
+			{
+				char frameName[64] = { '\0' };
+				std::vector<BoundingOrientedBox> boundingBoxes;
+				for (;;)
 				{
-					char frameName[64];
-					int childCount, boxColliderCount;
-					XMFLOAT3 aabbCenter, aabbExtents;
-					std::vector<BoundingOrientedBox> boundingBoxes;
-					for (;;)
+					if (!ReadLengthPrefixedString(inputFile, token, std::size(token)))
 					{
-						if (::ReadStringFromFile(inputFile, token))
+						return reportReadFailure("Failed to read a server scene frame token.");
+					}
+
+					if (!strcmp(token, "<Frame>:"))
+					{
+						int frameIndex = 0;
+						if (!ReadExact(inputFile, &frameIndex, sizeof(frameIndex), 1) ||
+							!ReadLengthPrefixedString(inputFile, frameName, std::size(frameName)))
 						{
-							if (!strcmp(token, "<Frame>:"))
-							{
-								::ReadIntegerFromFile(inputFile);
-								::ReadStringFromFile(inputFile, frameName);
-								//std::cout << frameName << endl;
-							}
-							else if (!strcmp(token, "<Children>:"))
-							{
-								childCount = ::ReadIntegerFromFile(inputFile);
-							}
-							else if (!strcmp(token, "<BoxColliders>:"))
-							{
-								boxColliderCount = ::ReadIntegerFromFile(inputFile);
-								boundingBoxes.reserve(boxColliderCount);
-								for (int i = 0; i < boxColliderCount; ++i)
-								{
-									::ReadStringFromFile(inputFile, token);	// <Bound>
-									int colliderIndex = 0;
-									readCount = fread(&colliderIndex, sizeof(int), 1, inputFile);
-									readCount = (UINT)::fread(&aabbCenter, sizeof(XMFLOAT3), 1, inputFile);
-									readCount = (UINT)::fread(&aabbExtents, sizeof(XMFLOAT3), 1, inputFile);
-									XMFLOAT4 orientation;
-									XMStoreFloat4(&orientation, XMQuaternionIdentity());
-									boundingBoxes.emplace_back(aabbCenter, aabbExtents, orientation);
-								}
-							}
-							else if (!strcmp(token, "<Matrix>:"))
-							{
-								childCount = ::ReadIntegerFromFile(inputFile);
-								XMFLOAT4X4* worldMatrices = new XMFLOAT4X4[childCount];
-								readCount = (UINT)::fread(worldMatrices, sizeof(XMFLOAT4X4), childCount, inputFile);
-								for (int i = 0; i < childCount; ++i)
-								{
-									// 오브젝트 생성
-									CreateObjectFromSceneFrame(frameName, Matrix4x4::Transpose(worldMatrices[i]), boundingBoxes);
-								}
-								delete[] worldMatrices;
-							}
-							else if (!strcmp(token, "</Frame>"))
-							{
-								break;
-							}
+							return reportReadFailure("Failed to read server scene frame data.");
 						}
 					}
-				}
-				else if (!strcmp(token, "</Hierarchy>"))
-				{
-					break;
-				}
-				else if (!strcmp(token, "</Scene>:"))
-				{
-					reachedSceneEnd = 1;
-					break;
+					else if (!strcmp(token, "<Children>:"))
+					{
+						int childCount = 0;
+						if (!ReadExact(inputFile, &childCount, sizeof(childCount), 1) || childCount < 0)
+						{
+							return reportReadFailure("Invalid server scene child count.");
+						}
+					}
+					else if (!strcmp(token, "<BoxColliders>:"))
+					{
+						int boxColliderCount = 0;
+						if (!ReadExact(inputFile, &boxColliderCount, sizeof(boxColliderCount), 1) ||
+							boxColliderCount < 0)
+						{
+							return reportReadFailure("Invalid server scene collider count.");
+						}
+
+						boundingBoxes.reserve(static_cast<std::size_t>(boxColliderCount));
+						for (int collider = 0; collider < boxColliderCount; ++collider)
+						{
+							if (!ReadLengthPrefixedString(inputFile, token, std::size(token)))
+							{
+								return reportReadFailure("Failed to read a server scene collider token.");
+							}
+
+							int colliderIndex = 0;
+							XMFLOAT3 aabbCenter = {};
+							XMFLOAT3 aabbExtents = {};
+							if (!ReadExact(inputFile, &colliderIndex, sizeof(colliderIndex), 1) ||
+								!ReadExact(inputFile, &aabbCenter, sizeof(aabbCenter), 1) ||
+								!ReadExact(inputFile, &aabbExtents, sizeof(aabbExtents), 1))
+							{
+								return reportReadFailure("Failed to read server scene collider data.");
+							}
+
+							XMFLOAT4 orientation;
+							XMStoreFloat4(&orientation, XMQuaternionIdentity());
+							boundingBoxes.emplace_back(aabbCenter, aabbExtents, orientation);
+						}
+					}
+					else if (!strcmp(token, "<Matrix>:"))
+					{
+						int matrixCount = 0;
+						if (!ReadExact(inputFile, &matrixCount, sizeof(matrixCount), 1) || matrixCount < 0)
+						{
+							return reportReadFailure("Invalid server scene matrix count.");
+						}
+
+						std::vector<XMFLOAT4X4> worldMatrices(static_cast<std::size_t>(matrixCount));
+						if (!worldMatrices.empty() && !ReadExact(
+							inputFile,
+							worldMatrices.data(),
+							sizeof(XMFLOAT4X4),
+							worldMatrices.size()))
+						{
+							return reportReadFailure("Failed to read server scene matrices.");
+						}
+
+						for (XMFLOAT4X4& worldMatrix : worldMatrices)
+						{
+							CreateObjectFromSceneFrame(
+								frameName,
+								Matrix4x4::Transpose(worldMatrix),
+								boundingBoxes);
+						}
+					}
+					else if (!strcmp(token, "</Frame>"))
+					{
+						break;
+					}
 				}
 			}
-			else
+			else if (!strcmp(token, "</Hierarchy>"))
 			{
 				break;
 			}
-		}
-		if (reachedSceneEnd)
-		{
-			break;
+			else if (!strcmp(token, "</Scene>:"))
+			{
+				reachedSceneEnd = true;
+				break;
+			}
 		}
 	}
 
-
+	return true;
 }
 
 void TCPServer::CreateObjectFromSceneFrame(char* frameName, const XMFLOAT4X4& world, const vector<BoundingOrientedBox>& boundingBoxes)

@@ -218,6 +218,10 @@ private:
 		Error
 	};
 
+	// Lifecycle
+	bool InitializeNetworking(HWND window);
+	void InitializeWorld();
+
 	// Socket events
 	void HandleAcceptEvent(HWND window, SOCKET listenSocket);
 	void HandleReadEvent(SOCKET socket);
@@ -275,7 +279,7 @@ private:
 	void EnqueueNearbyObjectSnapshots();
 
 	// World initialization
-	void LoadServerScene();
+	bool LoadServerScene();
 	void CreateObjectFromSceneFrame(char* frameName, const XMFLOAT4X4& world, const vector<BoundingOrientedBox>& boundingBoxes);
 	void PopulateSceneItems();
 	void AssignUniquePlayerSpawnPosition(shared_ptr<CServerPlayer>& serverPlayer, int index);
