@@ -9,6 +9,10 @@
 #include <random>
 #include <bitset>
 #include <algorithm>
+#include <iterator>
+
+#include <cstdio>
+#include <cstring>
 
 #include <DirectXMath.h>
 #include <DirectXCollision.h>
