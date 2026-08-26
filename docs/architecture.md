@@ -33,6 +33,7 @@ Nightmare Lab은 Win32 기반 멀티플레이어 게임으로, 두 개의 실행
 ### 5) 네트워크 / 서버 상호작용
 - 클라이언트: `CTcpClient`가 비동기 소켓 I/O, 패킷 파싱, 복제 상태 적용을 처리한다.
 - 서버: `TCPServer`가 accept/read/write/close 이벤트, 플레이어/월드 시뮬레이션, 패킷 브로드캐스팅을 처리한다.
+- 서버 월드 구성: `ServerWorldBuilder`가 서버 씬 파일 로딩, 프레임별 오브젝트 생성, 탈출문 선택과 초기 아이템 배치를 담당한다.
 - 서버 네트워크 측정값의 누적, 구간 초기화와 콘솔 출력은 `SocketNetworkStatistics` 및 `ServerNetworkStatisticsReporter`가 담당한다.
 
 현재 서버는 최대 5명의 클라이언트를 전제로 한 단일 스레드 `WSAAsyncSelect` 구조다.
@@ -52,7 +53,8 @@ Client.cpp
 
 Server.cpp
   -> TCPServer
-      -> ServerPlayer / ServerObject / ServerCollisionManager
+      -> ServerWorldBuilder -> ServerObject / ServerCollisionManager
+      -> ServerPlayer / ServerCollisionManager
       -> 소켓 상태 머신 + 복제 패킷
       -> ServerNetworkStatisticsReporter
 ```

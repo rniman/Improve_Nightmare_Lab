@@ -144,6 +144,7 @@
     <ClCompile Include="ServerCollision.cpp" />
     <ClCompile Include="ServerObject.cpp" />
     <ClCompile Include="ServerPlayer.cpp" />
+    <ClCompile Include="ServerWorldBuilder.cpp" />
     <ClCompile Include="Server.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -161,6 +162,7 @@
     <ClInclude Include="ServerCollision.h" />
     <ClInclude Include="ServerObject.h" />
     <ClInclude Include="ServerPlayer.h" />
+    <ClInclude Include="ServerWorldBuilder.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="TCPServer.h" />
     <ClInclude Include="Timer.h" />

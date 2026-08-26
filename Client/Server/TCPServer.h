@@ -197,7 +197,7 @@ public:
 
 	int GetZombieCount() const { return mZombieCount; }
 	int GetBlueSuitCount() const { return mBlueSuitCount; }
-	shared_ptr<CServerPlayer> GetPlayer(int index) { return mPlayers[index]; }
+	shared_ptr<CServerPlayer> GetPlayer(int clientIndex);
 	default_random_engine& GetRandomEngine() { return mRandomEngine; }
 	HWND GetWindowHandle() const { return mWindowHandle; }
 
@@ -278,11 +278,8 @@ private:
 	void BuildNearbyObjectSnapshots();
 	void EnqueueNearbyObjectSnapshots();
 
-	// World initialization
-	bool LoadServerScene();
-	void CreateObjectFromSceneFrame(char* frameName, const XMFLOAT4X4& world, const vector<BoundingOrientedBox>& boundingBoxes);
-	void PopulateSceneItems();
-	void AssignUniquePlayerSpawnPosition(shared_ptr<CServerPlayer>& serverPlayer, int index);
+	// World state
+	void AssignUniquePlayerSpawnPosition(shared_ptr<CServerPlayer>& serverPlayer, int clientIndex);
 
 	// Diagnostics
 	void ReportNetworkStatisticsIfDue();
@@ -304,8 +301,6 @@ private:
 	std::array<std::vector<NearbyObjectState>, MAX_CLIENT> mNearbyObjectSnapshots = {};
 	std::vector<shared_ptr<CServerGameObject>> mGameObjects;
 	std::shared_ptr<CServerCollisionManager> mCollisionManager;
-
-	vector<pair<int, int>> mDrawerEntries; // <ObjectCount,type>
 
 	HWND mWindowHandle = nullptr;
 	HWND mClientListBox = nullptr;

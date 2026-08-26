@@ -4,10 +4,10 @@
 #include "ServerEnvironmentObject.h"
 #include "ServerPlayer.h"
 #include "ServerCollision.h"
+#include "ServerWorldBuilder.h"
 
 #include <cmath>
 #include <iostream>
-#include <iterator>
 
 namespace
 {
@@ -106,34 +106,6 @@ namespace
 			-1,
 			destination,
 			destinationSize);
-	}
-
-	bool ReadExact(
-		FILE* inputFile,
-		void* destination,
-		std::size_t elementSize,
-		std::size_t elementCount)
-	{
-		return ::fread(destination, elementSize, elementCount, inputFile) == elementCount;
-	}
-
-	bool ReadLengthPrefixedString(FILE* inputFile, char* destination, std::size_t destinationSize)
-	{
-		BYTE stringLength = 0;
-		if (!ReadExact(inputFile, &stringLength, sizeof(stringLength), 1) ||
-			stringLength == 0 ||
-			static_cast<std::size_t>(stringLength) >= destinationSize)
-		{
-			return false;
-		}
-
-		if (!ReadExact(inputFile, destination, sizeof(char), stringLength))
-		{
-			return false;
-		}
-
-		destination[stringLength] = '\0';
-		return true;
 	}
 }
 
@@ -254,8 +226,14 @@ void TCPServer::HandleWindowMessage(HWND window, UINT messageId, WPARAM wParam, 
 	case WM_SOUND:
 	{
 		const int clientIndex = static_cast<int>(lParam);
-		if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()) ||
-			!mConnections[clientIndex].isUsed)
+		if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()))
+		{
+			break;
+		}
+
+		const std::size_t connectionIndex = static_cast<std::size_t>(clientIndex);
+		ClientConnectionState& connection = mConnections[connectionIndex];
+		if (!connection.isUsed)
 		{
 			break;
 		}
@@ -263,19 +241,19 @@ void TCPServer::HandleWindowMessage(HWND window, UINT messageId, WPARAM wParam, 
 		switch (static_cast<SoundMessage>(wParam))
 		{
 		case SoundMessage::OpenDrawer:
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::OpenDrawerSound;
+			connection.pendingPacketType = ServerPacketType::OpenDrawerSound;
 			break;
 		case SoundMessage::CloseDrawer:
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::CloseDrawerSound;
+			connection.pendingPacketType = ServerPacketType::CloseDrawerSound;
 			break;
 		case SoundMessage::OpenDoor:
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::OpenDoorSound;
+			connection.pendingPacketType = ServerPacketType::OpenDoorSound;
 			break;
 		case SoundMessage::CloseDoor:
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::CloseDoorSound;
+			connection.pendingPacketType = ServerPacketType::CloseDoorSound;
 			break;
 		case SoundMessage::BlueSuitDead:
-			mConnections[clientIndex].pendingPacketType = ServerPacketType::BlueSuitDead;
+			connection.pendingPacketType = ServerPacketType::BlueSuitDead;
 			break;
 		default:
 			return;
@@ -333,6 +311,15 @@ void TCPServer::HandleSocketMessage(HWND window, UINT messageId, WPARAM wParam, 
 	}
 
 	return;
+}
+
+shared_ptr<CServerPlayer> TCPServer::GetPlayer(int clientIndex)
+{
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(mPlayers.size()))
+	{
+		return nullptr;
+	}
+	return mPlayers[static_cast<std::size_t>(clientIndex)];
 }
 
 // Lifecycle
@@ -406,41 +393,22 @@ void TCPServer::InitializeWorld()
 	mCollisionManager = make_shared<CServerCollisionManager>();
 	mCollisionManager->CreateCollision(SPACE_FLOOR, SPACE_WIDTH, SPACE_DEPTH);
 
-	if (!LoadServerScene())
+	ServerWorldBuilder worldBuilder(*mCollisionManager, mRandomEngine);
+	const ServerWorldBuildResult buildResult = worldBuilder.Build();
+	if (!buildResult.succeeded)
 	{
 		return;
 	}
-	vector<pair<int, shared_ptr<CServerElevatorDoorObject>>> escapeDoorCandidates;
-	for (int objectId = 0; objectId < mCollisionManager->GetNumberOfCollisionObject(); ++objectId)
-	{
-		shared_ptr<CServerGameObject> object = mCollisionManager->GetCollisionObjectWithNumber(objectId);
-		auto elevatorDoor = dynamic_pointer_cast<CServerElevatorDoorObject>(object);
-		if (!elevatorDoor || strcmp(elevatorDoor->m_pstrFrameName, "Door1") != 0)
-		{
-			continue;
-		}
 
-		escapeDoorCandidates.emplace_back(objectId, std::move(elevatorDoor));
+	if (buildResult.escapeDoorId < 0)
+	{
+		return;
 	}
 
-	if (escapeDoorCandidates.empty())
+	for (PlayerReplicationState& playerState : mPlayerReplicationStates)
 	{
-		LogServerNotice("No escape door candidate was found in the server scene.");
+		playerState.playerInfo.escapeDoorId = buildResult.escapeDoorId;
 	}
-	else
-	{
-		uniform_int_distribution<size_t> candidateDistribution(0, escapeDoorCandidates.size() - 1);
-		const auto& [escapeDoorId, escapeDoor] =
-			escapeDoorCandidates[candidateDistribution(mRandomEngine)];
-		escapeDoor->SetEscapeDoor(true);
-
-		for (auto& playerState : mPlayerReplicationStates)
-		{
-			playerState.playerInfo.escapeDoorId = escapeDoorId;
-		}
-	}
-
-	PopulateSceneItems();
 }
 
 // Socket events
@@ -469,7 +437,7 @@ void TCPServer::HandleAcceptEvent(HWND window, SOCKET listenSocket)
 	const INT8 clientIndex = RegisterClientConnection(clientSocket, clientAddress, clientAddressLength);
 
 	// MAX_CLIENT보다 더 많은 접속 요구
-	if (clientIndex == -1)
+	if (clientIndex < 0 || clientIndex >= static_cast<INT8>(mConnections.size()))
 	{
 		closesocket(clientSocket); // 클라이언트 소켓 종료
 		LogServerNotice("Connection refused because the server is full.");
@@ -484,26 +452,31 @@ void TCPServer::HandleAcceptEvent(HWND window, SOCKET listenSocket)
 		DisconnectClient(clientSocket);
 		return;
 	}
+
+	const std::size_t connectionIndex = static_cast<std::size_t>(clientIndex);
+	ClientConnectionState& connection = mConnections[connectionIndex];
+	std::shared_ptr<CServerPlayer>& player = mPlayers[connectionIndex];
+
 	WCHAR clientListEntry[256];
 	WCHAR clientIpAddress[16];
-	ConvertCharToWideString(mConnections[clientIndex].ipAddress, clientIpAddress, 16);
-	wsprintf(clientListEntry, L"CLIENT[%d], IP: %s, 포트 번호: %d\n", clientIndex, clientIpAddress, ntohs(mConnections[clientIndex].clientAddress.sin_port));
+	ConvertCharToWideString(connection.ipAddress, clientIpAddress, 16);
+	wsprintf(clientListEntry, L"CLIENT[%d], IP: %s, 포트 번호: %d\n", clientIndex, clientIpAddress, ntohs(connection.clientAddress.sin_port));
 	SendMessage(mClientListBox, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(clientListEntry));
 
 	if (clientIndex == ZOMBIEPLAYER) // ZombiePlayer는 0번 소켓에만 생성
 	{
-		mPlayers[clientIndex] = make_shared<CServerZombiePlayer>();
-		mPlayers[clientIndex]->SetPlayerId(clientIndex);
+		player = make_shared<CServerZombiePlayer>();
+		player->SetPlayerId(clientIndex);
 		++mZombieCount;
 	}
 	else
 	{
-		mPlayers[clientIndex] = make_shared<CServerBlueSuitPlayer>();
-		mPlayers[clientIndex]->SetPlayerId(clientIndex);
+		player = make_shared<CServerBlueSuitPlayer>();
+		player->SetPlayerId(clientIndex);
 		++mBlueSuitCount;
 	}
 
-	mCollisionManager->AddCollisionPlayer(mPlayers[clientIndex], clientIndex);
+	mCollisionManager->AddCollisionPlayer(player, clientIndex);
 	EnqueuePendingPacket(clientIndex);
 
 	for (auto& socketInfo : mConnections)
@@ -522,14 +495,16 @@ void TCPServer::HandleAcceptEvent(HWND window, SOCKET listenSocket)
 void TCPServer::HandleReadEvent(SOCKET socket)
 {
 	int clientIndex = FindClientIndex(socket);
-	if (clientIndex < 0)
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()))
 	{
 		return;
 	}
 
-	std::shared_ptr<CServerPlayer> player = mPlayers[clientIndex];
+	const std::size_t initialConnectionIndex = static_cast<std::size_t>(clientIndex);
+	ClientConnectionState& connection = mConnections[initialConnectionIndex];
+	std::shared_ptr<CServerPlayer> player = mPlayers[initialConnectionIndex];
 
-	if (!mConnections[clientIndex].hasReceivePacketType)
+	if (!connection.hasReceivePacketType)
 	{
 		const ReceiveResult result = ReceiveData(clientIndex, sizeof(INT8));
 		if (!HandleReceiveResult(result, socket))
@@ -540,11 +515,11 @@ void TCPServer::HandleReadEvent(SOCKET socket)
 		INT8 rawPacketType = -1;
 		memcpy(
 			&rawPacketType,
-			mConnections[clientIndex].receiveBuffer.data(),
+			connection.receiveBuffer.data(),
 			sizeof(rawPacketType));
 		std::fill(
-			mConnections[clientIndex].receiveBuffer.begin(),
-			mConnections[clientIndex].receiveBuffer.end(),
+			connection.receiveBuffer.begin(),
+			connection.receiveBuffer.end(),
 			0);
 
 		// 등록되지 않은 HEAD는 payload 크기와 형식을 결정할 수 없으므로 더 이상 스트림을 해석하지 않는다.
@@ -557,12 +532,12 @@ void TCPServer::HandleReadEvent(SOCKET socket)
 			return;
 		}
 
-		mConnections[clientIndex].receivePacketType = static_cast<ClientPacketType>(rawPacketType);
-		mConnections[clientIndex].hasReceivePacketType = true;
+		connection.receivePacketType = static_cast<ClientPacketType>(rawPacketType);
+		connection.hasReceivePacketType = true;
 	}
 
 	bool shouldEnqueuePendingPacket = false;
-	switch (mConnections[clientIndex].receivePacketType)
+	switch (connection.receivePacketType)
 	{
 	case ClientPacketType::GameStart:
 		HandleGameStartPacket(clientIndex);
@@ -589,7 +564,13 @@ void TCPServer::HandleReadEvent(SOCKET socket)
 	}
 
 	// HEAD와 DATA가 모두 도착해 하나의 애플리케이션 패킷이 완성된 시점에만 패킷 수를 증가시킨다.
-	ClientConnectionState& socketInfo = mConnections[clientIndex];
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()))
+	{
+		return;
+	}
+
+	const std::size_t finalConnectionIndex = static_cast<std::size_t>(clientIndex);
+	ClientConnectionState& socketInfo = mConnections[finalConnectionIndex];
 	socketInfo.networkStatistics.RecordReceivedPacket(
 		static_cast<std::uint8_t>(socketInfo.receivePacketType),
 		socketInfo.currentPacketReceivedBytes);
@@ -603,7 +584,7 @@ void TCPServer::HandleReadEvent(SOCKET socket)
 void TCPServer::HandleWriteEvent(SOCKET socket)
 {
 	const int clientIndex = FindClientIndex(socket);
-	if (clientIndex < 0)
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()))
 	{
 		return;
 	}
@@ -652,7 +633,13 @@ bool TCPServer::IsValidClientPacketType(INT8 packetType) const
 
 TCPServer::ReceiveResult TCPServer::ReceiveData(int clientIndex, size_t expectedBytes)
 {
-	ClientConnectionState& socketInfo = mConnections[clientIndex];
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()))
+	{
+		return ReceiveResult::Error;
+	}
+
+	const std::size_t connectionIndex = static_cast<std::size_t>(clientIndex);
+	ClientConnectionState& socketInfo = mConnections[connectionIndex];
 
 	bool isInvalidBufferSize =
 		expectedBytes > MAX_PACKET_PAYLOAD_SIZE ||
@@ -731,14 +718,15 @@ void TCPServer::HandleGameStartPacket(int clientIndex)
 	mCanReplicateState = false;
 	mZombieCount = 0;
 	mBlueSuitCount = 0;
-	for (int i = 0; i < MAX_CLIENT; ++i)
+	for (std::size_t connectionIndex = 0; connectionIndex < mConnections.size(); ++connectionIndex)
 	{
-		if (!mConnections[i].isUsed)
+		ClientConnectionState& connection = mConnections[connectionIndex];
+		if (!connection.isUsed)
 		{
 			continue;
 		}
 
-		if (i == 0)
+		if (connectionIndex == 0)
 		{
 			++mZombieCount;
 		}
@@ -747,26 +735,37 @@ void TCPServer::HandleGameStartPacket(int clientIndex)
 			++mBlueSuitCount;
 		}
 
-		AssignUniquePlayerSpawnPosition(mPlayers[i], i);
-		mCollisionManager->AddCollisionPlayer(mPlayers[i], i);
-		mConnections[i].pendingPacketType = ServerPacketType::GameStart;
+		const int currentClientIndex = static_cast<int>(connectionIndex);
+		std::shared_ptr<CServerPlayer>& player = mPlayers[connectionIndex];
+		AssignUniquePlayerSpawnPosition(player, currentClientIndex);
+		mCollisionManager->AddCollisionPlayer(player, currentClientIndex);
+		connection.pendingPacketType = ServerPacketType::GameStart;
 
-		if (i != clientIndex)
+		if (currentClientIndex != clientIndex)
 		{
-			EnqueuePendingPacket(i);
+			EnqueuePendingPacket(currentClientIndex);
 		}
 	}
 }
 
 bool TCPServer::TryHandleChangeSlotPacket(SOCKET socket, int& clientIndex)
 {
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()))
+	{
+		return false;
+	}
+
+	const std::size_t currentConnectionIndex = static_cast<std::size_t>(clientIndex);
 	if (!HandleReceiveResult(ReceiveData(clientIndex, sizeof(INT8)), socket))
 	{
 		return false;
 	}
 
 	INT8 selectedSlot = -1;
-	memcpy(&selectedSlot, mConnections[clientIndex].receiveBuffer.data(), sizeof(selectedSlot));
+	memcpy(
+		&selectedSlot,
+		mConnections[currentConnectionIndex].receiveBuffer.data(),
+		sizeof(selectedSlot));
 	// 슬롯 번호는 플레이어 및 소켓 배열의 인덱스로 사용되므로 범위를 벗어난 값은 무시할 수 없다.
 	// 잘못된 연결을 종료해 이후 패킷이 비정상적인 서버 상태에 반영되는 것을 방지한다.
 	if (selectedSlot < 0 || selectedSlot >= static_cast<INT8>(MAX_CLIENT))
@@ -777,31 +776,39 @@ bool TCPServer::TryHandleChangeSlotPacket(SOCKET socket, int& clientIndex)
 		return false;
 	}
 
-	if (!mPlayers[selectedSlot])
+	const std::size_t selectedConnectionIndex = static_cast<std::size_t>(selectedSlot);
+	std::shared_ptr<CServerPlayer>& selectedPlayer = mPlayers[selectedConnectionIndex];
+	std::shared_ptr<CServerPlayer>& currentPlayer = mPlayers[currentConnectionIndex];
+	ClientConnectionState& selectedConnection = mConnections[selectedConnectionIndex];
+	ClientConnectionState& currentConnection = mConnections[currentConnectionIndex];
+	PlayerReplicationState& selectedPlayerState = mPlayerReplicationStates[selectedConnectionIndex];
+	PlayerReplicationState& currentPlayerState = mPlayerReplicationStates[currentConnectionIndex];
+
+	if (!selectedPlayer)
 	{
-		mPlayers[selectedSlot] = make_shared<CServerBlueSuitPlayer>();
+		selectedPlayer = make_shared<CServerBlueSuitPlayer>();
 	}
 
-	if (mPlayers[selectedSlot]->GetPlayerId() == -1)
+	if (selectedPlayer->GetPlayerId() == -1)
 	{
-		mPlayers[selectedSlot]->SetPlayerId(selectedSlot);
+		selectedPlayer->SetPlayerId(selectedSlot);
 
 		// 소켓과 수신 진행 상태는 하나의 단위이므로 전체를 함께 이동한다.
-		mConnections[selectedSlot] = std::move(mConnections[clientIndex]);
-		mConnections[clientIndex] = ClientConnectionState{};
+		selectedConnection = std::move(currentConnection);
+		currentConnection = ClientConnectionState{};
 
-		mPlayerReplicationStates[selectedSlot].clientId = selectedSlot;
-		mPlayerReplicationStates[clientIndex].clientId = -1;
-		mPlayers[clientIndex]->SetPlayerId(-1);
+		selectedPlayerState.clientId = selectedSlot;
+		currentPlayerState.clientId = -1;
+		currentPlayer->SetPlayerId(-1);
 	}
 	else
 	{
 		// 역할 슬롯을 교환해도 각 소켓의 수신 상태는 해당 소켓과 함께 이동해야 한다.
-		std::swap(mConnections[clientIndex], mConnections[selectedSlot]);
-		mPlayerReplicationStates[selectedSlot].clientId = selectedSlot;
+		std::swap(currentConnection, selectedConnection);
+		selectedPlayerState.clientId = selectedSlot;
 	}
 
-	mConnections[selectedSlot].pendingPacketType = ServerPacketType::ChangeSlot;
+	selectedConnection.pendingPacketType = ServerPacketType::ChangeSlot;
 	// 이후 통계, 수신 상태 초기화, 응답 전송도 이동한 소켓 슬롯을 대상으로 해야 한다.
 	clientIndex = selectedSlot;
 	return true;
@@ -812,6 +819,12 @@ bool TCPServer::TryHandleClientInputPacket(
 	int clientIndex,
 	const std::shared_ptr<CServerPlayer>& player)
 {
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()))
+	{
+		return false;
+	}
+
+	const std::size_t connectionIndex = static_cast<std::size_t>(clientIndex);
 	// 소켓 슬롯과 플레이어 슬롯이 일치할 때만 입력을 해당 플레이어에게 적용한다.
 	// 포인터가 없거나 ID가 다르면 서버 내부의 연결/플레이어 상태가 이미 불일치한 것이다.
 	if (!player || player->GetPlayerId() != clientIndex)
@@ -832,7 +845,8 @@ bool TCPServer::TryHandleClientInputPacket(
 	// 수신 버퍼의 모든 필드를 지역 변수로 먼저 역직렬화한다.
 	// 검증이 끝나기 전에는 일부 값만 플레이어 상태에 반영되는 일이 없어야 한다.
 	size_t readOffset = 0;
-	auto readValue = [&socketInfo = mConnections[clientIndex], &readOffset](auto& value)
+	ClientConnectionState& socketInfo = mConnections[connectionIndex];
+	auto readValue = [&socketInfo, &readOffset](auto& value)
 		{
 			memcpy(&value, socketInfo.receiveBuffer.data() + readOffset, sizeof(value));
 			readOffset += sizeof(value);
@@ -883,19 +897,23 @@ bool TCPServer::TryHandleClientInputPacket(
 	player->SetLook(input.look);
 	player->SetRight(input.right);
 	player->SetUp(input.up);
-	mPlayerReplicationStates[clientIndex].pitch = input.pitch;
+	mPlayerReplicationStates[connectionIndex].pitch = input.pitch;
 	player->SetRightClick(input.rightClick != 0);
 	return true;
 }
 
 bool TCPServer::HandleLoadingCompletePacket(int clientIndex)
 {
-	if (mCanReplicateState)
+	if (mCanReplicateState ||
+		clientIndex < 0 ||
+		clientIndex >= static_cast<int>(mConnections.size()))
 	{
 		return false;
 	}
 
-	mConnections[clientIndex].isLoadingComplete = true;
+	const std::size_t connectionIndex = static_cast<std::size_t>(clientIndex);
+	ClientConnectionState& connection = mConnections[connectionIndex];
+	connection.isLoadingComplete = true;
 	if (!AreAllClientsLoadingComplete())
 	{
 		return false;
@@ -905,7 +923,7 @@ bool TCPServer::HandleLoadingCompletePacket(int clientIndex)
 	const auto currentTime = std::chrono::steady_clock::now();
 	mNextStateReplicationTime = currentTime;
 	mNextNearbyObjectReplicationTime = currentTime;
-	mConnections[clientIndex].pendingPacketType = ServerPacketType::LoadingComplete;
+	connection.pendingPacketType = ServerPacketType::LoadingComplete;
 	return true;
 }
 
@@ -935,7 +953,7 @@ INT8 TCPServer::RegisterClientConnection(
 	int clientAddressLength)
 {
 	INT8 clientIndex = -1;
-	if (mClientCount >= MAX_CLIENT)
+	if (mClientCount >= static_cast<INT8>(mConnections.size()))
 	{
 		return clientIndex;
 	}
@@ -952,18 +970,19 @@ INT8 TCPServer::RegisterClientConnection(
 	socketInfo.pendingPacketType = ServerPacketType::Init;
 
 	// 배열에 정보 추가
-	for (int i = 0; i < mClientCount + 1; ++i)
+	for (std::size_t connectionIndex = 0; connectionIndex < mConnections.size(); ++connectionIndex)
 	{
-		if (mConnections[i].isUsed)
+		ClientConnectionState& connection = mConnections[connectionIndex];
+		if (connection.isUsed)
 		{
 			continue;
 		}
 		mClientCount++;
 
 		// 클라이언트 정보 초기화
-		mPlayerReplicationStates[i].clientId = i;
-		mConnections[i] = std::move(socketInfo);
-		clientIndex = i;
+		clientIndex = static_cast<INT8>(connectionIndex);
+		mPlayerReplicationStates[connectionIndex].clientId = clientIndex;
+		connection = std::move(socketInfo);
 		break;
 	}
 
@@ -990,26 +1009,30 @@ INT8 TCPServer::FindClientIndex(SOCKET clientSocket) const
 bool TCPServer::DisconnectClient(SOCKET clientSocket)
 {
 	const INT8 clientIndex = FindClientIndex(clientSocket);
-	if (clientIndex < 0)
+	if (clientIndex < 0 || clientIndex >= static_cast<INT8>(mConnections.size()))
 	{
 		return false;
 	}
 
+	const std::size_t connectionIndex = static_cast<std::size_t>(clientIndex);
+	ClientConnectionState& connection = mConnections[connectionIndex];
+	std::shared_ptr<CServerPlayer>& player = mPlayers[connectionIndex];
+
 	// ClientConnectionState가 초기화되기 전에 이 연결의 누적 측정값을 남긴다.
 	mNetworkStatisticsReporter.ReportDisconnected(
 		clientIndex,
-		mConnections[clientIndex].networkStatistics);
+		connection.networkStatistics);
 
 	INT8 listBoxIndex = -1;
-	for (INT8 i = 0; i <= clientIndex; ++i)
+	for (std::size_t index = 0; index <= connectionIndex; ++index)
 	{
-		if (mConnections[i].isUsed)
+		if (mConnections[index].isUsed)
 		{
 			++listBoxIndex;
 		}
 	}
 
-	const bool hadPlayer = (mPlayers[clientIndex] != nullptr);
+	const bool hadPlayer = (player != nullptr);
 	if (hadPlayer)
 	{
 		SendMessage(mClientListBox, LB_DELETESTRING, static_cast<WPARAM>(listBoxIndex), 0);
@@ -1027,10 +1050,10 @@ bool TCPServer::DisconnectClient(SOCKET clientSocket)
 	shutdown(clientSocket, SD_BOTH);
 	closesocket(clientSocket);
 
-	mPlayers[clientIndex].reset();
-	mPlayerStartPositionIndices[clientIndex] = -1;
-	mPlayerReplicationStates[clientIndex] = PlayerReplicationState{};
-	mConnections[clientIndex] = ClientConnectionState{};
+	player.reset();
+	mPlayerStartPositionIndices[connectionIndex] = -1;
+	mPlayerReplicationStates[connectionIndex] = PlayerReplicationState{};
+	connection = ClientConnectionState{};
 	mClientCount = max<INT8>(0, mClientCount - 1);
 
 	if (hadPlayer)
@@ -1052,9 +1075,10 @@ bool TCPServer::DisconnectClient(SOCKET clientSocket)
 		!mCanReplicateState &&
 		AreAllClientsLoadingComplete())
 	{
-		for (int index = 0; index < static_cast<int>(mConnections.size()); ++index)
+		for (std::size_t connectionIndex = 0; connectionIndex < mConnections.size(); ++connectionIndex)
 		{
-			if (!mConnections[index].isUsed)
+			ClientConnectionState& otherConnection = mConnections[connectionIndex];
+			if (!otherConnection.isUsed)
 			{
 				continue;
 			}
@@ -1063,8 +1087,8 @@ bool TCPServer::DisconnectClient(SOCKET clientSocket)
 			const auto currentTime = std::chrono::steady_clock::now();
 			mNextStateReplicationTime = currentTime;
 			mNextNearbyObjectReplicationTime = currentTime;
-			mConnections[index].pendingPacketType = ServerPacketType::LoadingComplete;
-			EnqueuePendingPacket(index);
+			otherConnection.pendingPacketType = ServerPacketType::LoadingComplete;
+			EnqueuePendingPacket(static_cast<int>(connectionIndex));
 			break;
 		}
 	}
@@ -1099,7 +1123,8 @@ bool TCPServer::EnqueuePacketBuffer(int clientIndex, vector<char> buffer)
 		return false;
 	}
 
-	ClientConnectionState& socketInfo = mConnections[clientIndex];
+	const std::size_t connectionIndex = static_cast<std::size_t>(clientIndex);
+	ClientConnectionState& socketInfo = mConnections[connectionIndex];
 	const bool isInvalidBufferSize = !socketInfo.isUsed || buffer.empty() ||
 		socketInfo.pendingSendBytes > MAX_PENDING_SEND_BYTES ||
 		buffer.size() > MAX_PENDING_SEND_BYTES - socketInfo.pendingSendBytes;
@@ -1132,7 +1157,13 @@ bool TCPServer::EnqueuePacketBuffer(int clientIndex, vector<char> buffer)
 
 TCPServer::SendResult TCPServer::FlushSendQueue(int clientIndex)
 {
-	ClientConnectionState& socketInfo = mConnections[clientIndex];
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()))
+	{
+		return SendResult::Error;
+	}
+
+	const std::size_t connectionIndex = static_cast<std::size_t>(clientIndex);
+	ClientConnectionState& socketInfo = mConnections[connectionIndex];
 	while (!socketInfo.sendQueue.empty())
 	{
 		PendingSend& pending = socketInfo.sendQueue.front();
@@ -1178,7 +1209,7 @@ void TCPServer::EnqueuePendingPacket(int clientIndex)
 	}
 
 	const std::size_t connectionIndex = static_cast<std::size_t>(clientIndex);
-	ClientConnectionState& connection = mConnections.at(connectionIndex);
+	ClientConnectionState& connection = mConnections[connectionIndex];
 	if (!connection.isUsed)
 	{
 		return;
@@ -1192,17 +1223,17 @@ void TCPServer::EnqueuePendingPacket(int clientIndex)
 		break;
 	case ServerPacketType::ChangeSlot:
 		connection.pendingPacketType = ServerPacketType::PlayerState;
-		for (int i = 0; i < MAX_CLIENT; ++i)
+		for (std::size_t recipientIndex = 0; recipientIndex < mConnections.size(); ++recipientIndex)
 		{
-			if (!mConnections[i].isUsed)
+			if (!mConnections[recipientIndex].isUsed)
 			{
 				continue;
 			}
 
 			EnqueuePacketFields(
-				i,
+				static_cast<int>(recipientIndex),
 				static_cast<INT8>(ServerPacketType::ChangeSlot),
-				mPlayerReplicationStates[i].clientId,
+				mPlayerReplicationStates[recipientIndex].clientId,
 				mPlayerReplicationStates);
 		}
 		break;
@@ -1211,7 +1242,7 @@ void TCPServer::EnqueuePendingPacket(int clientIndex)
 		EnqueuePacketFields(
 			clientIndex,
 			static_cast<INT8>(ServerPacketType::Init),
-			mPlayerReplicationStates.at(connectionIndex).clientId,
+			mPlayerReplicationStates[connectionIndex].clientId,
 			mClientCount,
 			mPlayerReplicationStates);
 		break;
@@ -1261,11 +1292,14 @@ void TCPServer::EnqueuePendingPacket(int clientIndex)
 	{
 		connection.pendingPacketType = ServerPacketType::PlayerState;
 		const char deadUserId = static_cast<char>(clientIndex);
-		for (int i = 0; i < MAX_CLIENT; ++i)
+		for (std::size_t recipientIndex = 0; recipientIndex < mConnections.size(); ++recipientIndex)
 		{
-			if (mConnections[i].isUsed)
+			if (mConnections[recipientIndex].isUsed)
 			{
-				EnqueuePacketFields(i, static_cast<INT8>(ServerPacketType::BlueSuitDead), deadUserId);
+				EnqueuePacketFields(
+					static_cast<int>(recipientIndex),
+					static_cast<INT8>(ServerPacketType::BlueSuitDead),
+					deadUserId);
 			}
 		}
 		break;
@@ -1273,13 +1307,17 @@ void TCPServer::EnqueuePendingPacket(int clientIndex)
 	case ServerPacketType::LoadingComplete:
 	{
 		connection.pendingPacketType = ServerPacketType::PlayerState;
-		for (int i = 0; i < MAX_CLIENT; ++i)
+		for (std::size_t recipientIndex = 0; recipientIndex < mConnections.size(); ++recipientIndex)
 		{
-			if (mConnections[i].isUsed &&
-				EnqueuePacketFields(i, static_cast<INT8>(ServerPacketType::LoadingComplete)) &&
-				mPlayers[i])
+			const int recipientClientIndex = static_cast<int>(recipientIndex);
+			const std::shared_ptr<CServerPlayer>& player = mPlayers[recipientIndex];
+			if (mConnections[recipientIndex].isUsed &&
+				EnqueuePacketFields(
+					recipientClientIndex,
+					static_cast<INT8>(ServerPacketType::LoadingComplete)) &&
+				player)
 			{
-				mPlayers[i]->GameStartLogic();
+				player->GameStartLogic();
 			}
 		}
 		BroadcastOpenableObjectSnapshot();
@@ -1304,14 +1342,15 @@ GameState TCPServer::DetermineGameOutcome()
 	if (mZombieCount == 1 && mBlueSuitCount > 0)
 	{
 		int aliveBlueSuitCount = 0;
-		for (int i = 1; i < MAX_CLIENT; ++i)
+		for (std::size_t playerIndex = 1; playerIndex < mPlayers.size(); ++playerIndex)
 		{
-			if (!mPlayers[i] || mPlayers[i]->GetPlayerId() == -1)
+			const std::shared_ptr<CServerPlayer>& player = mPlayers[playerIndex];
+			if (!player || player->GetPlayerId() == -1)
 			{
 				continue;
 			}
 
-			if (mPlayers[i]->IsAlive())
+			if (player->IsAlive())
 			{
 				++aliveBlueSuitCount;
 			}
@@ -1346,9 +1385,9 @@ GameState TCPServer::DetermineGameOutcome()
 
 void TCPServer::EnqueueGameOutcomePackets(GameState gameState)
 {
-	for (int clientIndex = 0; clientIndex < static_cast<int>(mConnections.size()); ++clientIndex)
+	for (std::size_t connectionIndex = 0; connectionIndex < mConnections.size(); ++connectionIndex)
 	{
-		ClientConnectionState& socketInfo = mConnections[clientIndex];
+		ClientConnectionState& socketInfo = mConnections[connectionIndex];
 		if (!socketInfo.isUsed)
 		{
 			continue;
@@ -1364,7 +1403,7 @@ void TCPServer::EnqueueGameOutcomePackets(GameState gameState)
 		}
 
 		// 정기 상태 복제가 종료된 뒤에도 승리 결과는 상태 전환 시 즉시 한 번 전송한다.
-		EnqueuePendingPacket(clientIndex);
+		EnqueuePendingPacket(static_cast<int>(connectionIndex));
 	}
 }
 
@@ -1379,7 +1418,13 @@ void TCPServer::BuildPlayerReplicationStates()
 		}
 
 		const INT8 playerId = player->GetPlayerId();
-		auto& playerState = mPlayerReplicationStates[playerId];
+		if (playerId < 0 || playerId >= static_cast<INT8>(mPlayerReplicationStates.size()))
+		{
+			continue;
+		}
+
+		const std::size_t playerIndex = static_cast<std::size_t>(playerId);
+		auto& playerState = mPlayerReplicationStates[playerIndex];
 		playerState.alive = player->IsAlive();
 		playerState.running = player->IsRunning();
 		playerState.position = player->GetPosition();
@@ -1445,15 +1490,15 @@ void TCPServer::ReplicateStateIfDue()
 
 	// 지연된 복제 횟수를 몰아서 보내지 않고 가장 최근 상태 하나만 전송한다.
 	mNextStateReplicationTime = currentTime + STATE_REPLICATION_INTERVAL;
-	for (int clientIndex = 0; clientIndex < static_cast<int>(mConnections.size()); ++clientIndex)
+	for (std::size_t connectionIndex = 0; connectionIndex < mConnections.size(); ++connectionIndex)
 	{
-		const ClientConnectionState& socketInfo = mConnections[clientIndex];
+		const ClientConnectionState& socketInfo = mConnections[connectionIndex];
 		if (!socketInfo.isUsed || socketInfo.pendingPacketType != ServerPacketType::PlayerState)
 		{
 			continue;
 		}
 
-		EnqueuePendingPacket(clientIndex);
+		EnqueuePendingPacket(static_cast<int>(connectionIndex));
 	}
 }
 
@@ -1471,15 +1516,15 @@ void TCPServer::BroadcastOpenableObjectState(
 		return;
 	}
 
-	for (int clientIndex = 0; clientIndex < static_cast<int>(mConnections.size()); ++clientIndex)
+	for (std::size_t connectionIndex = 0; connectionIndex < mConnections.size(); ++connectionIndex)
 	{
-		if (!mConnections[clientIndex].isUsed)
+		if (!mConnections[connectionIndex].isUsed)
 		{
 			continue;
 		}
 
 		EnqueuePacketFields(
-			clientIndex,
+			static_cast<int>(connectionIndex),
 			static_cast<INT8>(ServerPacketType::OpenableObjectState),
 			objectState);
 	}
@@ -1534,11 +1579,11 @@ void TCPServer::BroadcastOpenableObjectSnapshot()
 		AppendBytes(packetBuffer, objectStates.data(), payloadBytes);
 	}
 
-	for (int clientIndex = 0; clientIndex < static_cast<int>(mConnections.size()); ++clientIndex)
+	for (std::size_t connectionIndex = 0; connectionIndex < mConnections.size(); ++connectionIndex)
 	{
-		if (mConnections[clientIndex].isUsed)
+		if (mConnections[connectionIndex].isUsed)
 		{
-			EnqueuePacketBuffer(clientIndex, packetBuffer);
+			EnqueuePacketBuffer(static_cast<int>(connectionIndex), packetBuffer);
 		}
 	}
 }
@@ -1651,7 +1696,13 @@ void TCPServer::BuildNearbyObjectSnapshots()
 		}
 
 		const INT8 playerId = player->GetPlayerId();
-		auto& objectSnapshot = mNearbyObjectSnapshots[playerId];
+		if (playerId < 0 || playerId >= static_cast<INT8>(mNearbyObjectSnapshots.size()))
+		{
+			continue;
+		}
+
+		const std::size_t playerIndex = static_cast<std::size_t>(playerId);
+		auto& objectSnapshot = mNearbyObjectSnapshots[playerIndex];
 		objectSnapshot.clear();
 
 		// 현재는 플레이어와 같은 층만 검사한다. 계단 주변의 인접 층 검사는 별도 게임 규칙이다.
@@ -1709,14 +1760,14 @@ void TCPServer::BuildNearbyObjectSnapshots()
 
 void TCPServer::EnqueueNearbyObjectSnapshots()
 {
-	for (int clientIndex = 0; clientIndex < static_cast<int>(mConnections.size()); ++clientIndex)
+	for (std::size_t connectionIndex = 0; connectionIndex < mConnections.size(); ++connectionIndex)
 	{
-		if (!mConnections[clientIndex].isUsed)
+		if (!mConnections[connectionIndex].isUsed)
 		{
 			continue;
 		}
 
-		const auto& objectSnapshot = mNearbyObjectSnapshots[clientIndex];
+		const auto& objectSnapshot = mNearbyObjectSnapshots[connectionIndex];
 		const size_t payloadBytes = sizeof(NearbyObjectState) * objectSnapshot.size();
 		const std::uint16_t wirePayloadBytes = static_cast<std::uint16_t>(payloadBytes);
 
@@ -1728,324 +1779,33 @@ void TCPServer::EnqueueNearbyObjectSnapshots()
 		{
 			AppendBytes(packetBuffer, objectSnapshot.data(), payloadBytes);
 		}
-		EnqueuePacketBuffer(clientIndex, std::move(packetBuffer));
+		EnqueuePacketBuffer(static_cast<int>(connectionIndex), std::move(packetBuffer));
 	}
 }
 
-// World initialization
-bool TCPServer::LoadServerScene()
+void TCPServer::AssignUniquePlayerSpawnPosition(
+	shared_ptr<CServerPlayer>& serverPlayer,
+	int clientIndex)
 {
-	FILE* inputFile = nullptr;
-	const errno_t openResult = ::fopen_s(&inputFile, "ServerScene.bin", "rb");
-	if (openResult != 0 || inputFile == nullptr)
+	if (!serverPlayer ||
+		clientIndex < 0 ||
+		clientIndex >= static_cast<int>(mPlayerStartPositionIndices.size()))
 	{
-		std::cerr << "Failed to open server scene file: error=" << openResult << '\n';
-		return false;
+		return;
 	}
 
-	std::unique_ptr<FILE, decltype(&::fclose)> inputFileGuard(inputFile, &::fclose);
-	const auto reportReadFailure = [](const char* message)
-	{
-		LogServerNotice(message);
-		return false;
-	};
+	std::uniform_int_distribution<int> spawnPositionDistribution(
+		0,
+		static_cast<int>(mPlayerStartPositions.size()) - 1);
 
-	bool reachedSceneEnd = false;
-	while (!reachedSceneEnd)
-	{
-		char token[128] = { '\0' };
-		for (; ; )
-		{
-			if (!ReadLengthPrefixedString(inputFile, token, std::size(token)))
-			{
-				return reportReadFailure("Failed to read a server scene token.");
-			}
-
-			if (!strcmp(token, "<Hierarchy>:"))
-			{
-				char frameName[64] = { '\0' };
-				std::vector<BoundingOrientedBox> boundingBoxes;
-				for (;;)
-				{
-					if (!ReadLengthPrefixedString(inputFile, token, std::size(token)))
-					{
-						return reportReadFailure("Failed to read a server scene frame token.");
-					}
-
-					if (!strcmp(token, "<Frame>:"))
-					{
-						int frameIndex = 0;
-						if (!ReadExact(inputFile, &frameIndex, sizeof(frameIndex), 1) ||
-							!ReadLengthPrefixedString(inputFile, frameName, std::size(frameName)))
-						{
-							return reportReadFailure("Failed to read server scene frame data.");
-						}
-					}
-					else if (!strcmp(token, "<Children>:"))
-					{
-						int childCount = 0;
-						if (!ReadExact(inputFile, &childCount, sizeof(childCount), 1) || childCount < 0)
-						{
-							return reportReadFailure("Invalid server scene child count.");
-						}
-					}
-					else if (!strcmp(token, "<BoxColliders>:"))
-					{
-						int boxColliderCount = 0;
-						if (!ReadExact(inputFile, &boxColliderCount, sizeof(boxColliderCount), 1) ||
-							boxColliderCount < 0)
-						{
-							return reportReadFailure("Invalid server scene collider count.");
-						}
-
-						boundingBoxes.reserve(static_cast<std::size_t>(boxColliderCount));
-						for (int collider = 0; collider < boxColliderCount; ++collider)
-						{
-							if (!ReadLengthPrefixedString(inputFile, token, std::size(token)))
-							{
-								return reportReadFailure("Failed to read a server scene collider token.");
-							}
-
-							int colliderIndex = 0;
-							XMFLOAT3 aabbCenter = {};
-							XMFLOAT3 aabbExtents = {};
-							if (!ReadExact(inputFile, &colliderIndex, sizeof(colliderIndex), 1) ||
-								!ReadExact(inputFile, &aabbCenter, sizeof(aabbCenter), 1) ||
-								!ReadExact(inputFile, &aabbExtents, sizeof(aabbExtents), 1))
-							{
-								return reportReadFailure("Failed to read server scene collider data.");
-							}
-
-							XMFLOAT4 orientation;
-							XMStoreFloat4(&orientation, XMQuaternionIdentity());
-							boundingBoxes.emplace_back(aabbCenter, aabbExtents, orientation);
-						}
-					}
-					else if (!strcmp(token, "<Matrix>:"))
-					{
-						int matrixCount = 0;
-						if (!ReadExact(inputFile, &matrixCount, sizeof(matrixCount), 1) || matrixCount < 0)
-						{
-							return reportReadFailure("Invalid server scene matrix count.");
-						}
-
-						std::vector<XMFLOAT4X4> worldMatrices(static_cast<std::size_t>(matrixCount));
-						if (!worldMatrices.empty() && !ReadExact(
-							inputFile,
-							worldMatrices.data(),
-							sizeof(XMFLOAT4X4),
-							worldMatrices.size()))
-						{
-							return reportReadFailure("Failed to read server scene matrices.");
-						}
-
-						for (XMFLOAT4X4& worldMatrix : worldMatrices)
-						{
-							CreateObjectFromSceneFrame(
-								frameName,
-								Matrix4x4::Transpose(worldMatrix),
-								boundingBoxes);
-						}
-					}
-					else if (!strcmp(token, "</Frame>"))
-					{
-						break;
-					}
-				}
-			}
-			else if (!strcmp(token, "</Hierarchy>"))
-			{
-				break;
-			}
-			else if (!strcmp(token, "</Scene>:"))
-			{
-				reachedSceneEnd = true;
-				break;
-			}
-		}
-	}
-
-	return true;
-}
-
-void TCPServer::CreateObjectFromSceneFrame(char* frameName, const XMFLOAT4X4& world, const vector<BoundingOrientedBox>& boundingBoxes)
-{
-	static int serverObjectId = 0;
-	shared_ptr<CServerGameObject> gameObject;
-
-	if (!strcmp(frameName, "Door_1"))
-	{
-		gameObject = make_shared<CServerDoorObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "Drawer_1"))
-	{
-		mDrawerEntries.push_back(pair<int, int>(serverObjectId, 1));
-		gameObject = make_shared<CServerDrawerObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "Drawer_2"))
-	{
-		mDrawerEntries.push_back(pair<int, int>(serverObjectId, 2));
-		gameObject = make_shared<CServerDrawerObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "Door1"))
-	{
-		gameObject = make_shared<CServerElevatorDoorObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "Emergency_Handle"))
-	{
-		gameObject = make_shared<CServerElevatorDoorObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "Laboratory_Wall_1_Corner_1") || !strcmp(frameName, "Laboratory_Wall_1_Corner_2"))
-	{
-		gameObject = make_shared<CServerEnvironmentObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "BoxCollide_Wall"))
-	{
-		gameObject = make_shared<CServerEnvironmentObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "Laboratory_Wall_1_Corner") || !strcmp(frameName, "Laboratory_Wall_1_Corner2") || !strcmp(frameName, "Laboratory_Wall_1"))
-	{
-		gameObject = make_shared<CServerEnvironmentObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "Laboratory_Wall_Door_1") || !strcmp(frameName, "Laboratory_Wall_Door_1_2"))
-	{
-		gameObject = make_shared<CServerEnvironmentObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "Biological_Capsule_1") || !strcmp(frameName, "Laboratory_Table_1") || !strcmp(frameName, "Laboratory_Stool_1"))
-	{
-		gameObject = make_shared<CServerEnvironmentObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "Laboratory_Tunnel_1_Stairs") || !strcmp(frameName, "Laboratory_Tunnel_1") || !strcmp(frameName, "Laboratory_Desk_Drawers_1"))
-	{
-		gameObject = make_shared<CServerEnvironmentObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "SM_Prop_Vents_Straight_01") || !strcmp(frameName, "SM_Prop_Crate_01")
-		|| !strcmp(frameName, "SM_Prop_Pipe_Curve_02") || !strcmp(frameName, "SM_Prop_Billboard_Roof_01")
-		|| !strcmp(frameName, "SM_Prop_Roof_Aircon_03") || !strcmp(frameName, "SM_Prop_Vents_End_01")
-		|| !strcmp(frameName, "SM_Prop_ShopInterior_Table_01") || !strcmp(frameName, "SM_Prop_Couch_01")
-		|| !strcmp(frameName, "SM_Prop_PotPlant_02") || !strcmp(frameName, "Table1of10"))
-	{
-		gameObject = make_shared<CServerEnvironmentObject>(frameName, world, boundingBoxes);
-	}
-	else if (!strcmp(frameName, "BoxCollider_Stair_Start"))
-	{
-		gameObject = make_shared<CServerStairTriggerObject>(frameName, world, boundingBoxes);
-	}
-	else
-	{
-		gameObject = make_shared<CServerGameObject>(frameName, world, boundingBoxes);
-		gameObject->SetStatic(true);
-	}
-
-	strcpy(gameObject->m_pstrFrameName, frameName);
-
-	serverObjectId++;
-	mCollisionManager->AddCollisionObject(gameObject);
-}
-
-void TCPServer::PopulateSceneItems()
-{
-	// 확률: fus 30, mine 30, tp 30, radar 10
-	uniform_int_distribution<int> drawerDistribution(0, mDrawerEntries.size() - 1); //[CJI 0525] mDrawerEntries 에 번호를 저장하는 방식으로 변경하여 랜덤으로 뽑아 사용
-	uniform_int_distribution<int> itemTypeDistribution(0, 99);
-	uniform_int_distribution<int> rotationDistribution(1, 360);
-	uniform_real_distribution<float> offsetDistribution(-0.2f, 0.2f);
-	CServerItemObject::SetDrawerIdContainer(mDrawerEntries);
-
-	for (int i = 0; i < ITEM_COUNT; ++i)
-	{
-		int drawerEntryIndex = drawerDistribution(mRandomEngine);
-		int drawerObjectId = mDrawerEntries[drawerEntryIndex].first;
-		shared_ptr<CServerDrawerObject> drawerObject = dynamic_pointer_cast<CServerDrawerObject>(mCollisionManager->GetCollisionObjectWithNumber(drawerObjectId));
-		if (!drawerObject) //error
-			assert(0);
-		//exit(1);
-
-		if (drawerObject->m_pStoredItem)	// 이미 다른 아이템이 들어왔음
-		{
-			--i;
-			continue;
-		}
-		XMFLOAT4X4 drawerWorld = mCollisionManager->GetCollisionObjectWithNumber(drawerObjectId)->GetWorldMatrix();
-
-		int itemTypeRoll = itemTypeDistribution(mRandomEngine);
-		shared_ptr<CServerItemObject> itemObject;
-
-		XMFLOAT3 randomOffset = XMFLOAT3(offsetDistribution(mRandomEngine), 0.0f, offsetDistribution(mRandomEngine));
-		XMFLOAT3 randomRotation = XMFLOAT3(0.0f, 0.0f, (float)rotationDistribution(mRandomEngine));
-
-		if (i < 9)		// Fuse
-		{
-			itemObject = make_shared<CServerFuseObject>();
-			itemObject->SetDrawerNumber(drawerObjectId);
-			itemObject->SetDrawer(drawerObject);
-			itemObject->SetDrawerType(mDrawerEntries[drawerEntryIndex].second);
-			drawerObject->m_pStoredItem = itemObject;
-
-			itemObject->SetRandomRotation(randomRotation);
-			itemObject->SetRandomOffset(randomOffset);
-
-			itemObject->SetWorldMatrix(drawerWorld);
-			mCollisionManager->AddCollisionObject(itemObject);
-		}
-		else if (i < 24)	// tp
-		{
-			itemObject = make_shared<CServerTeleportObject>();
-			itemObject->SetDrawerNumber(drawerObjectId);
-			itemObject->SetDrawer(drawerObject);
-			itemObject->SetDrawerType(mDrawerEntries[drawerEntryIndex].second);
-			drawerObject->m_pStoredItem = itemObject;
-
-			itemObject->SetRandomRotation(randomRotation);
-			itemObject->SetRandomOffset(randomOffset);
-			itemObject->SetWorldMatrix(drawerWorld);
-			mCollisionManager->AddCollisionObject(itemObject);
-		}
-		else if (i < 26)	// Rader
-		{
-			randomRotation = XMFLOAT3(90.0f, 0.0f, 0.0f);
-			itemObject = make_shared<CServerRadarObject>();
-			itemObject->SetDrawerNumber(drawerObjectId);
-			itemObject->SetDrawer(drawerObject);
-			itemObject->SetDrawerType(mDrawerEntries[drawerEntryIndex].second);
-			drawerObject->m_pStoredItem = itemObject;
-
-			itemObject->SetRandomRotation(randomRotation);
-			itemObject->SetRandomOffset(randomOffset);
-			itemObject->SetWorldMatrix(drawerWorld);
-			mCollisionManager->AddCollisionObject(itemObject);
-		}
-		else if (i < 76)	// Mine
-		{
-			randomRotation = XMFLOAT3(90.0f, 0.0f, 0.0f);
-
-			itemObject = make_shared<CServerMineObject>();
-			itemObject->SetDrawerNumber(drawerObjectId);
-			itemObject->SetDrawer(drawerObject);
-			itemObject->SetDrawerType(mDrawerEntries[drawerEntryIndex].second);
-			drawerObject->m_pStoredItem = itemObject;
-
-			itemObject->SetRandomRotation(randomRotation);
-			itemObject->SetRandomOffset(randomOffset);
-			itemObject->SetWorldMatrix(drawerWorld);
-			mCollisionManager->AddCollisionObject(itemObject);
-		}
-
-	}
-}
-
-void TCPServer::AssignUniquePlayerSpawnPosition(shared_ptr<CServerPlayer>& serverPlayer, int index)
-{
-	// 후보지를 두고 int 값에 따라 그곳에 가도록 해야할듯
-	uniform_int_distribution<int> spawnPositionDistribution(0, mPlayerStartPositions.size() - 1);
-
+	// 기존 코드가 첫 반복 전에 소비하던 난수까지 유지해 이후 월드 난수 결과가 달라지지 않게 한다.
 	int spawnPositionIndex = spawnPositionDistribution(mRandomEngine);
 	bool isAvailable = false;
 	while (!isAvailable)
 	{
 		isAvailable = true;
 		spawnPositionIndex = spawnPositionDistribution(mRandomEngine);
-		for (const auto& assignedSpawnIndex : mPlayerStartPositionIndices)
+		for (const int assignedSpawnIndex : mPlayerStartPositionIndices)
 		{
 			if (assignedSpawnIndex == spawnPositionIndex)
 			{
@@ -2055,8 +1815,16 @@ void TCPServer::AssignUniquePlayerSpawnPosition(shared_ptr<CServerPlayer>& serve
 		}
 	}
 
-	mPlayerStartPositionIndices[index] = spawnPositionIndex;
-	XMFLOAT3 spawnPosition = mPlayerStartPositions[spawnPositionIndex];
+	if (spawnPositionIndex < 0 ||
+		spawnPositionIndex >= static_cast<int>(mPlayerStartPositions.size()))
+	{
+		return;
+	}
+
+	const std::size_t playerIndex = static_cast<std::size_t>(clientIndex);
+	const std::size_t positionIndex = static_cast<std::size_t>(spawnPositionIndex);
+	mPlayerStartPositionIndices[playerIndex] = spawnPositionIndex;
+	const XMFLOAT3 spawnPosition = mPlayerStartPositions[positionIndex];
 	serverPlayer->SetPlayerPosition(spawnPosition);
 	serverPlayer->SetPlayerOldPosition(spawnPosition);
 }
