@@ -1,7 +1,7 @@
 #pragma once
+#include "../GameLimits.h"
 #include "Timer.h"
 #include "Shader.h"
-#include "TCPClient.h"
 #include "TextureBlendObject.h"
 
 class CGenerateSSAOShader;

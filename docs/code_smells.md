@@ -34,7 +34,6 @@
 | ID | 영역 | 항목 | 영향 및 다음 작업 |
 |---|---|---|---|
 | M-001 | Framework | `CGameFramework` 책임 집중 | 씬 전환, 렌더링, 입력, 네트워크 라우팅을 함께 담당한다. 실제 수정이 발생하는 경로부터 작은 함수로 분리한다. |
-| M-002 | Scene/Network | `Scene`과 `TCPClient` 직접 의존 | 렌더링 씬과 네트워크 정의의 결합이 변경 범위를 넓힌다. 게임 상태 전달 경계를 확인한 뒤 점진적으로 완화한다. |
 | M-003 | Network | 패킷 파싱과 상태 적용 결합 | 수신 처리에서 프로토콜 해석과 게임 객체 변경이 섞여 있다. 안정성 수정이 필요한 처리부터 두 단계를 분리한다. |
 | M-004 | Resource | 일부 raw pointer 및 수동 수명 관리 | 전체 일괄 교체는 하지 않는다. 소유권이 불명확하거나 오류가 재현되는 리소스부터 정리한다. |
 | M-005 | Source layout | 큰 클래스와 긴 함수 | 월드 구성은 `ServerWorldBuilder`로 분리했다. 크기 자체를 문제로 보지 않고, `TCPServer`에 남은 패킷 처리·연결/송신·복제·세션 책임 중 반복 수정되는 경로만 동작 단계 기준으로 추출한다. |
@@ -69,6 +68,7 @@
 | RS-013 | Network buffer | 연결 상태의 대형 인라인 저장소 | 클라이언트와 서버의 65,535 byte 수신 배열을 `vector<char>` 소유로 옮기고 약 16.5 KiB의 소켓 통계 저장소를 `unique_ptr` 소유로 옮겼다. `SocketInfo` 이동·교환의 대형 스택 임시 객체와 관련 경고를 제거하고 Release 2인 실행에서 통신 동작을 확인했다. |
 | RS-014 | Replication | 문·서랍의 30 Hz 애니메이션과 관심 영역 진입 시 상태 pop | 문·서랍을 `NEARBY_OBJECTS`에서 제외하고 상태 변경 event를 모든 활성 클라이언트에 전달하며, 모든 클라이언트 로딩 완료 후 현재 상태 snapshot을 한 번 전송한다. 클라이언트는 서버 최종 상태를 적용해 렌더 프레임마다 애니메이션하고 서버의 행렬·충돌 권위는 유지한다. Release 실행에서 자신과 다른 클라이언트의 문·서랍 상태 및 서랍 애니메이션을 확인했다. |
 | RS-015 | Server structure | TCPServer의 월드 구성 책임 집중 | 월드 구성을 `ServerWorldBuilder`로 분리하고 초기화 성공·실패를 `TCPServer::Initialize()`까지 전달하도록 정리했다. 정상적인 서버 시작·게임 진행과 `ServerScene.bin` 누락 시 네트워크 초기화 전 종료를 확인했다. |
+| RS-016 | Shared limits | 공통 인원 제한의 네트워크 헤더 종속 | `MAX_CLIENT`와 `MAX_SURVIVOR`를 공통 `GameLimits.h`로 이동하고 사용하는 헤더가 직접 참조하게 했다. `Scene.h`와 `ServerCollision.h`의 불필요한 네트워크 헤더 의존을 제거하고 Client/Server 빌드와 실행을 확인했다. |
 
 ## 항목 작성 규칙
 

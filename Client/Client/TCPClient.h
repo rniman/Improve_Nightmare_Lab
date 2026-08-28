@@ -7,12 +7,11 @@
 #include <memory>
 #include <vector>
 
+#include "../GameLimits.h"
 #include "GlobalDefine.h"
 
 constexpr UINT WM_SOCKET{ WM_USER + 1 };
 
-constexpr std::size_t MAX_CLIENT{ 5 };
-constexpr std::size_t MAX_SURVIVOR{ 4 };
 constexpr std::size_t MAX_NEARBY_OBJECTS{ 30 };
 
 constexpr WORD KEY_W{ 0x01 };

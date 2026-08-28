@@ -74,7 +74,10 @@
 ### 현재 활성 단계
 
 - Phase 4의 클라이언트 의존성 개선을 작은 변경 단위로 진행한다.
-- 첫 후보는 `MAX_CLIENT` 정의 위치를 정리해 `Scene.h`가 `TCPClient.h`를 포함하지 않게 하는 작업이다.
+- 완료: `MAX_CLIENT`와 `MAX_SURVIVOR`를 `GameLimits.h`로 이동해 `Scene.h`의
+  `TCPClient.h` 직접 include를 제거하고 Client/Server 빌드와 실행을 확인했다.
+- 완료: `GameFramework.h`와 `ServerCollision.h`도 `GameLimits.h`를 직접 include하고,
+  `ServerCollision.h`의 불필요한 `TCPServer.h` 의존을 제거한 뒤 Client/Server 빌드와 실행을 확인했다.
 - 다음 후보는 `TCPClient.cpp`가 `CGameFramework::GetKeysBuffer()`를 직접 호출하는 역의존을
   입력 스냅샷 전달 방식으로 완화하는 작업이다.
 - 패킷 파싱과 게임 상태 적용 분리는 실제 수정이 필요한 클라이언트 패킷부터 한 종류씩 진행한다.
@@ -283,7 +286,8 @@ WAN 환경의 움직임 끊김 중 하나가 측정될 때 재평가한다.
 
 ## Phase 4. 문제 기반의 작은 구조 개선 — 현재 활성 단계
 
-- `MAX_CLIENT`의 정의 위치를 정리해 `Scene.h`의 `TCPClient.h` 직접 include를 제거한다.
+- `MAX_CLIENT`와 `MAX_SURVIVOR`를 `GameLimits.h`로 이동해 `Scene.h`의
+  `TCPClient.h` 직접 include를 제거한다. — 구현, Client/Server 빌드·실행 확인
 - `GameFramework.h`에서는 가능한 타입을 전방 선언하고 구현에 필요한 헤더는 `.cpp`에서 직접 include한다.
 - `TCPClient.cpp`가 `CGameFramework`의 정적 입력 버퍼를 직접 조회하는 역의존을 입력 스냅샷 전달로 점진적으로 완화한다.
 - 네트워크 패킷 파싱과 게임 상태 적용은 실제 수정이 필요한 클라이언트 패킷부터 한 종류씩 분리한다.

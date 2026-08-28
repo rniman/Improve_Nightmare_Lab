@@ -6,10 +6,10 @@
 #include <memory>
 #include <vector>
 
+#include "../GameLimits.h"
 #include "../Client/GlobalDefine.h"
 #include "NetworkStatistics.h"
 #include "Timer.h"
-constexpr size_t MAX_CLIENT{ 5 };
 constexpr size_t MAX_NEARBY_OBJECTS{ 30 };
 constexpr UINT WM_OPENABLE_OBJECT_STATE{ WM_USER + 3 };
 

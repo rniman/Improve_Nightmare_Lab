@@ -1,4 +1,5 @@
 #pragma once
+#include "../GameLimits.h"
 #include "Timer.h"
 #include "Scene.h"
 #include "TCPClient.h"

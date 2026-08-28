@@ -60,7 +60,7 @@ Server.cpp
 ```
 
 주요 결합 지점:
-- `Scene.h`가 `TCPClient.h`를 포함한다 (씬이 네트워킹 정의에 의존).
+- 공통 인원 제한은 `GameLimits.h`가 소유하며 이를 사용하는 Client/Server 헤더가 직접 참조한다.
 - `TCPClient.cpp`가 `GameFramework` 정적 상태에 의존한다.
 - 전역/싱글턴 방식의 접근이 일반적이다 (`g_collisionManager`, `gGameTimer`, `SharedObject`, `SoundManager`).
 
