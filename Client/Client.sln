@@ -1,11 +1,29 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.6.33829.357
+# Visual Studio Version 18
+VisualStudioVersion = 18.9.12120.119
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Client", "Client\Client.vcxproj", "{714451CA-43AC-4FF1-B9A8-C97890F8F63B}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Server", "Server\Server.vcxproj", "{334A1E66-5A3E-45E9-BAAF-0EA8E682DA59}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Commons", "Commons", "{942DEAFF-A846-4028-B851-A2D87CFC835C}"
+	ProjectSection(SolutionItems) = preProject
+		Common.h = Common.h
+		GameLimits.h = GameLimits.h
+		WindowMessages.h = WindowMessages.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{7FE8C8D0-3C1A-4E36-B120-D83B6468BE1A}"
+	ProjectSection(SolutionItems) = preProject
+		..\docs\architecture.md = ..\docs\architecture.md
+		..\docs\code_smells.md = ..\docs\code_smells.md
+		..\docs\coding_convention.md = ..\docs\coding_convention.md
+		..\docs\git_convention.md = ..\docs\git_convention.md
+		..\docs\pipeline.md = ..\docs\pipeline.md
+		..\docs\refactoring_plan.md = ..\docs\refactoring_plan.md
+		..\docs\ssao.md = ..\docs\ssao.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
