@@ -746,6 +746,7 @@ CServerStairTriggerObject::CServerStairTriggerObject(char* pstrFrameName, const 
 	: CServerGameObject(pstrFrameName, xmf4x4World, voobb)
 {
 	m_nCollisionType = COLLISION_TYPE::StairTrigger;
+	m_bStatic = true;
 	XMFLOAT3 xmf3Position = XMFLOAT3(m_xmf4x4World._41, m_xmf4x4World._42, m_xmf4x4World._43);
 	XMFLOAT3 xmf3Point1, xmf3Point2, xmf3Point3;
 
