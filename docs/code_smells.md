@@ -26,7 +26,7 @@
 |---|---|---|---|
 | R-003 | Lifetime | 씬 전환 및 연결 종료 수명 | 로비에서 인게임 전환, 연결 종료, 게임 종료 경로의 null 접근과 소유 관계를 확인한다. |
 | R-004 | Rendering | 렌더 상태 및 리소스 수명 결합 | 씬 전환이나 command list 재설정 시 root signature, descriptor heap, GPU 리소스 수명이 유효한지 변경 범위마다 확인한다. |
-| R-005 | Replication | 최대 인원과 부하 조건의 잔여 검증 | 입력·플레이어·주변 오브젝트 책임과 주기를 분리하고 legacy 고정 배열을 제거했다. Release 로컬 3인에서 서버 TX는 `2092acd2`의 평균 2,743,023 byte/s에서 현재 평균 94,067 byte/s로 96.57% 감소했고, 출력 시점 큐 0과 연결별 구간 peak 최대 461 byte/1 packet을 확인했다. 프레임 종속·고정 10KB 복제 위험은 해소됐으며, 5인·느린 네트워크·강제 partial I/O와 30개 제한 도달 여부를 확인할 때까지 검증 위험으로 유지한다. |
+| R-005 | Replication | 최대 인원과 부하 조건의 잔여 검증 | 입력·플레이어·주변 오브젝트 책임과 주기를 분리하고 legacy 고정 배열을 제거했다. Release 로컬 3인에서 서버 TX는 `2092acd2`의 평균 2,743,023 byte/s에서 현재 평균 94,067 byte/s로 96.57% 감소했고, 출력 시점 큐 0과 연결별 구간 peak 최대 461 byte/1 packet을 확인했다. 프레임 종속·고정 10KB 복제 위험은 해소됐다. 5인·느린 네트워크·강제 partial I/O와 30개 제한 도달 여부는 검증 위험으로 기록하되, 큐 증가·주기 불안정·연결 문제가 관찰될 때까지 실행을 보류한다. |
 | R-006 | Protocol | 클라이언트 방향·카메라 입력 신뢰 | 서버는 `viewMatrix`, `look`, `right`, `up`, `pitch`의 유한성과 right-click action의 0/1 범위를 검사한다. 다만 방향 벡터의 정규화·직교성이나 권위 위치와의 관계는 검사하지 않으므로, 새 입력 wire 구조를 설계하기 전에 허용 범위와 서버 재구성 가능한 필드를 정한다. |
 
 ### Maintainability
@@ -68,8 +68,7 @@
 | RS-012 | Network event | 상태 복제 분리 후 게임 종료 패킷 미전송 | 승리 상태 설정 후 `EnqueuePendingPacket()`가 없어 정기 복제 중단과 함께 종료 패킷도 누락됐다. 상태 전환 시 각 활성 연결에 승리 패킷을 한 번 즉시 등록하도록 수정하고 Release 2인 플레이에서 WIN 패킷 로그를 확인했다. |
 | RS-013 | Network buffer | 연결 상태의 대형 인라인 저장소 | 클라이언트와 서버의 65,535 byte 수신 배열을 `vector<char>` 소유로 옮기고 약 16.5 KiB의 소켓 통계 저장소를 `unique_ptr` 소유로 옮겼다. `SocketInfo` 이동·교환의 대형 스택 임시 객체와 관련 경고를 제거하고 Release 2인 실행에서 통신 동작을 확인했다. |
 | RS-014 | Replication | 문·서랍의 30 Hz 애니메이션과 관심 영역 진입 시 상태 pop | 문·서랍을 `NEARBY_OBJECTS`에서 제외하고 상태 변경 event를 모든 활성 클라이언트에 전달하며, 모든 클라이언트 로딩 완료 후 현재 상태 snapshot을 한 번 전송한다. 클라이언트는 서버 최종 상태를 적용해 렌더 프레임마다 애니메이션하고 서버의 행렬·충돌 권위는 유지한다. Release 실행에서 자신과 다른 클라이언트의 문·서랍 상태 및 서랍 애니메이션을 확인했다. |
-| RS-015 | Server structure | TCPServer의 월드 구성 책임 집중 | 초기화를 네트워크와 월드 단계로 나누고, 씬 로딩·오브젝트 생성·탈출문 선택·아이템 배치와 `mDrawerEntries`를 `ServerWorldBuilder`로 이동했다. 프로젝트 XML 및 diff 정적 검사는 통과했으며 빌드·실행 검증은 후속 대상이다. |
-| RS-016 | Server initialization | 월드 구성 실패가 초기화 결과에 반영되지 않음 | `InitializeWorld()`가 성공 여부를 반환하고 `TCPServer::Initialize()`가 이를 전달하도록 정리했다. 월드를 네트워크보다 먼저 구성해 실패 시 리슨 소켓을 열지 않으며, 호출부는 기존대로 창을 닫고 서버 시작을 중단한다. 정적 검사를 수행했으며 빌드·실행 검증은 후속 대상이다. |
+| RS-015 | Server structure | TCPServer의 월드 구성 책임 집중 | 월드 구성을 `ServerWorldBuilder`로 분리하고 초기화 성공·실패를 `TCPServer::Initialize()`까지 전달하도록 정리했다. 정상적인 서버 시작·게임 진행과 `ServerScene.bin` 누락 시 네트워크 초기화 전 종료를 확인했다. |
 
 ## 항목 작성 규칙
 
