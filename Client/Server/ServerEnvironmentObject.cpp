@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "ServerEnvironmentObject.h"
+#include "../WindowMessages.h"
 #include "ServerPlayer.h"
 #include "TCPServer.h"
 #include "ServerCollision.h"
@@ -128,18 +129,18 @@ void CServerDrawerObject::UpdatePicking(INT8 nClientId)
 	{
 		m_bOpened = false;
 		m_bAnimate = true;
-		PostMessage(gTcpServer.GetWindowHandle(), WM_SOUND, (WPARAM)SoundMessage::CloseDrawer, (LPARAM)nClientId);
+		PostMessage(gTcpServer.GetWindowHandle(), ServerWindowMessage::WM_SOUND, (WPARAM)SoundMessage::CloseDrawer, (LPARAM)nClientId);
 	}
 	else
 	{
 		m_bOpened = true;
 		m_bAnimate = true;
-		PostMessage(gTcpServer.GetWindowHandle(), WM_SOUND, (WPARAM)SoundMessage::OpenDrawer, (LPARAM)nClientId);
+		PostMessage(gTcpServer.GetWindowHandle(), ServerWindowMessage::WM_SOUND, (WPARAM)SoundMessage::OpenDrawer, (LPARAM)nClientId);
 	}
 
 	PostMessage(
 		gTcpServer.GetWindowHandle(),
-		WM_OPENABLE_OBJECT_STATE,
+		ServerWindowMessage::WM_OPENABLE_OBJECT_STATE,
 		static_cast<WPARAM>(GetCollisionNum()),
 		static_cast<LPARAM>(MAKELPARAM(
 			static_cast<WORD>(OpenableObjectType::Drawer),
@@ -188,18 +189,18 @@ void CServerDoorObject::UpdatePicking(INT8 nClientId)
 	{
 		m_bOpened = false;
 		m_fDoorAngle = 0.0f;
-		PostMessage(gTcpServer.GetWindowHandle(), WM_SOUND, (WPARAM)SoundMessage::CloseDoor, (LPARAM)nClientId);
+		PostMessage(gTcpServer.GetWindowHandle(), ServerWindowMessage::WM_SOUND, (WPARAM)SoundMessage::CloseDoor, (LPARAM)nClientId);
 	}
 	else
 	{
 		m_bOpened = true;
 		m_fDoorAngle = 150.0f;
-		PostMessage(gTcpServer.GetWindowHandle(), WM_SOUND, (WPARAM)SoundMessage::OpenDoor, (LPARAM)nClientId);
+		PostMessage(gTcpServer.GetWindowHandle(), ServerWindowMessage::WM_SOUND, (WPARAM)SoundMessage::OpenDoor, (LPARAM)nClientId);
 	}
 
 	PostMessage(
 		gTcpServer.GetWindowHandle(),
-		WM_OPENABLE_OBJECT_STATE,
+		ServerWindowMessage::WM_OPENABLE_OBJECT_STATE,
 		static_cast<WPARAM>(GetCollisionNum()),
 		static_cast<LPARAM>(MAKELPARAM(
 			static_cast<WORD>(OpenableObjectType::Door),

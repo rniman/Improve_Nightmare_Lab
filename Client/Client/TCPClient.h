@@ -10,8 +10,6 @@
 #include "../GameLimits.h"
 #include "GlobalDefine.h"
 
-constexpr UINT WM_SOCKET{ WM_USER + 1 };
-
 constexpr std::size_t MAX_NEARBY_OBJECTS{ 30 };
 
 constexpr WORD KEY_W{ 0x01 };
@@ -132,7 +130,7 @@ public:
 
 	bool CreateSocket(HWND window, const TCHAR* ipAddress);
 	void OnProcessingSocketMessage(HWND window, UINT messageId, WPARAM wParam, LPARAM lParam);
-	void SendInputIfDue();
+	void SendInputIfDue(const UCHAR* keysBuffer);
 	void RequestSend();
 	void SendLoadingComplete();
 
@@ -223,6 +221,7 @@ private:
 	std::deque<PendingSend> mSendQueue;
 	std::size_t mPendingSendBytes = 0;
 	std::chrono::steady_clock::time_point mNextInputSendTime = {};
+	WORD mLatestInputKeyMask = 0;
 
 	SOCKET_STATE mSocketState = SOCKET_STATE::SEND_GAME_START;
 	INT8 mMainClientId = -1;

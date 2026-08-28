@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "Client.h"
+#include "../WindowMessages.h"
 #include "GameFramework.h"
-#include "TCPClient.h"
 
 #include "Sound.h"
 
@@ -256,12 +256,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		return (LRESULT)GetStockObject(WHITE_BRUSH);
 	}
 	break;
-	case WM_SOCKET: // 소켓 관련 윈도우 메시지
-	case WM_CREATE_TCP:
-	case WM_END_GAME:
-	case WM_START_GAME:
-	case WM_CHANGE_SLOT:
-	case WM_REQUEST_SEND:
+	case ClientWindowMessage::WM_SOCKET: // 소켓 관련 윈도우 메시지
+	case ClientWindowMessage::WM_CREATE_TCP:
+	case ClientWindowMessage::WM_END_GAME:
+	case ClientWindowMessage::WM_START_GAME:
+	case ClientWindowMessage::WM_CHANGE_SLOT:
+	case ClientWindowMessage::WM_REQUEST_SEND:
 	case WM_COMMAND:
 	case WM_SIZE:
 	case WM_LBUTTONDOWN:

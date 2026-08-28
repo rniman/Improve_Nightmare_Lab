@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "TCPServer.h"
+#include "../WindowMessages.h"
 #include "ServerObject.h"
 #include "ServerEnvironmentObject.h"
 #include "ServerPlayer.h"
@@ -222,7 +223,7 @@ void TCPServer::HandleWindowMessage(HWND window, UINT messageId, WPARAM wParam, 
 	case WM_CREATE:
 		mTimer.Start();
 		break;
-	case WM_SOUND:
+	case ServerWindowMessage::WM_SOUND:
 	{
 		const int clientIndex = static_cast<int>(lParam);
 		if (clientIndex < 0 || clientIndex >= static_cast<int>(mConnections.size()))
@@ -260,7 +261,7 @@ void TCPServer::HandleWindowMessage(HWND window, UINT messageId, WPARAM wParam, 
 		EnqueuePendingPacket(clientIndex);
 		break;
 	}
-	case WM_OPENABLE_OBJECT_STATE:
+	case ServerWindowMessage::WM_OPENABLE_OBJECT_STATE:
 	{
 		const int objectId = static_cast<int>(wParam);
 		const OpenableObjectType objectType =
@@ -372,7 +373,7 @@ bool TCPServer::InitializeNetworking(HWND window)
 	}
 
 	// WSAAsyncSelect()
-	result = WSAAsyncSelect(listenSocket, window, WM_SOCKET, FD_ACCEPT | FD_CLOSE);
+	result = WSAAsyncSelect(listenSocket, window, ServerWindowMessage::WM_SOCKET, FD_ACCEPT | FD_CLOSE);
 	if (result == SOCKET_ERROR)
 	{
 		const int errorCode = WSAGetLastError();
@@ -445,7 +446,7 @@ void TCPServer::HandleAcceptEvent(HWND window, SOCKET listenSocket)
 		return;
 	}
 
-	const int result = WSAAsyncSelect(clientSocket, window, WM_SOCKET, FD_READ | FD_WRITE | FD_CLOSE);
+	const int result = WSAAsyncSelect(clientSocket, window, ServerWindowMessage::WM_SOCKET, FD_READ | FD_WRITE | FD_CLOSE);
 	if (result == SOCKET_ERROR)
 	{
 		const int errorCode = WSAGetLastError();

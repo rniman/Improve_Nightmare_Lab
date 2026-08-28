@@ -3,6 +3,7 @@
 //-----------------------------------------------------------------------------
 #include "stdafx.h"
 #include "GameFramework.h"
+#include "../WindowMessages.h"
 #include "TCPClient.h"
 #include "Player.h"
 #include "Collision.h"
@@ -221,7 +222,7 @@ void CGameFramework::OnButtonClick(HWND hWnd)
 
 	if (m_pTcpClient->CreateSocket(hWnd, m_pszIPAddress))
 	{
-		SendMessage(hWnd, WM_CREATE_TCP, NULL, NULL);
+		SendMessage(hWnd, ClientWindowMessage::WM_CREATE_TCP, NULL, NULL);
 	}
 }
 
@@ -557,7 +558,7 @@ void CGameFramework::ProcessInput()
 	}
 
 	// 입력 상태는 매 프레임 갱신하지만 실제 패킷 송신은 CTcpClient의 deadline이 제한한다.
-	m_pTcpClient->SendInputIfDue();
+	m_pTcpClient->SendInputIfDue(m_pKeysBuffer);
 
 	if (!bProcessedByScene)
 	{
@@ -940,7 +941,7 @@ void CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARA
 	case WM_COMMAND:
 		OnProcessingCommandMessage(hWnd, nMessageID, wParam, lParam);
 		break;
-	case WM_CHANGE_SLOT:
+	case ClientWindowMessage::WM_CHANGE_SLOT:
 	{
 		shared_ptr<CLobbyScene> pScene = dynamic_pointer_cast<CLobbyScene>(m_pScene);
 		if (LOWORD(wParam) == 0) // 교환 주체
@@ -969,13 +970,13 @@ void CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARA
 		}
 	}
 	break;
-	case WM_REQUEST_SEND:
+	case ClientWindowMessage::WM_REQUEST_SEND:
 		m_pTcpClient->RequestSend();
 		break;
-	case WM_CREATE_TCP:
+	case ClientWindowMessage::WM_CREATE_TCP:
 		m_bTcpClient = true;
 		break;
-	case WM_START_GAME:
+	case ClientWindowMessage::WM_START_GAME:
 	{
 		m_nGameState = GAME_STATE::IN_LOADING;
 
@@ -995,10 +996,10 @@ void CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARA
 		m_pTcpClient->SendLoadingComplete();
 	}
 	break;
-	case WM_END_GAME:
+	case ClientWindowMessage::WM_END_GAME:
 		OnProcessingEndGameMessage(wParam);
 		break;
-	case WM_SOCKET:
+	case ClientWindowMessage::WM_SOCKET:
 		OnProcessingSocketMessage(hWnd, nMessageID, wParam, lParam);
 		break;
 	case WM_ACTIVATE:
@@ -1384,11 +1385,6 @@ void CGameFramework::RenderTextUI()
 INT8 CGameFramework::GetClientIdFromTcpClient() const
 {
 	return m_pTcpClient->GetMainClientId();
-}
-
-UCHAR* CGameFramework::GetKeysBuffer()
-{
-	return m_pKeysBuffer;
 }
 
 void CGameFramework::SetPlayerObjectOfClient(int nClientId)

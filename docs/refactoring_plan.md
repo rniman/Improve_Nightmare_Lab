@@ -79,10 +79,12 @@
 - 완료: `GameFramework.h`와 `ServerCollision.h`도 `GameLimits.h`를 직접 include하고,
   `ServerCollision.h`의 불필요한 `TCPServer.h` 의존을 제거한 뒤 Client/Server 빌드와 실행을 확인했다.
 - 완료: `GameFramework.h`는 `CTcpClient`를 전방 선언하고, 완전한 정의가 필요한
-  `GameFramework.cpp`와 `WM_SOCKET`을 사용하는 `Client.cpp`가 `TCPClient.h`를 직접 include한다.
-  Client 빌드와 실행을 확인했다.
-- 다음 후보는 `TCPClient.cpp`가 `CGameFramework::GetKeysBuffer()`를 직접 호출하는 역의존을
-  입력 스냅샷 전달 방식으로 완화하는 작업이다.
+  `GameFramework.cpp`만 `TCPClient.h`를 직접 include한다. `Client.cpp`는 `WM_SOCKET` 정의를
+  `WindowMessages.h`에서 직접 참조한다. Client 빌드와 실행을 확인했다.
+- 완료: `GameFramework`가 최신 키 입력을 `CTcpClient::SendInputIfDue()`에 전달하고,
+  `TCPClient.cpp`의 `GameFramework.h` 역의존과 정적 입력 버퍼 접근을 제거했다. Client 빌드·실행 확인.
+- 완료: 클라이언트와 서버의 Win32 메시지 ID를 공통 `WindowMessages.h`에서 네임스페이스별로 구분하고,
+  `Common.h`와 기능 헤더에서 메시지 정의 책임을 제거했다. Client/Server 빌드·실행 확인.
 - 패킷 파싱과 게임 상태 적용 분리는 실제 수정이 필요한 클라이언트 패킷부터 한 종류씩 진행한다.
 - 씬 전환·연결 종료 수명과 렌더 리소스 상태는 관련 코드를 수정할 때마다 회귀 검증한다.
 
@@ -292,8 +294,12 @@ WAN 환경의 움직임 끊김 중 하나가 측정될 때 재평가한다.
 - `MAX_CLIENT`와 `MAX_SURVIVOR`를 `GameLimits.h`로 이동해 `Scene.h`의
   `TCPClient.h` 직접 include를 제거한다. — 구현, Client/Server 빌드·실행 확인
 - `GameFramework.h`에서 `CTcpClient`를 전방 선언하고 구현에 필요한 `TCPClient.h`는
-  `GameFramework.cpp`에서 직접 include한다. — 구현, Client 빌드·실행 확인
-- `TCPClient.cpp`가 `CGameFramework`의 정적 입력 버퍼를 직접 조회하는 역의존을 입력 스냅샷 전달로 점진적으로 완화한다.
+  `GameFramework.cpp`에서 직접 include한다. `Client.cpp`는 Win32 메시지 헤더만 직접 참조한다.
+  — 구현, Client 빌드·실행 확인
+- `GameFramework`가 최신 키 입력을 `CTcpClient::SendInputIfDue()`에 전달하도록 바꾸고,
+  `TCPClient.cpp`의 `GameFramework.h` 역의존과 정적 입력 버퍼 접근을 제거한다. — 구현, Client 빌드·실행 확인
+- 클라이언트와 서버의 Win32 메시지 ID를 작은 공통 헤더에서 네임스페이스별로 구분하고,
+  발신·처리 구현 파일이 직접 include한다. — 구현, Client/Server 빌드·실행 확인
 - 네트워크 패킷 파싱과 게임 상태 적용은 실제 수정이 필요한 클라이언트 패킷부터 한 종류씩 분리한다.
 - 실제 변경이 필요한 경로에서만 `GameFramework` 책임을 작은 함수로 분리한다.
 - 소유권이나 수명이 불명확해 실제 위험이 있는 리소스부터 정리한다.

@@ -61,7 +61,10 @@ Server.cpp
 
 주요 결합 지점:
 - 공통 인원 제한은 `GameLimits.h`가 소유하며 이를 사용하는 Client/Server 헤더가 직접 참조한다.
-- `TCPClient.cpp`가 `GameFramework` 정적 상태에 의존한다.
+- 키 입력은 `GameFramework`가 `CTcpClient::SendInputIfDue()`에 명시적으로 전달하며,
+  `TCPClient.cpp`는 `GameFramework` 정적 상태에 의존하지 않는다.
+- 클라이언트와 서버의 Win32 메시지 ID는 공통 `WindowMessages.h`가 네임스페이스별로 소유하며,
+  메시지를 발신하거나 처리하는 구현 파일이 직접 참조한다.
 - 전역/싱글턴 방식의 접근이 일반적이다 (`g_collisionManager`, `gGameTimer`, `SharedObject`, `SoundManager`).
 
 ## 알려진 아키텍처 이슈

@@ -7,9 +7,6 @@
 class CGenerateSSAOShader;
 class CBlurSSAOComputeShader;
 
-constexpr UINT WM_CHANGE_SLOT{ WM_USER + 5 };
-constexpr UINT WM_REQUEST_SEND{ WM_USER + 6 };
-
 // m_vShader 쉐이더에 AddDefaultObject 시에 접근할 각 쉐이더 인덱스를 의미
 #define STANDARD_SHADER 0
 #define INSTANCE_STANDARD_SHADER 1

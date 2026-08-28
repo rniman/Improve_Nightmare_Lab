@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Scene.h"
+#include "../WindowMessages.h"
 #include "Shader.h"
 #include "ParticleShader.h"
 #include "TextureBlendAnimationShader.h"
@@ -510,14 +511,14 @@ bool CLobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wP
 		if (nRetVal == 1)	// GAME START
 		{
 			// 애플리케이션 송신 요청은 Winsock의 실제 FD_WRITE 알림과 분리한다.
-			PostMessage(m_hWnd, WM_REQUEST_SEND, 0, 0);
+			PostMessage(m_hWnd, ClientWindowMessage::WM_REQUEST_SEND, 0, 0);
 			break;
 		}
 		nRetVal = pLobbyUIShader->ProcessInput(LOBBY_PROCESS_INPUT::CHANGE_BUTTON_UP);
 		if (nRetVal == 2)
 		{
 			// CHANGE
-			PostMessage(hWnd, WM_CHANGE_SLOT, 0, 0);
+			PostMessage(hWnd, ClientWindowMessage::WM_CHANGE_SLOT, 0, 0);
 			break;
 		}
 	}

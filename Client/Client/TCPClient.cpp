@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "TCPClient.h"
-#include "GameFramework.h"
+#include "../WindowMessages.h"
 #include "EnvironmentObject.h"
 #include "Player.h"
 #include "SharedObject.h"
@@ -221,6 +221,7 @@ void CTcpClient::CloseConnection()
 	mSendQueue.clear();
 	mPendingSendBytes = 0;
 	mNextInputSendTime = {};
+	mLatestInputKeyMask = 0;
 	ResetReceiveState();
 }
 
@@ -279,7 +280,7 @@ bool CTcpClient::CreateSocket(HWND window, const TCHAR* ipAddress)
 		return false;
 	}
 
-	result = WSAAsyncSelect(m_sock, window, WM_SOCKET, FD_CLOSE | FD_READ | FD_WRITE);
+	result = WSAAsyncSelect(m_sock, window, ClientWindowMessage::WM_SOCKET, FD_CLOSE | FD_READ | FD_WRITE);
 	if (result == SOCKET_ERROR)
 	{
 		const int errorCode = WSAGetLastError();
@@ -369,7 +370,7 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 	switch (mReceiveHead)
 	{
 	case ReceiveHead::GameStart:
-		PostMessage(window, WM_START_GAME, 0, 0);
+		PostMessage(window, ClientWindowMessage::WM_START_GAME, 0, 0);
 		mSocketState = SOCKET_STATE::SEND_KEY_BUFFER;
 		mNextInputSendTime = std::chrono::steady_clock::now();
 		break;
@@ -416,10 +417,10 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 		}
 		break;
 	case ReceiveHead::BlueSuitWin:
-		PostMessage(window, WM_END_GAME, 0, 0);
+		PostMessage(window, ClientWindowMessage::WM_END_GAME, 0, 0);
 		break;
 	case ReceiveHead::ZombieWin:
-		PostMessage(window, WM_END_GAME, 1, 0);
+		PostMessage(window, ClientWindowMessage::WM_END_GAME, 1, 0);
 		break;
 	case ReceiveHead::OpenDrawerSound:
 	{
@@ -514,7 +515,7 @@ bool CTcpClient::TryProcessChangeSlotPacket(HWND window, SOCKET socket)
 
 	if (previousMainClientId != mMainClientId)
 	{
-		PostMessage(window, WM_CHANGE_SLOT, 1, 0);
+		PostMessage(window, ClientWindowMessage::WM_CHANGE_SLOT, 1, 0);
 	}
 	return true;
 }
@@ -1154,9 +1155,9 @@ void CTcpClient::ProcessWriteEvent()
 	}
 }
 
-void CTcpClient::SendInputIfDue()
+void CTcpClient::SendInputIfDue(const UCHAR* keysBuffer)
 {
-	if (mSocketState != SOCKET_STATE::SEND_KEY_BUFFER)
+	if (mSocketState != SOCKET_STATE::SEND_KEY_BUFFER || !keysBuffer)
 	{
 		return;
 	}
@@ -1167,6 +1168,7 @@ void CTcpClient::SendInputIfDue()
 		return;
 	}
 
+	mLatestInputKeyMask = BuildKeyBitMask(keysBuffer);
 	RequestSend();
 
 	// 놓친 주기는 건너뛰되 기존 기준 시각을 유지해 프레임별 초과 시간이 누적되지 않게 한다.
@@ -1202,8 +1204,6 @@ void CTcpClient::RequestSend()
 	{
 		const shared_ptr<CPlayer>& player = mPlayers[mMainClientId];
 		const shared_ptr<CCamera> camera = player->GetCamera();
-		const UCHAR* keysBuffer = CGameFramework::GetKeysBuffer();
-		const WORD keyMask = BuildKeyBitMask(keysBuffer);
 		const bool usesPlayerBasis = player->m_pSkinnedAnimationController->IsAnimation();
 		const XMFLOAT3 look = usesPlayerBasis ? player->GetLook() : camera->GetLookVector();
 		const XMFLOAT3 right = usesPlayerBasis ? player->GetRight() : camera->GetRightVector();
@@ -1215,7 +1215,7 @@ void CTcpClient::RequestSend()
 		player->SetRightClick(false);
 		SubmitSendData(
 			static_cast<INT8>(SOCKET_STATE::SEND_KEY_BUFFER),
-			keyMask,
+			mLatestInputKeyMask,
 			camera->GetViewMatrix(),
 			look,
 			right,

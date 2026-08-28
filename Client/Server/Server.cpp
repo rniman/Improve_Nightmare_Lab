@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "../WindowMessages.h"
 #include "TCPServer.h"
 
 TCPServer gTcpServer;
@@ -83,11 +84,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	switch (uMsg)
 	{
 	case WM_ACTIVATE:
-	case WM_SOUND:
-	case WM_OPENABLE_OBJECT_STATE:
+	case ServerWindowMessage::WM_SOUND:
+	case ServerWindowMessage::WM_OPENABLE_OBJECT_STATE:
 		HandleWindowMessage(hWnd, uMsg, wParam, lParam);
 		break;
-	case WM_SOCKET: // 소켓 관련 윈도우 메시지
+	case ServerWindowMessage::WM_SOCKET: // 소켓 관련 윈도우 메시지
 		return HandleSocketMessage(hWnd, uMsg, wParam, lParam);
 		break;
 	case WM_DESTROY:
@@ -102,8 +103,8 @@ LRESULT CALLBACK HandleWindowMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM
 	switch (uMsg)
 	{
 	case WM_ACTIVATE:
-	case WM_SOUND:
-	case WM_OPENABLE_OBJECT_STATE:
+	case ServerWindowMessage::WM_SOUND:
+	case ServerWindowMessage::WM_OPENABLE_OBJECT_STATE:
 		gTcpServer.HandleWindowMessage(hWnd, uMsg, wParam, lParam);
 		break;
 	}

@@ -11,7 +11,6 @@
 #include "NetworkStatistics.h"
 #include "Timer.h"
 constexpr size_t MAX_NEARBY_OBJECTS{ 30 };
-constexpr UINT WM_OPENABLE_OBJECT_STATE{ WM_USER + 3 };
 
 constexpr WORD KEY_W{ 0x01 };
 constexpr WORD KEY_S{ 0x02 };

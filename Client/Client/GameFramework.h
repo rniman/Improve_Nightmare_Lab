@@ -18,9 +18,6 @@ struct CB_FRAMEWORK_INFO
 //constexpr size_t SWAPCHAIN_BUFFER_NUM = 2;
 //class TextObject;
 
-constexpr UINT WM_CREATE_TCP{ WM_USER + 2 };
-constexpr UINT WM_END_GAME{ WM_USER + 3 };
-constexpr UINT WM_START_GAME{ WM_USER + 4 };
 constexpr UINT BUTTON_CREATE_TCP_ID{ 1 };
 constexpr UINT EDIT_INPUT_ADDRESS_ID{ 2 };
 
@@ -87,7 +84,6 @@ public:
 	void SetGameState(int nGameState) { m_nGameState = nGameState; }
 
 	// Static Interface
-	static UCHAR* GetKeysBuffer();
 	static int GetMainClientId() { return m_nMainClientId; }
 	static int GetSwapChainNum() { return m_nSwapChainBuffers; }
 	static POINT GetClientWindowSize();
