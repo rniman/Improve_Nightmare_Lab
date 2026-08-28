@@ -78,6 +78,9 @@
   `TCPClient.h` 직접 include를 제거하고 Client/Server 빌드와 실행을 확인했다.
 - 완료: `GameFramework.h`와 `ServerCollision.h`도 `GameLimits.h`를 직접 include하고,
   `ServerCollision.h`의 불필요한 `TCPServer.h` 의존을 제거한 뒤 Client/Server 빌드와 실행을 확인했다.
+- 완료: `GameFramework.h`는 `CTcpClient`를 전방 선언하고, 완전한 정의가 필요한
+  `GameFramework.cpp`와 `WM_SOCKET`을 사용하는 `Client.cpp`가 `TCPClient.h`를 직접 include한다.
+  Client 빌드와 실행을 확인했다.
 - 다음 후보는 `TCPClient.cpp`가 `CGameFramework::GetKeysBuffer()`를 직접 호출하는 역의존을
   입력 스냅샷 전달 방식으로 완화하는 작업이다.
 - 패킷 파싱과 게임 상태 적용 분리는 실제 수정이 필요한 클라이언트 패킷부터 한 종류씩 진행한다.
@@ -288,7 +291,8 @@ WAN 환경의 움직임 끊김 중 하나가 측정될 때 재평가한다.
 
 - `MAX_CLIENT`와 `MAX_SURVIVOR`를 `GameLimits.h`로 이동해 `Scene.h`의
   `TCPClient.h` 직접 include를 제거한다. — 구현, Client/Server 빌드·실행 확인
-- `GameFramework.h`에서는 가능한 타입을 전방 선언하고 구현에 필요한 헤더는 `.cpp`에서 직접 include한다.
+- `GameFramework.h`에서 `CTcpClient`를 전방 선언하고 구현에 필요한 `TCPClient.h`는
+  `GameFramework.cpp`에서 직접 include한다. — 구현, Client 빌드·실행 확인
 - `TCPClient.cpp`가 `CGameFramework`의 정적 입력 버퍼를 직접 조회하는 역의존을 입력 스냅샷 전달로 점진적으로 완화한다.
 - 네트워크 패킷 파싱과 게임 상태 적용은 실제 수정이 필요한 클라이언트 패킷부터 한 종류씩 분리한다.
 - 실제 변경이 필요한 경로에서만 `GameFramework` 책임을 작은 함수로 분리한다.

@@ -3,6 +3,7 @@
 //-----------------------------------------------------------------------------
 #include "stdafx.h"
 #include "GameFramework.h"
+#include "TCPClient.h"
 #include "Player.h"
 #include "Collision.h"
 #include "SharedObject.h"
@@ -1379,6 +1380,11 @@ void CGameFramework::RenderTextUI()
 //=========================================================================
 // Interface
 //=========================================================================
+
+INT8 CGameFramework::GetClientIdFromTcpClient() const
+{
+	return m_pTcpClient->GetMainClientId();
+}
 
 UCHAR* CGameFramework::GetKeysBuffer()
 {

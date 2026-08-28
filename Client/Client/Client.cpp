@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Client.h"
 #include "GameFramework.h"
+#include "TCPClient.h"
 
 #include "Sound.h"
 

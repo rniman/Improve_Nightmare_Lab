@@ -2,7 +2,8 @@
 #include "../GameLimits.h"
 #include "Timer.h"
 #include "Scene.h"
-#include "TCPClient.h"
+
+class CTcpClient;
 
 struct CB_FRAMEWORK_INFO
 {
@@ -76,7 +77,7 @@ public:
 	void RenderTextUI();
 
 	// Interface
-	INT8 GetClientIdFromTcpClient() const { return m_pTcpClient->GetMainClientId(); }
+	INT8 GetClientIdFromTcpClient() const;
 	void SetPlayerObjectOfClient(int nClientId);
 
 	void SetConnected(bool bConnected) { m_bConnected = bConnected; }
