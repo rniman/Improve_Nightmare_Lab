@@ -12,6 +12,10 @@ public:
 
 	virtual void Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager);
 	virtual void UpdateUsing(const shared_ptr<CServerGameObject>& pGameObject, shared_ptr<CServerCollisionManager>& pCollisionManager) {};
+	virtual bool ShouldReplicateNearbyTransform() const override
+	{
+		return !m_bObtained && CServerGameObject::ShouldReplicateNearbyTransform();
+	}
 
 	static void SetDrawerIdContainer(vector<pair<int, int>> vDrawerId);
 
@@ -129,6 +133,8 @@ public:
 
 	virtual void Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager) override;
 	virtual void UpdatePicking(INT8 nClientId) override;
+	virtual bool ShouldReplicateNearbyTransform() const override { return false; }
+
 	void EscapeDoorOpen(INT8 nClientId);
 
 	void SetEscapeDoor(bool val) { m_bEscapeDoor = val; }
