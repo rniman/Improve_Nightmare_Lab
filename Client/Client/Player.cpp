@@ -452,6 +452,20 @@ void CPlayer::SetGameStart()
 	m_fGameStartCount = 10.f;
 }
 
+void CPlayer::UpdateGameStartState(float fElapsedTime)
+{
+	if (!m_bGameStartWait)
+	{
+		return;
+	}
+
+	m_fGameStartCount -= fElapsedTime;
+	if (m_fGameStartCount <= 0.0f)
+	{
+		m_bGameStartWait = false;
+	}
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 
@@ -570,6 +584,8 @@ void CBlueSuitPlayer::Rotate(float x, float y, float z)
 
 void CBlueSuitPlayer::Update(float fElapsedTime)
 {
+	UpdateGameStartState(fElapsedTime);
+
 	if (m_bInterruption)
 	{
 		m_fInterruption += fElapsedTime;
@@ -1122,6 +1138,8 @@ void CBlueSuitPlayer::SetHitEvent()
 void CBlueSuitPlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush)
 {
 	wchar_t text[128]; // 변환된 유니코드 문자열을 저장할 버퍼
+	const D2D1_COLOR_F previousColor = brush->GetColor();
+	const float previousOpacity = brush->GetOpacity();
 
 	//// 화면 중앙에 숫자 렌더링
 	//POINT windowSize = CGameFramework::GetClientWindowSize();
@@ -1138,17 +1156,14 @@ void CBlueSuitPlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext
 	//);
 
 	if (m_bGameStartWait) {
-		m_fGameStartCount -= gGameTimer.GetTimeElapsed();
-		if (m_fGameStartCount <= 0.0f) {
-			m_bGameStartWait = false;
-		}
-		int len = swprintf(text, 43, L"잠시후 적대자가 행동을 시작합니다.\n퓨즈를 모아 탈출구를 찾으세요.");
-		text[len + 1] = '\0';
+		const int len = swprintf_s(
+			text,
+			_countof(text),
+			L"잠시후 적대자가 행동을 시작합니다.\n퓨즈를 모아 탈출구를 찾으세요.");
 
 		POINT pos = CGameFramework::GetClientWindowSize();
 		D2D1_RECT_F textRect = D2D1::RectF(0, 0, pos.x, pos.y / 2);
 
-		auto color = brush->GetColor();
 		brush->SetColor(D2D1::ColorF(D2D1::ColorF::DarkGray));
 
 		if (m_fGameStartCount <= 3.0f) {
@@ -1163,19 +1178,16 @@ void CBlueSuitPlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext
 			&textRect,
 			brush.Get()
 		);
-		brush->SetColor(color);
-		brush->SetOpacity(1.0f);
+		brush->SetColor(previousColor);
+		brush->SetOpacity(previousOpacity);
 	}
 
 
 
 	if (PlayRadarUI()) {
-		float escapelength = GetEscapeLength();
+		const float escapelength = GetEscapeLength();
 		// 부동 소수점 값을 문자열로 변환 후 유니코드 문자열로 저장
-		int len = swprintf(text, 20, L"%d", (int)escapelength);
-		text[len] = 'm';
-		len += 1;
-		text[len + 1] = '\0';
+		const int len = swprintf_s(text, _countof(text), L"%dm", static_cast<int>(escapelength));
 		//D2D1::Matrix3x2F mat = D2D1::Matrix3x2F::Identity();
 		//mat = mat.Translation(point.x,point.y);
 		//m_d2dDeviceContext->SetTransform(mat);
@@ -1192,6 +1204,9 @@ void CBlueSuitPlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext
 		);
 		//textFormat->set
 	}
+
+	brush->SetColor(previousColor);
+	brush->SetOpacity(previousOpacity);
 }
 
 XMFLOAT4X4 CBlueSuitPlayer::GetRightHandItemRaderModelTransform() const
@@ -1378,6 +1393,8 @@ void CZombiePlayer::LoadModelAndAnimation(ID3D12Device* pd3dDevice, ID3D12Graphi
 
 void CZombiePlayer::Update(float fElapsedTime)
 {
+	UpdateGameStartState(fElapsedTime);
+
 	//[0519] 스킬 UI를 위해서 필요
 	UpdateSkill(fElapsedTime);
 
@@ -1633,47 +1650,80 @@ void CZombiePlayer::SetAttackTrail(shared_ptr<Trail> trail)
 void CZombiePlayer::SetGameStart()
 {
 	CPlayer::SetGameStart();
+	m_nPreviousGameStartCount = 10;
+	m_fGameStartTextOpacity = 1.0f;
+}
+
+void CZombiePlayer::UpdateGameStartState(float fElapsedTime)
+{
+	if (!m_bGameStartWait)
+	{
+		return;
+	}
+
+	m_fGameStartCount -= fElapsedTime;
+	m_fGameStartTextOpacity -= fElapsedTime;
+
+	if (m_fGameStartCount <= 0.1f)
+	{
+		m_bGameStartWait = false;
+		m_bInterruption = false;
+		m_pCamera->SetFogColor(XMFLOAT4(0.5f, 0.5f, 0.5f, 0.5f));
+		m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f, 1.0f));
+	}
+
+	const int nCurrentGameStartCount = static_cast<int>(ceil(m_fGameStartCount));
+	if (m_nPreviousGameStartCount > nCurrentGameStartCount)
+	{
+		m_nPreviousGameStartCount = nCurrentGameStartCount;
+		m_fGameStartTextOpacity = 1.0f;
+	}
+
+	m_bInterruption = (m_fGameStartCount > 2.5f);
+
+	float fFogColorValue = 0.1f;
+	if (m_bInterruption)
+	{
+		m_fInterruption = 2.0f;
+	}
+	else
+	{
+		m_fInterruption -= fElapsedTime;
+		if (m_fInterruption <= 0.0f)
+		{
+			m_fInterruption = 0.0f;
+		}
+
+		fFogColorValue = (1.0f - m_fInterruption / 2.0f) * 0.5f;
+		if (fFogColorValue < 0.1f)
+		{
+			fFogColorValue = 0.1f;
+		}
+	}
+
+	m_pCamera->SetFogColor(XMFLOAT4(fFogColorValue, fFogColorValue, fFogColorValue, fFogColorValue));
+	m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f + m_fInterruption / 2, 1.0f));
 }
 
 void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush)
 {
 	wchar_t text[128]; // 변환된 유니코드 문자열을 저장할 버퍼
+	const D2D1_COLOR_F previousColor = brush->GetColor();
+	const float previousOpacity = brush->GetOpacity();
 
 	// 부동 소수점 값을 문자열로 변환 후 유니코드 문자열로 저장
 	if (m_bGameStartWait)
 	{
-		static int iPrevCount = 10;
-		// 카운트 투명도 조절
-		static float opacity = 1.0f;
+		const int iCeilGameStartCount = static_cast<int>(ceil(m_fGameStartCount));
 
-		m_fGameStartCount -= gGameTimer.GetTimeElapsed();
-		opacity -= gGameTimer.GetTimeElapsed();
-
-		if (m_fGameStartCount <= 0.1f)
-		{
-			m_bGameStartWait = false;
-
-			// 기본으로 되돌림.
-			m_bInterruption = false;
-			m_pCamera->SetFogColor(XMFLOAT4(0.5f, 0.5f, 0.5f, 0.5f));
-			m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f, 1.0f));
-		}
-		int iCeilGameStartCount = ceil(m_fGameStartCount);
-		if (iPrevCount > iCeilGameStartCount) {
-			iPrevCount = iCeilGameStartCount;
-			opacity = 1.0f;
-		}
-
-		int len = swprintf(text, 20, L"%d", iCeilGameStartCount);
-		text[len + 1] = '\0';
+		int len = swprintf_s(text, _countof(text), L"%d", iCeilGameStartCount);
 
 		// 화면 중앙에 숫자 렌더링
 		POINT windowSize = CGameFramework::GetClientWindowSize();
 		//윈도우 좌표 주의.
 		D2D1_RECT_F textRect = D2D1::RectF(0.f, 0.f, (float)windowSize.x, (float)windowSize.y);
-		auto color = brush->GetColor();
 		brush->SetColor(D2D1::ColorF(D2D1::ColorF::Tomato));
-		brush->SetOpacity(opacity);
+		brush->SetOpacity(m_fGameStartTextOpacity);
 
 		d2dDeviceContext->DrawText(
 			text,
@@ -1685,8 +1735,7 @@ void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, 
 		brush->SetOpacity(1.0f);
 
 		textRect = D2D1::RectF(0.f, 0.f, (float)windowSize.x, (float)windowSize.y / 2);
-		len = swprintf(text, 20, L"모든 생존자를 제거하라");
-		text[len + 1] = '\0';
+		len = swprintf_s(text, _countof(text), L"모든 생존자를 제거하라");
 		brush->SetColor(D2D1::ColorF(D2D1::ColorF::DarkGray));
 		d2dDeviceContext->DrawText(
 			text,
@@ -1695,38 +1744,8 @@ void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, 
 			&textRect,
 			brush.Get()
 		);
-		brush->SetColor(color);
-
-		// 시야 차단 작업
-		if (m_fGameStartCount > 2.5f) {
-			m_bInterruption = true;
-		}
-		else {
-			m_bInterruption = false;
-		}
-
-		float fogColorValue = 0.1f;
-
-		if (m_bInterruption)
-		{
-			m_fInterruption = 2.0f;
-		}
-		else
-		{
-			m_fInterruption -= gGameTimer.GetTimeElapsed();
-
-			fogColorValue += gGameTimer.GetTimeElapsed();
-
-			if (m_fInterruption <= 0.0f)
-			{
-				m_fInterruption = 0.0f;
-			}
-			fogColorValue = (1.0f - m_fInterruption / 2.0f) * 0.5f;
-			if (fogColorValue < 0.1f) {
-				fogColorValue = 0.1f;
-			}
-		}
-		m_pCamera->SetFogColor(XMFLOAT4(fogColorValue, fogColorValue, fogColorValue, fogColorValue));
-		m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f + m_fInterruption / 2, 1.0f));
 	}
+
+	brush->SetColor(previousColor);
+	brush->SetOpacity(previousOpacity);
 }

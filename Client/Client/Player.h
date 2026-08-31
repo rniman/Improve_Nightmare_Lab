@@ -131,6 +131,8 @@ public:
 		return m_bSense;
 	}
 protected:
+	virtual void UpdateGameStartState(float fElapsedTime);
+
 	INT8 m_nClientId = -1;
 
 	int m_nFloor = 0;
@@ -321,6 +323,8 @@ constexpr float ZOM_RUNNING_COOLTIME{ 10.0f };
 class CZombiePlayer : public CPlayer
 {
 private:
+	void UpdateGameStartState(float fElapsedTime) override;
+
 	FrameTimeInfo* m_pcbMappedTime;
 	D3D12_GPU_DESCRIPTOR_HANDLE		m_d3dTimeCbvGPUDescriptorHandle;
 	ComPtr<ID3D12Resource>			m_pd3dcbTime;
@@ -356,6 +360,8 @@ private:
 	bool m_bAbleTracking = true;
 	bool m_bAbleInterruption = true;
 	bool m_bAbleRunning = true;
+	int m_nPreviousGameStartCount = 10;
+	float m_fGameStartTextOpacity = 1.0f;
 
 	shared_ptr<CGameObject> m_pBodyObject;
 	shared_ptr<CGameObject> m_pEyesObject;

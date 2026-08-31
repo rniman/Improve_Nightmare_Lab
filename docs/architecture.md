@@ -94,8 +94,8 @@ Server.cpp
 
 7. **DX12 렌더링과 D3D11On12 문자 UI 혼용**
    - `CGameFramework`가 D3D11On12·D2D·DirectWrite 초기화, wrapped back buffer, resize 재생성과 프레임별 acquire/release를 담당한다.
-   - `CBlueSuitPlayer::RenderTextUI()`와 `CZombiePlayer::RenderTextUI()`는 출력뿐 아니라 일부 게임 시작 카운트다운 상태도 변경한다.
-   - 먼저 상태 갱신을 프레임 업데이트로 옮기고 출력 책임을 작은 UI 경계로 격리한 뒤 DX12 기반 렌더링으로 교체한다.
+   - 게임 시작 카운트다운, 좀비 시야 차단과 안개 변경은 플레이어 `UpdateGameStartState()`가 담당하며, `RenderTextUI()`는 현재 표시 상태를 읽어 D2D draw call만 수행한다.
+   - 다음 단계는 출력 책임을 작은 UI 경계로 격리한 뒤 DX12 기반 렌더링으로 교체하는 것이다.
    - 교체 완료 후 D3D11 device/context, D3D11On12, D2D, DirectWrite, wrapped back buffer와 관련 헤더·링크 라이브러리를 모두 제거한다.
 
 ## 의존성 고위험 영역
