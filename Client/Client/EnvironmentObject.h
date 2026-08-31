@@ -2,6 +2,8 @@
 #include "Object.h"
 #include "TextureBlendObject.h"
 
+class CDrawerObject;
+
 class CItemObject : public CGameObject
 {
 public:
@@ -11,15 +13,27 @@ public:
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList) override;;
 	virtual void Animate(float fElapsedTime) override;
 
+	void AttachToDrawer(
+		const shared_ptr<CDrawerObject>& pDrawerObject,
+		const XMFLOAT4X4& xmf4x4DrawerLocal);
+	void DetachFromDrawer(const XMFLOAT4X4& xmf4x4World);
+
 	void SetObtain(bool bObtained) { m_bObtained = bObtained; }
 	void SetReferenceNumber(int nObjectNumber) { m_nReferenceNumber = nObjectNumber; }
 
+	bool IsAttachedToDrawer() const { return m_bAttachedToDrawer; }
 	bool IsObtained() const { return m_bObtained; }
 	int GetReferenceNumber() const { return m_nReferenceNumber; }
 protected:
 	bool m_bObtained = false;
 
 	int m_nReferenceNumber = -1;
+
+private:
+	weak_ptr<CDrawerObject> m_pDrawerObject;
+	XMFLOAT4X4 m_xmf4x4DrawerLocal;
+
+	bool m_bAttachedToDrawer = false;
 };
 
 /// <CGameObject - CItemObject>

@@ -12,10 +12,7 @@ public:
 
 	virtual void Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager);
 	virtual void UpdateUsing(const shared_ptr<CServerGameObject>& pGameObject, shared_ptr<CServerCollisionManager>& pCollisionManager) {};
-	virtual bool ShouldReplicateNearbyTransform() const override
-	{
-		return !m_bObtained && CServerGameObject::ShouldReplicateNearbyTransform();
-	}
+	virtual bool ShouldReplicateNearbyTransform() const override { return false; }
 
 	static void SetDrawerIdContainer(vector<pair<int, int>> vDrawerId);
 
@@ -33,6 +30,7 @@ public:
 	void SetRandomOffset(const XMFLOAT3& xmf3Offset);
 
 	bool IsObtained() const { return m_bObtained; }
+	virtual int GetPlacementParentObjectId() const { return m_nDrawerNumber; }
 	int GetDrawerNumber() const { return m_nDrawerNumber; }
 	int GetReferenceNumber() const { return m_nReferenceNumber; }
 protected:
@@ -179,9 +177,9 @@ public:
 
 	virtual void Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager);
 	virtual void UpdateUsing(const shared_ptr<CServerGameObject>& pGameObject, shared_ptr<CServerCollisionManager>& pCollisionManager) override;
-	virtual bool ShouldReplicateNearbyTransform() const override
+	virtual int GetPlacementParentObjectId() const override
 	{
-		return !m_bInstall && CServerItemObject::ShouldReplicateNearbyTransform();
+		return m_bInstall ? -1 : CServerItemObject::GetPlacementParentObjectId();
 	}
 
 	virtual void SetRandomPosition(shared_ptr<CServerCollisionManager>& pCollisionManager) override;

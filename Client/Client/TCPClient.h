@@ -57,7 +57,9 @@ enum class ReceiveHead : INT8
 	PlayerState = 14,
 	NearbyObjects = 15,
 	OpenableObjectState = 16,
-	OpenableObjectSnapshot = 17
+	OpenableObjectSnapshot = 17,
+	ItemPlacementSnapshot = 18,
+	ItemPlacementState = 19
 };
 
 struct CS_PLAYER_INFO
@@ -122,6 +124,14 @@ struct CS_OPENABLE_OBJECT_STATE
 static_assert(sizeof(OpenableObjectType) == 1);
 static_assert(sizeof(CS_OPENABLE_OBJECT_STATE) == 8);
 
+struct CS_ITEM_PLACEMENT_STATE
+{
+	std::int32_t itemObjectId = -1;
+	std::int32_t parentObjectId = -1;
+	XMFLOAT4X4 transform;
+};
+static_assert(sizeof(CS_ITEM_PLACEMENT_STATE) == 72);
+
 class CTcpClient
 {
 public:
@@ -179,6 +189,8 @@ private:
 	bool TryProcessNearbyObjectsPacket(SOCKET socket);
 	bool TryProcessOpenableObjectStatePacket(SOCKET socket);
 	bool TryProcessOpenableObjectSnapshotPacket(SOCKET socket);
+	bool TryProcessItemPlacementSnapshotPacket(SOCKET socket);
+	bool TryProcessItemPlacementStatePacket(SOCKET socket);
 	bool TryProcessClientCountPacket(SOCKET socket);
 	bool TryProcessBlueSuitDeadPacket(SOCKET socket);
 	bool TryProcessSpaceOutObjectsPacket(SOCKET socket);
@@ -190,6 +202,10 @@ private:
 		const CS_OPENABLE_OBJECT_STATE& objectState,
 		const char* packetName) const;
 	void ApplyOpenableObjectState(const CS_OPENABLE_OBJECT_STATE& objectState);
+	bool ValidateItemPlacementState(
+		const CS_ITEM_PLACEMENT_STATE& itemState,
+		const char* packetName) const;
+	void ApplyItemPlacementState(const CS_ITEM_PLACEMENT_STATE& itemState);
 	void ResetReceiveState();
 	ReceiveResult ReceiveData(SOCKET socket, std::size_t expectedBytes);
 	bool TryGetCollisionObject(

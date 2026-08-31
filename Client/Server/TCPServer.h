@@ -26,6 +26,7 @@ constexpr WORD KEY_LBUTTON{ 0x400 };
 
 // 소켓 정보 저장을 위한 구조체와 변수
 class CServerGameObject;
+class CServerItemObject;
 class CServerPlayer;
 class CServerCollisionManager;
 
@@ -109,6 +110,14 @@ struct OpenableObjectState
 static_assert(sizeof(OpenableObjectType) == 1);
 static_assert(sizeof(OpenableObjectState) == 8);
 
+struct ItemPlacementState
+{
+	std::int32_t itemObjectId = -1;
+	std::int32_t parentObjectId = -1;
+	XMFLOAT4X4 transform;
+};
+static_assert(sizeof(ItemPlacementState) == 72);
+
 enum class ServerPacketType : INT8
 {
 	Init = 0,
@@ -130,7 +139,9 @@ enum class ServerPacketType : INT8
 	PlayerState = 14,
 	NearbyObjects = 15,
 	OpenableObjectState = 16,
-	OpenableObjectSnapshot = 17
+	OpenableObjectSnapshot = 17,
+	ItemPlacementSnapshot = 18,
+	ItemPlacementState = 19
 };
 
 enum class ClientPacketType : INT8
@@ -270,8 +281,15 @@ private:
 		OpenableObjectType objectType,
 		bool opened);
 	void BroadcastOpenableObjectSnapshot();
+	void BroadcastItemPlacementSnapshot();
+	void BroadcastItemPlacementState(const ItemPlacementState& itemState);
+	bool TryBuildItemPlacementState(
+		const std::shared_ptr<CServerItemObject>& itemObject,
+		ItemPlacementState& itemState) const;
 	void ReplicateOutOfSpaceObjects();
-	std::vector<SC_SPACEOUT_OBJECT> CollectOutOfSpaceObjects();
+	void CollectOutOfSpaceUpdates(
+		std::vector<SC_SPACEOUT_OBJECT>& objectUpdates,
+		std::vector<ItemPlacementState>& itemUpdates);
 	void EnqueueOutOfSpaceObjectPackets(const std::vector<SC_SPACEOUT_OBJECT>& objectUpdates);
 	void ReplicateNearbyObjectsIfDue();
 	void BuildNearbyObjectSnapshots();

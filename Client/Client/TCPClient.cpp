@@ -410,6 +410,18 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 			return;
 		}
 		break;
+	case ReceiveHead::ItemPlacementSnapshot:
+		if (!TryProcessItemPlacementSnapshotPacket(socket))
+		{
+			return;
+		}
+		break;
+	case ReceiveHead::ItemPlacementState:
+		if (!TryProcessItemPlacementStatePacket(socket))
+		{
+			return;
+		}
+		break;
 	case ReceiveHead::ClientCount:
 		if (!TryProcessClientCountPacket(socket))
 		{
@@ -736,6 +748,124 @@ bool CTcpClient::TryProcessOpenableObjectSnapshotPacket(SOCKET socket)
 	return true;
 }
 
+bool CTcpClient::TryProcessItemPlacementSnapshotPacket(SOCKET socket)
+{
+	if (!mHasPayloadSize)
+	{
+		if (!HandleReceiveResult(ReceiveData(socket, sizeof(std::uint16_t))))
+		{
+			return false;
+		}
+
+		std::uint16_t payloadBytes = 0;
+		memcpy(&payloadBytes, mReceiveBuffer.data(), sizeof(payloadBytes));
+		mExpectedPayloadBytes = payloadBytes;
+		mHasPayloadSize = true;
+		std::fill(mReceiveBuffer.begin(), mReceiveBuffer.end(), 0);
+
+		if (mExpectedPayloadBytes % sizeof(CS_ITEM_PLACEMENT_STATE) != 0)
+		{
+			LogInvalidServerPacket(
+				"ITEM_PLACEMENT_SNAPSHOT",
+				"payloadSize",
+				static_cast<int>(mExpectedPayloadBytes));
+			CloseConnection();
+			return false;
+		}
+	}
+
+	if (!HandleReceiveResult(ReceiveData(socket, mExpectedPayloadBytes)))
+	{
+		return false;
+	}
+
+	const size_t itemCount = mExpectedPayloadBytes / sizeof(CS_ITEM_PLACEMENT_STATE);
+	const auto readItemState = [this](size_t itemIndex)
+	{
+		CS_ITEM_PLACEMENT_STATE itemState = {};
+		memcpy(
+			&itemState,
+			mReceiveBuffer.data() + itemIndex * sizeof(CS_ITEM_PLACEMENT_STATE),
+			sizeof(itemState));
+		return itemState;
+	};
+
+#ifdef LOADSCENE
+	size_t expectedItemCount = 0;
+	for (int objectId = 0; objectId < g_collisionManager.GetNumOfCollisionObject(); ++objectId)
+	{
+		const shared_ptr<CGameObject> gameObject =
+			g_collisionManager.GetCollisionObjectWithNumber(objectId).lock();
+		if (dynamic_pointer_cast<CItemObject>(gameObject))
+		{
+			++expectedItemCount;
+		}
+	}
+	if (itemCount != expectedItemCount)
+	{
+		LogInvalidServerPacket(
+			"ITEM_PLACEMENT_SNAPSHOT",
+			"itemCount",
+			static_cast<int>(itemCount));
+		CloseConnection();
+		return false;
+	}
+
+	vector<bool> seenItemIds(g_collisionManager.GetNumOfCollisionObject(), false);
+#endif
+
+	// 전체 snapshot을 검증한 뒤 적용해 일부 아이템만 연결되는 상황을 막는다.
+	for (size_t itemIndex = 0; itemIndex < itemCount; ++itemIndex)
+	{
+		const CS_ITEM_PLACEMENT_STATE itemState = readItemState(itemIndex);
+		if (!ValidateItemPlacementState(itemState, "ITEM_PLACEMENT_SNAPSHOT"))
+		{
+			CloseConnection();
+			return false;
+		}
+
+#ifdef LOADSCENE
+		if (seenItemIds[itemState.itemObjectId])
+		{
+			LogInvalidServerPacket(
+				"ITEM_PLACEMENT_SNAPSHOT",
+				"duplicateItemId",
+				itemIndex,
+				itemState.itemObjectId);
+			CloseConnection();
+			return false;
+		}
+		seenItemIds[itemState.itemObjectId] = true;
+#endif
+	}
+
+	for (size_t itemIndex = 0; itemIndex < itemCount; ++itemIndex)
+	{
+		ApplyItemPlacementState(readItemState(itemIndex));
+	}
+
+	return true;
+}
+
+bool CTcpClient::TryProcessItemPlacementStatePacket(SOCKET socket)
+{
+	CS_ITEM_PLACEMENT_STATE itemState = {};
+	if (!HandleReceiveResult(ReceiveData(socket, sizeof(itemState))))
+	{
+		return false;
+	}
+
+	memcpy(&itemState, mReceiveBuffer.data(), sizeof(itemState));
+	if (!ValidateItemPlacementState(itemState, "ITEM_PLACEMENT_STATE"))
+	{
+		CloseConnection();
+		return false;
+	}
+
+	ApplyItemPlacementState(itemState);
+	return true;
+}
+
 bool CTcpClient::TryProcessPlayerStatePacket(SOCKET socket)
 {
 	std::array<CS_PLAYER_STATE, MAX_CLIENT> playerStates = {};
@@ -928,6 +1058,8 @@ bool CTcpClient::IsValidReceiveHead(INT8 head) const
 	case ReceiveHead::NearbyObjects:
 	case ReceiveHead::OpenableObjectState:
 	case ReceiveHead::OpenableObjectSnapshot:
+	case ReceiveHead::ItemPlacementSnapshot:
+	case ReceiveHead::ItemPlacementState:
 		return true;
 	default:
 		return false;
@@ -1025,6 +1157,85 @@ void CTcpClient::ApplyOpenableObjectState(
 			drawer->ApplyAuthoritativeState(opened);
 		}
 	}
+#endif
+}
+
+bool CTcpClient::ValidateItemPlacementState(
+	const CS_ITEM_PLACEMENT_STATE& itemState,
+	const char* packetName) const
+{
+	if (itemState.itemObjectId < 0)
+	{
+		LogInvalidServerPacket(packetName, "itemObjectId", itemState.itemObjectId);
+		return false;
+	}
+	if (itemState.parentObjectId < -1)
+	{
+		LogInvalidServerPacket(packetName, "parentObjectId", itemState.parentObjectId);
+		return false;
+	}
+	if (!IsFiniteMatrix(itemState.transform))
+	{
+		LogInvalidServerPacketAtIndex(packetName, "transform", itemState.itemObjectId);
+		return false;
+	}
+
+#ifdef LOADSCENE
+	if (!IsValidObjectId(itemState.itemObjectId))
+	{
+		LogInvalidServerPacket(packetName, "itemObjectId", itemState.itemObjectId);
+		return false;
+	}
+	const shared_ptr<CGameObject> itemObject =
+		g_collisionManager.GetCollisionObjectWithNumber(itemState.itemObjectId).lock();
+	if (!dynamic_pointer_cast<CItemObject>(itemObject))
+	{
+		LogInvalidServerPacket(packetName, "itemObjectType", itemState.itemObjectId);
+		return false;
+	}
+
+	if (itemState.parentObjectId >= 0)
+	{
+		if (!IsValidObjectId(itemState.parentObjectId))
+		{
+			LogInvalidServerPacket(packetName, "parentObjectId", itemState.parentObjectId);
+			return false;
+		}
+		const shared_ptr<CGameObject> parentObject =
+			g_collisionManager.GetCollisionObjectWithNumber(itemState.parentObjectId).lock();
+		if (!dynamic_pointer_cast<CDrawerObject>(parentObject))
+		{
+			LogInvalidServerPacket(packetName, "parentObjectType", itemState.parentObjectId);
+			return false;
+		}
+	}
+#endif
+
+	return true;
+}
+
+void CTcpClient::ApplyItemPlacementState(const CS_ITEM_PLACEMENT_STATE& itemState)
+{
+#ifdef LOADSCENE
+	const shared_ptr<CGameObject> gameObject =
+		g_collisionManager.GetCollisionObjectWithNumber(itemState.itemObjectId).lock();
+	const shared_ptr<CItemObject> itemObject = dynamic_pointer_cast<CItemObject>(gameObject);
+	shared_ptr<CDrawerObject> drawerObject;
+	if (itemState.parentObjectId >= 0)
+	{
+		const shared_ptr<CGameObject> parentObject =
+			g_collisionManager.GetCollisionObjectWithNumber(itemState.parentObjectId).lock();
+		drawerObject = dynamic_pointer_cast<CDrawerObject>(parentObject);
+	}
+
+	itemObject->SetObtain(false);
+	if (itemState.parentObjectId < 0)
+	{
+		itemObject->DetachFromDrawer(itemState.transform);
+		return;
+	}
+
+	itemObject->AttachToDrawer(drawerObject, itemState.transform);
 #endif
 }
 

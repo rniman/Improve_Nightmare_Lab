@@ -14,6 +14,7 @@ CItemObject::CItemObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 	: CGameObject(pd3dDevice, pd3dCommandList)
 {
 	SetStatic(false);
+	m_xmf4x4DrawerLocal = Matrix4x4::Identity();
 }
 
 void CItemObject::Render(ID3D12GraphicsCommandList* pd3dCommandList)
@@ -35,7 +36,49 @@ void CItemObject::Animate(float fElapsedTime)
 
 	CGameObject::Animate(fElapsedTime);
 
-	UpdateTransform(NULL);
+	if (m_bAttachedToDrawer)
+	{
+		shared_ptr<CDrawerObject> pDrawerObject = m_pDrawerObject.lock();
+		if (pDrawerObject)
+		{
+			XMFLOAT4X4 xmf4x4DrawerWorld = pDrawerObject->GetWorldTransform();
+			m_xmf4x4ToParent = m_xmf4x4DrawerLocal;
+			UpdateTransform(&xmf4x4DrawerWorld);
+			return;
+		}
+
+		DetachFromDrawer(m_xmf4x4World);
+		return;
+	}
+
+	UpdateTransform(nullptr);
+}
+
+void CItemObject::AttachToDrawer(
+	const shared_ptr<CDrawerObject>& pDrawerObject,
+	const XMFLOAT4X4& xmf4x4DrawerLocal)
+{
+	if (!pDrawerObject)
+	{
+		DetachFromDrawer(m_xmf4x4World);
+		return;
+	}
+
+	XMFLOAT4X4 xmf4x4DrawerWorld = pDrawerObject->GetWorldTransform();
+	m_xmf4x4DrawerLocal = xmf4x4DrawerLocal;
+	m_pDrawerObject = pDrawerObject;
+	m_bAttachedToDrawer = true;
+	m_xmf4x4ToParent = m_xmf4x4DrawerLocal;
+	UpdateTransform(&xmf4x4DrawerWorld);
+}
+
+void CItemObject::DetachFromDrawer(const XMFLOAT4X4& xmf4x4World)
+{
+	m_pDrawerObject.reset();
+	m_xmf4x4DrawerLocal = Matrix4x4::Identity();
+	m_bAttachedToDrawer = false;
+	m_xmf4x4ToParent = xmf4x4World;
+	UpdateTransform(nullptr);
 }
 
 /// <CGameObject - CItemObject>
@@ -370,8 +413,6 @@ void CTeleportObject::LoadModelAndAnimation(ID3D12Device* pd3dDevice, ID3D12Grap
 void CTeleportObject::Animate(float fElapsedTime)
 {
 	CItemObject::Animate(fElapsedTime);
-
-	UpdateTransform(NULL);
 }
 
 
@@ -419,8 +460,6 @@ void CMineObject::Animate(float fElapsedTime)
 	CItemObject::Animate(fElapsedTime);
 
 	CollideZombie();
-
-	UpdateTransform(NULL);
 }
 
 void CMineObject::UpdatePicking()
@@ -465,8 +504,6 @@ void CFuseObject::LoadModelAndAnimation(ID3D12Device* pd3dDevice, ID3D12Graphics
 void CFuseObject::Animate(float fElapsedTime)
 {
 	CItemObject::Animate(fElapsedTime);
-
-	UpdateTransform(NULL);
 }
 
 void CFuseObject::UpdatePicking()
@@ -509,8 +546,6 @@ void CRadarObject::LoadModelAndAnimation(ID3D12Device* pd3dDevice, ID3D12Graphic
 void CRadarObject::Animate(float fElapsedTime)
 {
 	CItemObject::Animate(fElapsedTime);
-
-	UpdateTransform(NULL);
 }
 
 void CRadarObject::UpdatePicking()

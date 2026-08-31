@@ -1323,6 +1323,7 @@ void TCPServer::EnqueuePendingPacket(int clientIndex)
 			}
 		}
 		BroadcastOpenableObjectSnapshot();
+		BroadcastItemPlacementSnapshot();
 		break;
 	}
 	default:
@@ -1590,21 +1591,143 @@ void TCPServer::BroadcastOpenableObjectSnapshot()
 	}
 }
 
+void TCPServer::BroadcastItemPlacementSnapshot()
+{
+	const int collisionObjectCount = CServerCollisionManager::GetNumberOfCollisionObject();
+	std::vector<ItemPlacementState> itemStates;
+	itemStates.reserve(collisionObjectCount);
+
+	for (int objectId = 0; objectId < collisionObjectCount; ++objectId)
+	{
+		const shared_ptr<CServerGameObject> gameObject =
+			mCollisionManager->GetCollisionObjectWithNumber(objectId);
+		const shared_ptr<CServerItemObject> itemObject =
+			dynamic_pointer_cast<CServerItemObject>(gameObject);
+		if (!itemObject)
+		{
+			continue;
+		}
+
+		ItemPlacementState itemState = {};
+		if (!TryBuildItemPlacementState(itemObject, itemState))
+		{
+			return;
+		}
+
+		itemStates.push_back(itemState);
+	}
+
+	const size_t payloadBytes = sizeof(ItemPlacementState) * itemStates.size();
+	if (payloadBytes > MAX_PACKET_PAYLOAD_SIZE)
+	{
+		return;
+	}
+
+	const std::uint16_t wirePayloadBytes = static_cast<std::uint16_t>(payloadBytes);
+	std::vector<char> packetBuffer;
+	packetBuffer.reserve(sizeof(INT8) + sizeof(wirePayloadBytes) + payloadBytes);
+	packetBuffer.push_back(static_cast<INT8>(ServerPacketType::ItemPlacementSnapshot));
+	AppendBytes(packetBuffer, &wirePayloadBytes, sizeof(wirePayloadBytes));
+	if (!itemStates.empty())
+	{
+		AppendBytes(packetBuffer, itemStates.data(), payloadBytes);
+	}
+
+	for (std::size_t connectionIndex = 0; connectionIndex < mConnections.size(); ++connectionIndex)
+	{
+		if (mConnections[connectionIndex].isUsed)
+		{
+			EnqueuePacketBuffer(static_cast<int>(connectionIndex), packetBuffer);
+		}
+	}
+}
+
+bool TCPServer::TryBuildItemPlacementState(
+	const std::shared_ptr<CServerItemObject>& itemObject,
+	ItemPlacementState& itemState) const
+{
+	if (!itemObject)
+	{
+		return false;
+	}
+
+	const int collisionObjectCount = CServerCollisionManager::GetNumberOfCollisionObject();
+	itemState.itemObjectId = itemObject->GetCollisionNum();
+	itemState.parentObjectId = itemObject->GetPlacementParentObjectId();
+	XMFLOAT4X4 xmf4x4ItemWorld = itemObject->GetWorldMatrix();
+	if (itemState.itemObjectId < 0 ||
+		itemState.itemObjectId >= collisionObjectCount ||
+		itemState.parentObjectId < -1 ||
+		!IsFiniteMatrix(xmf4x4ItemWorld))
+	{
+		return false;
+	}
+
+	if (itemState.parentObjectId < 0)
+	{
+		itemState.transform = xmf4x4ItemWorld;
+		return true;
+	}
+	if (itemState.parentObjectId >= collisionObjectCount)
+	{
+		return false;
+	}
+
+	const shared_ptr<CServerGameObject> parentObject =
+		mCollisionManager->GetCollisionObjectWithNumber(itemState.parentObjectId);
+	const shared_ptr<CServerDrawerObject> drawerObject =
+		dynamic_pointer_cast<CServerDrawerObject>(parentObject);
+	if (!drawerObject)
+	{
+		return false;
+	}
+
+	XMFLOAT4X4 xmf4x4DrawerWorld = drawerObject->GetWorldMatrix();
+	XMFLOAT4X4 xmf4x4DrawerWorldInverse = Matrix4x4::Inverse(xmf4x4DrawerWorld);
+	itemState.transform = Matrix4x4::Multiply(xmf4x4ItemWorld, xmf4x4DrawerWorldInverse);
+	return IsFiniteMatrix(itemState.transform);
+}
+
+void TCPServer::BroadcastItemPlacementState(const ItemPlacementState& itemState)
+{
+	for (std::size_t connectionIndex = 0; connectionIndex < mConnections.size(); ++connectionIndex)
+	{
+		if (!mConnections[connectionIndex].isUsed)
+		{
+			continue;
+		}
+
+		EnqueuePacketFields(
+			static_cast<int>(connectionIndex),
+			static_cast<INT8>(ServerPacketType::ItemPlacementState),
+			itemState);
+	}
+}
+
 void TCPServer::ReplicateOutOfSpaceObjects()
 {
 	// 시뮬레이션에서 발생한 공간 이동은 정기 snapshot을 기다리지 않고 즉시 큐에 추가한다.
-	const std::vector<SC_SPACEOUT_OBJECT> outOfSpaceObjects = CollectOutOfSpaceObjects();
-	EnqueueOutOfSpaceObjectPackets(outOfSpaceObjects);
+	std::vector<SC_SPACEOUT_OBJECT> objectUpdates;
+	std::vector<ItemPlacementState> itemUpdates;
+	CollectOutOfSpaceUpdates(objectUpdates, itemUpdates);
+	EnqueueOutOfSpaceObjectPackets(objectUpdates);
+
+	for (const ItemPlacementState& itemState : itemUpdates)
+	{
+		BroadcastItemPlacementState(itemState);
+	}
 }
 
-std::vector<SC_SPACEOUT_OBJECT> TCPServer::CollectOutOfSpaceObjects()
+void TCPServer::CollectOutOfSpaceUpdates(
+	std::vector<SC_SPACEOUT_OBJECT>& objectUpdates,
+	std::vector<ItemPlacementState>& itemUpdates)
 {
-	std::vector<SC_SPACEOUT_OBJECT> objectUpdates;
 	auto& outOfSpaceObjects = mCollisionManager->GetOutSpaceObject();
 	objectUpdates.reserve(outOfSpaceObjects.size());
+	itemUpdates.reserve(outOfSpaceObjects.size());
 
-	// 충돌 관리자가 이번 시뮬레이션에서 별도 전송이 필요하다고 표시한 오브젝트를
-	// 네트워크 전용 구조체로 복사한다. null 항목은 패킷에 포함하지 않는다.
+	// 전환 검증이 끝날 때까지 아이템도 기존 SPACEOUT_OBJECTS에 포함하고,
+	// 부모 연결 상태는 전용 이벤트로 함께 수집한다.
 	for (const auto& gameObject : outOfSpaceObjects)
 	{
 		if (!gameObject)
@@ -1614,11 +1737,21 @@ std::vector<SC_SPACEOUT_OBJECT> TCPServer::CollectOutOfSpaceObjects()
 		objectUpdates.emplace_back(SC_SPACEOUT_OBJECT(
 			gameObject->GetCollisionNum(),
 			gameObject->GetWorldMatrix()));
+
+		const shared_ptr<CServerItemObject> itemObject =
+			dynamic_pointer_cast<CServerItemObject>(gameObject);
+		if (itemObject)
+		{
+			ItemPlacementState itemState = {};
+			if (TryBuildItemPlacementState(itemObject, itemState))
+			{
+				itemUpdates.push_back(itemState);
+			}
+		}
 	}
 
 	// 이 목록은 프레임 간 누적 목록이 아니다. 복사한 뒤 비워 다음 시뮬레이션의 변경만 수집한다.
 	outOfSpaceObjects.clear();
-	return objectUpdates;
 }
 
 void TCPServer::EnqueueOutOfSpaceObjectPackets(const std::vector<SC_SPACEOUT_OBJECT>& objectUpdates)

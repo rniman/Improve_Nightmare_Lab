@@ -27,6 +27,8 @@ namespace
 		case ServerPacketType::NearbyObjects: return "NEARBY_OBJECTS";
 		case ServerPacketType::OpenableObjectState: return "OPENABLE_OBJECT_STATE";
 		case ServerPacketType::OpenableObjectSnapshot: return "OPENABLE_OBJECT_SNAPSHOT";
+		case ServerPacketType::ItemPlacementSnapshot: return "ITEM_PLACEMENT_SNAPSHOT";
+		case ServerPacketType::ItemPlacementState: return "ITEM_PLACEMENT_STATE";
 		default: return "UNKNOWN";
 		}
 	}
