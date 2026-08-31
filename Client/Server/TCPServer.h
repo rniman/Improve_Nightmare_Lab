@@ -10,8 +10,6 @@
 #include "../Client/GlobalDefine.h"
 #include "NetworkStatistics.h"
 #include "Timer.h"
-constexpr size_t MAX_NEARBY_OBJECTS{ 30 };
-
 constexpr WORD KEY_W{ 0x01 };
 constexpr WORD KEY_S{ 0x02 };
 constexpr WORD KEY_A{ 0x04 };
@@ -77,14 +75,6 @@ struct PlayerReplicationState
 static_assert(sizeof(PlayerReplicationInfo) == 20);
 static_assert(sizeof(PlayerReplicationState) == 92);
 
-struct NearbyObjectState
-{
-	int objectId = -1;
-	XMFLOAT4X4 world;
-};
-static_assert(sizeof(NearbyObjectState) == 68);
-static_assert(sizeof(NearbyObjectState) * MAX_NEARBY_OBJECTS <= MAX_PACKET_PAYLOAD_SIZE);
-
 enum class OpenableObjectType : std::uint8_t
 {
 	Invalid = 0,
@@ -137,7 +127,7 @@ enum class ServerPacketType : INT8
 	SpaceOutObjects = 12,
 	LoadingComplete = 13,
 	PlayerState = 14,
-	NearbyObjects = 15,
+	// wire 값 15는 폐기된 NEARBY_OBJECTS head이므로 재사용하지 않는다.
 	OpenableObjectState = 16,
 	OpenableObjectSnapshot = 17,
 	ItemPlacementSnapshot = 18,
@@ -291,9 +281,6 @@ private:
 		std::vector<SC_SPACEOUT_OBJECT>& objectUpdates,
 		std::vector<ItemPlacementState>& itemUpdates);
 	void EnqueueOutOfSpaceObjectPackets(const std::vector<SC_SPACEOUT_OBJECT>& objectUpdates);
-	void ReplicateNearbyObjectsIfDue();
-	void BuildNearbyObjectSnapshots();
-	void EnqueueNearbyObjectSnapshots();
 
 	// World state
 	void AssignUniquePlayerSpawnPosition(shared_ptr<CServerPlayer>& serverPlayer, int clientIndex);
@@ -305,7 +292,6 @@ private:
 	CTimer mTimer;
 	ServerNetworkStatisticsReporter mNetworkStatisticsReporter;
 	std::chrono::steady_clock::time_point mNextStateReplicationTime = {};
-	std::chrono::steady_clock::time_point mNextNearbyObjectReplicationTime = {};
 	default_random_engine mRandomEngine;
 
 	// 접속한 클라이언트들의 정보를 저장.
@@ -315,7 +301,6 @@ private:
 	int mBlueSuitCount = 0;
 	std::array<std::shared_ptr<CServerPlayer>, MAX_CLIENT> mPlayers;
 	std::array<PlayerReplicationState, MAX_CLIENT> mPlayerReplicationStates = {};
-	std::array<std::vector<NearbyObjectState>, MAX_CLIENT> mNearbyObjectSnapshots = {};
 	std::vector<shared_ptr<CServerGameObject>> mGameObjects;
 	std::shared_ptr<CServerCollisionManager> mCollisionManager;
 

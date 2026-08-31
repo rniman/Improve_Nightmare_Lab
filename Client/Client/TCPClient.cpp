@@ -392,12 +392,6 @@ void CTcpClient::ProcessReadEvent(HWND window, SOCKET socket)
 			return;
 		}
 		break;
-	case ReceiveHead::NearbyObjects:
-		if (!TryProcessNearbyObjectsPacket(socket))
-		{
-			return;
-		}
-		break;
 	case ReceiveHead::OpenableObjectState:
 		if (!TryProcessOpenableObjectStatePacket(socket))
 		{
@@ -580,90 +574,6 @@ bool CTcpClient::TryProcessInitPacket(SOCKET socket)
 	mMainClientId = receivedMainClientId;
 	mClientCount = receivedClientCount;
 	mClientInfo = receivedClientInfo;
-	return true;
-}
-
-bool CTcpClient::TryProcessNearbyObjectsPacket(SOCKET socket)
-{
-	if (!mHasPayloadSize)
-	{
-		if (!HandleReceiveResult(ReceiveData(socket, sizeof(std::uint16_t))))
-		{
-			return false;
-		}
-
-		std::uint16_t payloadBytes = 0;
-		memcpy(&payloadBytes, mReceiveBuffer.data(), sizeof(payloadBytes));
-		mExpectedPayloadBytes = payloadBytes;
-		mHasPayloadSize = true;
-		std::fill(mReceiveBuffer.begin(), mReceiveBuffer.end(), 0);
-
-		if (mExpectedPayloadBytes > sizeof(CS_NEARBY_OBJECT) * MAX_NEARBY_OBJECTS ||
-			mExpectedPayloadBytes % sizeof(CS_NEARBY_OBJECT) != 0)
-		{
-			LogInvalidServerPacket(
-				"NEARBY_OBJECTS",
-				"payloadSize",
-				static_cast<int>(mExpectedPayloadBytes));
-			CloseConnection();
-			return false;
-		}
-	}
-
-	if (!HandleReceiveResult(ReceiveData(socket, mExpectedPayloadBytes)))
-	{
-		return false;
-	}
-
-	const size_t objectCount = mExpectedPayloadBytes / sizeof(CS_NEARBY_OBJECT);
-	const auto readNearbyObject = [this](size_t objectIndex)
-		{
-			CS_NEARBY_OBJECT objectInfo = {};
-			memcpy(
-				&objectInfo,
-				mReceiveBuffer.data() + objectIndex * sizeof(CS_NEARBY_OBJECT),
-				sizeof(objectInfo));
-			return objectInfo;
-		};
-
-	// 전체 entry를 먼저 검증해 잘못된 패킷이 게임 상태에 일부만 적용되지 않게 한다.
-	for (size_t objectIndex = 0; objectIndex < objectCount; ++objectIndex)
-	{
-		const CS_NEARBY_OBJECT objectInfo = readNearbyObject(objectIndex);
-		if (!IsValidObjectId(objectInfo.m_nObjectId))
-		{
-			LogInvalidServerPacket(
-				"NEARBY_OBJECTS",
-				"objectId",
-				objectIndex,
-				objectInfo.m_nObjectId);
-			CloseConnection();
-			return false;
-		}
-		if (!IsFiniteMatrix(objectInfo.m_xmf4x4World))
-		{
-			LogInvalidServerPacketAtIndex(
-				"NEARBY_OBJECTS",
-				"worldTransform",
-				objectIndex);
-			CloseConnection();
-			return false;
-		}
-	}
-
-#ifdef LOADSCENE
-	for (size_t objectIndex = 0; objectIndex < objectCount; ++objectIndex)
-	{
-		const CS_NEARBY_OBJECT objectInfo = readNearbyObject(objectIndex);
-		shared_ptr<CGameObject> gameObject =
-			g_collisionManager.GetCollisionObjectWithNumber(objectInfo.m_nObjectId).lock();
-		if (gameObject)
-		{
-			gameObject->m_xmf4x4World = objectInfo.m_xmf4x4World;
-			gameObject->m_xmf4x4ToParent = objectInfo.m_xmf4x4World;
-		}
-	}
-#endif // LOADSCENE
 	return true;
 }
 
@@ -1055,7 +965,6 @@ bool CTcpClient::IsValidReceiveHead(INT8 head) const
 	case ReceiveHead::SpaceOutObjects:
 	case ReceiveHead::LoadingComplete:
 	case ReceiveHead::PlayerState:
-	case ReceiveHead::NearbyObjects:
 	case ReceiveHead::OpenableObjectState:
 	case ReceiveHead::OpenableObjectSnapshot:
 	case ReceiveHead::ItemPlacementSnapshot:

@@ -10,8 +10,6 @@
 #include "../GameLimits.h"
 #include "GlobalDefine.h"
 
-constexpr std::size_t MAX_NEARBY_OBJECTS{ 30 };
-
 constexpr WORD KEY_W{ 0x01 };
 constexpr WORD KEY_S{ 0x02 };
 constexpr WORD KEY_A{ 0x04 };
@@ -55,7 +53,7 @@ enum class ReceiveHead : INT8
 	SpaceOutObjects = 12,
 	LoadingComplete = 13,
 	PlayerState = 14,
-	NearbyObjects = 15,
+	// wire 값 15는 폐기된 NEARBY_OBJECTS head이므로 재사용하지 않는다.
 	OpenableObjectState = 16,
 	OpenableObjectSnapshot = 17,
 	ItemPlacementSnapshot = 18,
@@ -90,14 +88,6 @@ struct CS_PLAYER_STATE
 };
 static_assert(sizeof(CS_PLAYER_INFO) == 20);
 static_assert(sizeof(CS_PLAYER_STATE) == 92);
-
-struct CS_NEARBY_OBJECT
-{
-	int m_nObjectId = -1;
-	XMFLOAT4X4 m_xmf4x4World;
-};
-static_assert(sizeof(CS_NEARBY_OBJECT) == 68);
-static_assert(sizeof(CS_NEARBY_OBJECT) * MAX_NEARBY_OBJECTS <= MAX_PACKET_PAYLOAD_SIZE);
 
 enum class OpenableObjectType : std::uint8_t
 {
@@ -186,7 +176,6 @@ private:
 	bool TryProcessChangeSlotPacket(HWND window, SOCKET socket);
 	bool TryProcessInitPacket(SOCKET socket);
 	bool TryProcessPlayerStatePacket(SOCKET socket);
-	bool TryProcessNearbyObjectsPacket(SOCKET socket);
 	bool TryProcessOpenableObjectStatePacket(SOCKET socket);
 	bool TryProcessOpenableObjectSnapshotPacket(SOCKET socket);
 	bool TryProcessItemPlacementSnapshotPacket(SOCKET socket);

@@ -24,7 +24,6 @@ namespace
 		case ServerPacketType::SpaceOutObjects: return "SPACEOUT_OBJECTS";
 		case ServerPacketType::LoadingComplete: return "LOADING_COMPLETE";
 		case ServerPacketType::PlayerState: return "PLAYER_STATE";
-		case ServerPacketType::NearbyObjects: return "NEARBY_OBJECTS";
 		case ServerPacketType::OpenableObjectState: return "OPENABLE_OBJECT_STATE";
 		case ServerPacketType::OpenableObjectSnapshot: return "OPENABLE_OBJECT_SNAPSHOT";
 		case ServerPacketType::ItemPlacementSnapshot: return "ITEM_PLACEMENT_SNAPSHOT";

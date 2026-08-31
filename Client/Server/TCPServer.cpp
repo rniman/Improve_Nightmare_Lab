@@ -14,7 +14,6 @@ namespace
 {
 	constexpr size_t MAX_PENDING_SEND_BYTES = 4 * 1024 * 1024;
 	constexpr auto STATE_REPLICATION_INTERVAL = std::chrono::microseconds{ 16'667 };
-	constexpr auto NEARBY_OBJECT_REPLICATION_INTERVAL = std::chrono::microseconds{ 33'333 };
 	constexpr WORD VALID_CLIENT_KEY_MASK =
 		KEY_W | KEY_S | KEY_A | KEY_D |
 		KEY_1 | KEY_2 | KEY_3 | KEY_4 |
@@ -148,10 +147,6 @@ TCPServer::TCPServer()
 	};
 
 	mPlayerStartPositionIndices = { -1, -1, -1, -1, -1 };
-	for (auto& objectSnapshot : mNearbyObjectSnapshots)
-	{
-		objectSnapshot.reserve(MAX_NEARBY_OBJECTS);
-	}
 }
 
 TCPServer::~TCPServer()
@@ -211,7 +206,6 @@ void TCPServer::RunSimulationTick()
 
 	BuildPlayerReplicationStates();
 	ReplicateOutOfSpaceObjects();
-	ReplicateNearbyObjectsIfDue();
 	ReplicateStateIfDue();
 }
 
@@ -924,7 +918,6 @@ bool TCPServer::HandleLoadingCompletePacket(int clientIndex)
 	mCanReplicateState = true;
 	const auto currentTime = std::chrono::steady_clock::now();
 	mNextStateReplicationTime = currentTime;
-	mNextNearbyObjectReplicationTime = currentTime;
 	connection.pendingPacketType = ServerPacketType::LoadingComplete;
 	return true;
 }
@@ -1088,7 +1081,6 @@ bool TCPServer::DisconnectClient(SOCKET clientSocket)
 			mCanReplicateState = true;
 			const auto currentTime = std::chrono::steady_clock::now();
 			mNextStateReplicationTime = currentTime;
-			mNextNearbyObjectReplicationTime = currentTime;
 			otherConnection.pendingPacketType = ServerPacketType::LoadingComplete;
 			EnqueuePendingPacket(static_cast<int>(connectionIndex));
 			break;
@@ -1797,124 +1789,6 @@ void TCPServer::EnqueueOutOfSpaceObjectPackets(const std::vector<SC_SPACEOUT_OBJ
 			// 소켓마다 partial send 위치가 다르므로 각 송신 큐가 버퍼 복사본을 소유한다.
 			EnqueuePacketBuffer(playerId, packetBuffer);
 		}
-	}
-}
-
-void TCPServer::ReplicateNearbyObjectsIfDue()
-{
-	if (!mCanReplicateState)
-	{
-		return;
-	}
-
-	const auto currentTime = std::chrono::steady_clock::now();
-	if (currentTime < mNextNearbyObjectReplicationTime)
-	{
-		return;
-	}
-
-	// 지연된 조사를 몰아서 실행하지 않고 가장 최근 상태만 갱신한다.
-	mNextNearbyObjectReplicationTime = currentTime + NEARBY_OBJECT_REPLICATION_INTERVAL;
-	BuildNearbyObjectSnapshots();
-	EnqueueNearbyObjectSnapshots();
-}
-
-void TCPServer::BuildNearbyObjectSnapshots()
-{
-	constexpr size_t maxNearbyObjects = MAX_NEARBY_OBJECTS;
-	// 수신 플레이어가 속한 셀을 중심으로 3x3 셀만 탐색하고 최대 30개까지 기록한다.
-	for (const auto& player : mPlayers)
-	{
-		if (!player || player->GetPlayerId() == -1)
-		{
-			continue;
-		}
-
-		const INT8 playerId = player->GetPlayerId();
-		if (playerId < 0 || playerId >= static_cast<INT8>(mNearbyObjectSnapshots.size()))
-		{
-			continue;
-		}
-
-		const std::size_t playerIndex = static_cast<std::size_t>(playerId);
-		auto& objectSnapshot = mNearbyObjectSnapshots[playerIndex];
-		objectSnapshot.clear();
-
-		// 현재는 플레이어와 같은 층만 검사한다. 계단 주변의 인접 층 검사는 별도 게임 규칙이다.
-		for (int widthIndex = player->GetWidth() - 1;
-			widthIndex <= player->GetWidth() + 1 && objectSnapshot.size() < maxNearbyObjects;
-			++widthIndex)
-		{
-			if (widthIndex < 0 || widthIndex >= mCollisionManager->GetWidth())
-			{
-				continue;
-			}
-
-			for (int depthIndex = player->GetDepth() - 1;
-				depthIndex <= player->GetDepth() + 1 && objectSnapshot.size() < maxNearbyObjects;
-				++depthIndex)
-			{
-				if (depthIndex < 0 || depthIndex >= mCollisionManager->GetDepth())
-				{
-					continue;
-				}
-
-				for (const auto& gameObject : mCollisionManager->GetSpaceGameObjects(
-					player->GetFloor(),
-					widthIndex,
-					depthIndex))
-				{
-					if (!gameObject || !gameObject->ShouldReplicateNearbyTransform())
-					{
-						continue;
-					}
-
-					const int objectId = gameObject->GetCollisionNum();
-					const bool alreadyIncluded = std::any_of(
-						objectSnapshot.begin(),
-						objectSnapshot.end(),
-						[objectId](const NearbyObjectState& objectInfo)
-						{
-							return objectInfo.objectId == objectId;
-						});
-					if (alreadyIncluded)
-					{
-						continue;
-					}
-
-					objectSnapshot.push_back(NearbyObjectState{ objectId, gameObject->GetWorldMatrix() });
-					if (objectSnapshot.size() == maxNearbyObjects)
-					{
-						break;
-					}
-				}
-			}
-		}
-	}
-}
-
-void TCPServer::EnqueueNearbyObjectSnapshots()
-{
-	for (std::size_t connectionIndex = 0; connectionIndex < mConnections.size(); ++connectionIndex)
-	{
-		if (!mConnections[connectionIndex].isUsed)
-		{
-			continue;
-		}
-
-		const auto& objectSnapshot = mNearbyObjectSnapshots[connectionIndex];
-		const size_t payloadBytes = sizeof(NearbyObjectState) * objectSnapshot.size();
-		const std::uint16_t wirePayloadBytes = static_cast<std::uint16_t>(payloadBytes);
-
-		std::vector<char> packetBuffer;
-		packetBuffer.reserve(sizeof(INT8) + sizeof(wirePayloadBytes) + payloadBytes);
-		packetBuffer.push_back(static_cast<INT8>(ServerPacketType::NearbyObjects));
-		AppendBytes(packetBuffer, &wirePayloadBytes, sizeof(wirePayloadBytes));
-		if (!objectSnapshot.empty())
-		{
-			AppendBytes(packetBuffer, objectSnapshot.data(), payloadBytes);
-		}
-		EnqueuePacketBuffer(static_cast<int>(connectionIndex), std::move(packetBuffer));
 	}
 }
 

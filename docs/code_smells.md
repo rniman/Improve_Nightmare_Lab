@@ -26,7 +26,7 @@
 |---|---|---|---|
 | R-003 | Lifetime | 씬 전환 및 연결 종료 수명 | 로비에서 인게임 전환, 연결 종료, 게임 종료 경로의 null 접근과 소유 관계를 확인한다. |
 | R-004 | Rendering | 렌더 상태 및 리소스 수명 결합 | 씬 전환이나 command list 재설정 시 root signature, descriptor heap, GPU 리소스 수명이 유효한지 변경 범위마다 확인한다. |
-| R-005 | Replication | 최대 인원과 부하 조건의 잔여 검증 | 입력·플레이어·주변 오브젝트 책임과 주기를 분리하고 legacy 고정 배열을 제거했다. Release 로컬 3인에서 서버 TX는 `2092acd2`의 평균 2,743,023 byte/s에서 현재 평균 94,067 byte/s로 96.57% 감소했고, 출력 시점 큐 0과 연결별 구간 peak 최대 461 byte/1 packet을 확인했다. 프레임 종속·고정 10KB 복제 위험은 해소됐다. 5인·느린 네트워크·강제 partial I/O와 30개 제한 도달 여부는 검증 위험으로 기록하되, 큐 증가·주기 불안정·연결 문제가 관찰될 때까지 실행을 보류한다. |
+| R-005 | Replication | 최대 인원과 부하 조건의 잔여 검증 | 입력·플레이어·오브젝트 책임을 분리하고 legacy 고정 배열과 대상 없는 `NEARBY_OBJECTS`를 제거했다. 제거 전 Release 로컬 3인에서 서버 TX가 `2092acd2`의 평균 2,743,023 byte/s에서 평균 94,067 byte/s로 96.57% 감소했다. 제거 후 Release 로컬 2인에서는 서버 TX 55,320 byte/s, 120 packet/s와 송신 큐 0, 연결별 구간 peak 461 byte/1 packet을 확인했다. 프레임 종속·고정 10KB 복제 위험은 해소됐다. 5인·느린 네트워크·강제 partial I/O는 검증 위험으로 기록하되, 큐 증가·주기 불안정·연결 문제가 관찰될 때까지 실행을 보류한다. |
 | R-006 | Protocol | 클라이언트 방향·카메라 입력 신뢰 | 서버는 `viewMatrix`, `look`, `right`, `up`, `pitch`의 유한성과 right-click action의 0/1 범위를 검사한다. 다만 방향 벡터의 정규화·직교성이나 권위 위치와의 관계는 검사하지 않으므로, 새 입력 wire 구조를 설계하기 전에 허용 범위와 서버 재구성 가능한 필드를 정한다. |
 
 ### Maintainability
@@ -69,6 +69,7 @@
 | RS-014 | Replication | 문·서랍의 30 Hz 애니메이션과 관심 영역 진입 시 상태 pop | 문·서랍을 `NEARBY_OBJECTS`에서 제외하고 상태 변경 event를 모든 활성 클라이언트에 전달하며, 모든 클라이언트 로딩 완료 후 현재 상태 snapshot을 한 번 전송한다. 클라이언트는 서버 최종 상태를 적용해 렌더 프레임마다 애니메이션하고 서버의 행렬·충돌 권위는 유지한다. Release 실행에서 자신과 다른 클라이언트의 문·서랍 상태 및 서랍 애니메이션을 확인했다. |
 | RS-015 | Server structure | TCPServer의 월드 구성 책임 집중 | 월드 구성을 `ServerWorldBuilder`로 분리하고 초기화 성공·실패를 `TCPServer::Initialize()`까지 전달하도록 정리했다. 정상적인 서버 시작·게임 진행과 `ServerScene.bin` 누락 시 네트워크 초기화 전 종료를 확인했다. |
 | RS-016 | Shared limits | 공통 인원 제한의 네트워크 헤더 종속 | `MAX_CLIENT`와 `MAX_SURVIVOR`를 공통 `GameLimits.h`로 이동하고 사용하는 헤더가 직접 참조하게 했다. `Scene.h`와 `ServerCollision.h`의 불필요한 네트워크 헤더 의존을 제거하고 Client/Server 빌드와 실행을 확인했다. |
+| RS-017 | Item replication | 서랍 아이템의 30 Hz 행렬 복제로 인한 움직임 끊김 | 아이템 배치를 서랍 부모 ID와 로컬 행렬 event/snapshot으로 동기화하고 클라이언트가 매 프레임 서랍 월드 행렬과 결합하도록 했다. 빈 패킷만 남은 `NEARBY_OBJECTS` 송수신과 주변 셀 조사 경로를 제거하고 Release 로컬 2인 실행에서 정기 TX 120 packet/s와 송신 큐 0을 확인했다. |
 
 ## 항목 작성 규칙
 

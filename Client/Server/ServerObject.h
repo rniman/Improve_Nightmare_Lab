@@ -27,10 +27,6 @@ public:
 
 	static bool CheckPicking(const shared_ptr<CServerGameObject>& pCollisionGameObject, const XMFLOAT3& xmf3PickPosition, const XMFLOAT4X4& xmf4x4ViewMatrix, float& fDistance);
 
-	/// @brief 월드 행렬을 주기적인 NEARBY_OBJECTS 복제에 포함할지 결정한다.
-	/// @return 정적 객체이거나 상태 이벤트 등 별도 경로로 동기화하면 false
-	virtual bool ShouldReplicateNearbyTransform() const { return !m_bStatic; }
-
 	// Interface
 	void SetStatic(bool bStatic) { m_bStatic = bStatic; }
 	void SetCollision(bool bCollision) { m_bCollision = bCollision; }

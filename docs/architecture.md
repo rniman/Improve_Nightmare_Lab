@@ -87,7 +87,7 @@ Server.cpp
 
 6. **상태 복제 주기와 패킷 크기**
    - 입력은 108 byte `KEYS_BUFFER`로 렌더 루프에서 `steady_clock` 기준 최대 60 Hz로 제한하고, 서버 상태 복제는 입력 수신과 분리된 `steady_clock` 기준 최대 60 Hz로 실행한다. 서버는 모든 활성 클라이언트의 로딩 완료 이후에만 최신 상태를 복제한다.
-   - 플레이어 상태는 461 byte `PLAYER_STATE`로 최대 60 Hz, 주변 오브젝트는 수신자 관심 영역의 실제 개수만 `NEARBY_OBJECTS`로 최대 30 Hz 전송한다. 기존 `UPDATE_DATA` head와 고정 오브젝트 배열은 제거됐다.
+   - 플레이어 상태는 461 byte `PLAYER_STATE`로 최대 60 Hz 전송한다. 문·서랍과 아이템은 상태 변경 event와 로딩 완료 후 snapshot으로 동기화하며, 기존 `UPDATE_DATA`와 `NEARBY_OBJECTS` head는 제거됐다.
 
 ## 의존성 고위험 영역
 1. **GameFramework ↔ Scene ↔ TCPClient 경계**
@@ -106,7 +106,7 @@ Server.cpp
    - 씬 관련 코드의 정적 디스크립터/카운터 상태가 숨겨진 씬 간 의존성을 발생시킬 수 있다.
 
 6. **입력·복제 주기와 패킷 크기**
-   - 입력 호출점은 렌더 루프에 남아 있어 낮은 FPS에서는 입력 빈도도 낮아진다. 상태 복제는 입력 수신과 분리했으며, 고정 `UPDATE_DATA`는 `PLAYER_STATE`와 가변 `NEARBY_OBJECTS`로 교체했다. Release 로컬 3인에서 전송 주기와 빈 송신 큐를 확인했으며, 5인·느린 네트워크·강제 partial I/O 검증은 현재 보류 상태다.
+   - 입력 호출점은 렌더 루프에 남아 있어 낮은 FPS에서는 입력 빈도도 낮아진다. 상태 복제는 입력 수신과 분리했으며, 고정 `UPDATE_DATA`는 `PLAYER_STATE`와 오브젝트별 event/snapshot으로 교체했다. `NEARBY_OBJECTS` 제거 후 Release 로컬 2인에서 서버 TX 55,320 byte/s, 120 packet/s와 빈 송신 큐를 확인했으며, 5인·느린 네트워크·강제 partial I/O 검증은 현재 보류 상태다.
 
 ## 점진적 리팩토링 참고 사항
 - 동작 보존을 최우선으로 하며, 작고 모듈 내부에 국한된 변경을 선호한다.

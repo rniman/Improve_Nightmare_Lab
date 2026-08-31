@@ -60,23 +60,21 @@
      `OPENABLE_OBJECT_STATE`를 모든 활성 클라이언트의 송신 큐에 등록한다.
 5. `BuildPlayerReplicationStates()`가 플레이어 상태를 갱신한다.
 6. `ReplicateOutOfSpaceObjects()`이 영역을 이탈한 오브젝트를
-   가변 길이 `SEND_SPACEOUT_OBJECTS` 패킷으로 직렬화해 즉시 송신 큐에 등록한다.
-7. `ReplicateNearbyObjectsIfDue()`가 플레이어별 주변 동적 오브젝트를
-	최대 30 Hz로 조사한다. 수신자 자신의 3x3 셀에 있는 중복 제거된
-	오브젝트만 `NEARBY_OBJECTS`에 가변 길이로 담아 송신한다.
-8. `ReplicateStateIfDue()`가 로딩 완료 후 오브젝트 배열을 제외한
+   가변 길이 `SPACEOUT_OBJECTS` 패킷으로 직렬화해 즉시 송신 큐에 등록한다.
+7. `ReplicateStateIfDue()`가 로딩 완료 후 오브젝트 배열을 제외한
 	`PLAYER_STATE`를 최대 60 Hz로 각 활성 연결에 등록한다.
 
 기존 `UPDATE_DATA` head와 고정 오브젝트 배열은 제거됐다. 서버가 모든 활성
 클라이언트의 로딩 완료를 확인한 뒤 `steady_clock` 기준의 독립 60 Hz 주기에서
 가장 최근 플레이어 상태를 `PLAYER_STATE`로 직렬화한다. 루프가 지연돼도
 놓친 횟수만큼 몰아서 보내지 않는다.
-주변 오브젝트 조사도 같은 방식의 독립 30 Hz deadline을 사용하며 놓친 조사를
-몰아서 실행하지 않는다. `NEARBY_OBJECTS`는 `uint16_t` payload 크기 뒤에
-오브젝트 ID와 4x4 행렬 entry를 실제 개수만 직렬화한다.
-문·서랍은 이 주기 패킷에서 제외되며 상태 변경 event와 로딩 완료 후 한 번의
+문·서랍은 상태 변경 event와 로딩 완료 후 한 번의
 `OPENABLE_OBJECT_SNAPSHOT`으로 동기화한다. 클라이언트는 수신한 최종 상태를
 기준으로 렌더 프레임마다 여닫힘 애니메이션을 진행한다.
+아이템은 `ITEM_PLACEMENT_STATE`와 `ITEM_PLACEMENT_SNAPSHOT`으로 서랍 ID와
+서랍 기준 로컬 행렬을 전달한다. 클라이언트는 매 프레임 서랍 월드 행렬과 결합한다.
+주기 행렬 복제가 필요한 동적 오브젝트가 남지 않아 30 Hz 주변 조사와
+`NEARBY_OBJECTS`는 제거했다.
 
 ## 5) 네트워킹 이벤트 흐름 (요약)
 
@@ -127,9 +125,10 @@
 | 게임 종료 상태 전환 | `EnqueueGameOutcomePackets()` → `EnqueuePendingPacket()` | 승리 패킷을 각 활성 연결에 한 번 등록한 뒤 정기 상태 복제를 종료 |
 | 문·서랍 상태 변경 | `BroadcastOpenableObjectState()` | ID·타입·open/close 상태를 모든 활성 연결에 즉시 등록 |
 | 모든 클라이언트 로딩 완료 | `BroadcastOpenableObjectSnapshot()` | 현재 문·서랍 상태 전체를 각 활성 연결에 한 번 등록 |
+| 아이템 배치 변경 | `BroadcastItemPlacementState()` | 서랍 연결 또는 분리 상태를 모든 활성 연결에 즉시 등록 |
+| 모든 클라이언트 로딩 완료 | `BroadcastItemPlacementSnapshot()` | 현재 아이템 배치 전체를 각 활성 연결에 한 번 등록 |
 | 로딩 완료 후 플레이어 복제 주기 도달 | `ReplicateStateIfDue()` → `EnqueuePendingPacket()` | 최신 `PLAYER_STATE`를 최대 60 Hz로 각 활성 연결에 등록 |
 | `RunSimulationTick()`에서 영역 이탈 오브젝트 발견 | `ReplicateOutOfSpaceObjects()` → 가변 패킷 직렬화 | 완성된 패킷을 송신 큐에 등록 |
-| 주변 오브젝트 조사 30 Hz 주기 도달 | `ReplicateNearbyObjectsIfDue()` → `NEARBY_OBJECTS` | 수신자 관심 영역의 실제 개수만 가변 길이로 송신 |
 | Winsock의 실제 `FD_WRITE` 알림 | `FlushSendQueue()` | 새 패킷을 만들지 않고 저장된 전송 위치부터 재개 |
 
 패킷이 송신 큐에 등록된 뒤에는 생성 경로와 관계없이 동일하게 처리한다.
@@ -158,11 +157,10 @@
 - 월드 구성은 네트워크 초기화보다 먼저 수행하며, 씬 파일 누락·탈출문 후보 없음·아이템
   배치 실패를 `TCPServer::Initialize()`의 실패 결과로 전달한다.
 - 입력 송신은 렌더 루프 안에서 최대 60 Hz로 제한하며, 고정 deadline을 전진시켜 60 FPS 이상에서 프레임별 초과 시간이 누적되지 않게 한다. 상태 복제는 입력 수신 횟수와 분리된 최대 60 Hz 주기를 사용한다.
-- 정기 인게임 복제는 `PLAYER_STATE` 60 Hz와 수신자별 `NEARBY_OBJECTS`
-  30 Hz로 분리됐다. 다만 로비·접속 초기 패킷은 아직 기존 통합 구조체를 사용한다.
-- 문·서랍은 전역 event와 초기 snapshot으로 관심 영역 밖에서도 상태가 수렴한다.
-  그 밖의 동적 오브젝트는 수신자 관심 영역 밖의 정기 snapshot에서 제외되므로
-  진입·재진입 시 상태 수렴과 `SPACEOUT_OBJECTS` 순서를 계속 검증해야 한다.
+- 정기 인게임 복제는 `PLAYER_STATE` 60 Hz만 유지한다. 다만 로비·접속 초기 패킷은
+  아직 기존 통합 구조체를 사용한다.
+- 문·서랍과 아이템은 전역 event와 초기 snapshot으로 관심 영역 밖에서도 상태가 수렴한다.
+  `SPACEOUT_OBJECTS`는 영역 이동의 기존 즉시 전송 경로로 유지한다.
 - IOCP 또는 다중 스레드 전환은 현재 범위에 포함하지 않는다.
 
 네트워크 partial I/O 안정화 변경 당시 Client/Server x64 Debug 빌드가 성공했고 서버
@@ -217,7 +215,13 @@ Release 로컬 3인에서는 `UPDATE_DATA`가 총 180 packet/s와 1,926,180 byte
 같은 날 필드 단위 정리 후 Release 1인에서는 `KEYS_BUFFER`가 108 byte × 60으로
 6,480 byte/s, `PLAYER_STATE`가 461 byte × 60으로 27,660 byte/s를 유지했다.
 주변 오브젝트 4개 조건의 `NEARBY_OBJECTS`는 275 byte × 30으로 8,250 byte/s였고,
-서버 전체 송신은 35,910 byte/s, 큐는 0 byte/0 packet이었다. 이후 코드 정리는
+서버 전체 송신은 35,910 byte/s, 큐는 0 byte/0 packet이었다. 당시 후속 코드 정리는
 wire 크기와 주기를 변경하지 않았다.
+
+이후 문·서랍과 모든 아이템을 전용 상태 event 및 초기 snapshot으로 분리했다.
+실행 검증 후 남은 대상 없이 빈 패킷만 전송하던 `NEARBY_OBJECTS` 송수신 경로와
+30 Hz 주변 셀 조사를 제거했으며 wire 값 15는 폐기 번호로 보존한다. 제거 후
+Release 로컬 2인에서 서버 TX 55,320 byte/s, 120 packet/s, 연결별 TX
+27,660 byte/s, 60 packet/s와 송신 큐 0 byte/0 packet을 확인했다.
 
 구체적인 결함과 개선 후보는 `code_smells.md`, 작업 순서는 `refactoring_plan.md`에서 관리한다.
