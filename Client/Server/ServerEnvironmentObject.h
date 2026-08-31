@@ -33,7 +33,7 @@ public:
 	void SetRandomOffset(const XMFLOAT3& xmf3Offset);
 
 	bool IsObtained() const { return m_bObtained; }
-	int GetDrawerNumber() const { return m_nReferenceNumber; }
+	int GetDrawerNumber() const { return m_nDrawerNumber; }
 	int GetReferenceNumber() const { return m_nReferenceNumber; }
 protected:
 	/*static int m_nStartDrawer1;
@@ -179,6 +179,10 @@ public:
 
 	virtual void Update(float fElapsedTime, shared_ptr<CServerCollisionManager>& pCollisionManager);
 	virtual void UpdateUsing(const shared_ptr<CServerGameObject>& pGameObject, shared_ptr<CServerCollisionManager>& pCollisionManager) override;
+	virtual bool ShouldReplicateNearbyTransform() const override
+	{
+		return !m_bInstall && CServerItemObject::ShouldReplicateNearbyTransform();
+	}
 
 	virtual void SetRandomPosition(shared_ptr<CServerCollisionManager>& pCollisionManager) override;
 
