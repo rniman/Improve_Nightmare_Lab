@@ -14,6 +14,7 @@ Nightmare Lab은 Win32 기반 멀티플레이어 게임으로, 두 개의 실행
 ## 핵심 모듈
 ### 1) 애플리케이션 / 프레임워크
 - `CGameFramework`는 윈도우 생명주기, DX12 디바이스/스왑체인/커맨드 리스트 설정, 씬 전환, 입력 라우팅, 소켓 메시지 라우팅을 관리한다.
+- 현재는 D3D11On12·Direct2D·DirectWrite 문자 출력 리소스와 swap-chain wrapped back buffer도 소유한다.
 
 ### 2) 씬 / 게임 로직
 - `CScene`은 기본 인터페이스이다.
@@ -25,6 +26,7 @@ Nightmare Lab은 Win32 기반 멀티플레이어 게임으로, 두 개의 실행
 - `CShader` 계층 구조가 파이프라인 상태와 드로우 동작을 캡슐화한다.
 - 렌더 단계는 섀도우 패스, 메인/디퍼드 패스, 후처리, 블러 컴퓨트, 포워드/UI 패스, 풀스크린 합성으로 구성된다.
 - command list 공통 상태인 graphics/compute root signature와 CBV/SRV/UAV descriptor heap은 각 `Reset()` 직후 한 번 설정한다.
+- 문자 UI는 DX12 패스 실행 후 D3D11On12 wrapped back buffer를 통해 D2D로 그린다. 레이더 거리와 게임 시작 안내를 표시하며, DX12 UI로 교체한 뒤 D3D11On12·D2D·DirectWrite 코드와 빌드 의존성을 모두 제거할 최우선 정리 대상이다.
 
 ### 4) 리소스 관리
 - `CTexture`, `CMaterial`, `CGameObject`가 런타임 리소스, 모델 로딩, 오브젝트별 셰이더 데이터를 관리한다.
@@ -48,6 +50,7 @@ Client.cpp
   -> CGameFramework
       -> 씬 (CScene / CLobbyScene / CMainScene)
       -> 렌더러 (Shader/Object/Camera/Mesh)
+      -> D3D11On12 / D2D / DirectWrite 문자 UI
       -> CTcpClient
       -> SoundManager / Timer / CollisionManager
 
@@ -89,6 +92,12 @@ Server.cpp
    - 입력은 108 byte `KEYS_BUFFER`로 렌더 루프에서 `steady_clock` 기준 최대 60 Hz로 제한하고, 서버 상태 복제는 입력 수신과 분리된 `steady_clock` 기준 최대 60 Hz로 실행한다. 서버는 모든 활성 클라이언트의 로딩 완료 이후에만 최신 상태를 복제한다.
    - 플레이어 상태는 461 byte `PLAYER_STATE`로 최대 60 Hz 전송한다. 문·서랍과 아이템은 상태 변경 event와 로딩 완료 후 snapshot으로 동기화하며, 기존 `UPDATE_DATA`와 `NEARBY_OBJECTS` head는 제거됐다.
 
+7. **DX12 렌더링과 D3D11On12 문자 UI 혼용**
+   - `CGameFramework`가 D3D11On12·D2D·DirectWrite 초기화, wrapped back buffer, resize 재생성과 프레임별 acquire/release를 담당한다.
+   - `CBlueSuitPlayer::RenderTextUI()`와 `CZombiePlayer::RenderTextUI()`는 출력뿐 아니라 일부 게임 시작 카운트다운 상태도 변경한다.
+   - 먼저 상태 갱신을 프레임 업데이트로 옮기고 출력 책임을 작은 UI 경계로 격리한 뒤 DX12 기반 렌더링으로 교체한다.
+   - 교체 완료 후 D3D11 device/context, D3D11On12, D2D, DirectWrite, wrapped back buffer와 관련 헤더·링크 라이브러리를 모두 제거한다.
+
 ## 의존성 고위험 영역
 1. **GameFramework ↔ Scene ↔ TCPClient 경계**
    - 한 레이어의 변경이 프레임 루프, 메시지 처리, 네트워크 업데이트 경로 전반에 파급될 수 있다.
@@ -108,7 +117,10 @@ Server.cpp
 6. **입력·복제 주기와 패킷 크기**
    - 입력 호출점은 렌더 루프에 남아 있어 낮은 FPS에서는 입력 빈도도 낮아진다. 상태 복제는 입력 수신과 분리했으며, 고정 `UPDATE_DATA`는 `PLAYER_STATE`와 오브젝트별 event/snapshot으로 교체했다. `NEARBY_OBJECTS` 제거 후 Release 로컬 2인에서 서버 TX 55,320 byte/s, 120 packet/s와 빈 송신 큐를 확인했으며, 5인·느린 네트워크·강제 partial I/O 검증은 현재 보류 상태다.
 
+7. **swap-chain ↔ D3D11On12/D2D 문자 UI 경계**
+   - 매 프레임 DX12 command 실행 이후 wrapped back buffer를 D2D가 획득하고 반환하며 D3D11 context를 `Flush()`한다. resize 시 관련 래퍼와 렌더 타겟을 모두 다시 만들므로 프레임 순서와 swap-chain 수명 변경의 영향 범위가 넓다.
+
 ## 점진적 리팩토링 참고 사항
 - 동작 보존을 최우선으로 하며, 작고 모듈 내부에 국한된 변경을 선호한다.
-- 경계 개선 순서: 프레임워크 ↔ 씬, 씬 ↔ 네트워크, 네트워크 ↔ 게임플레이 적용.
+- 경계 개선 순서: 프레임워크 ↔ 문자 UI, 프레임워크 ↔ 씬, 씬 ↔ 네트워크, 네트워크 ↔ 게임플레이 적용.
 - 디렉토리 재구성은 모듈 경계가 안정된 이후 별도 작업으로 수행한다.

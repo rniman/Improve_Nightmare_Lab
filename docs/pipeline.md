@@ -43,8 +43,16 @@
    - 블러 컴퓨트 디스패치
    - 포워드/UI 렌더
    - 풀스크린 처리
-6. 커맨드 리스트 실행, 텍스트 UI 렌더, 스왑체인 프레젠트.
-7. 프레임 동기화 진행 (`WaitForGpuComplete`, `MoveToNextFrame`).
+6. DX12 커맨드 리스트를 닫고 실행한다.
+7. 인게임에서는 D3D11On12 wrapped back buffer를 획득해 D2D/DirectWrite로
+   레이더 거리와 게임 시작 안내 문구를 그리고, 반환 후 D3D11 context를 `Flush()`한다.
+8. `WaitForGpuComplete()`로 GPU 완료를 기다리고 필요한 readback을 처리한다.
+9. 스왑체인을 `Present()`한 뒤 `MoveToNextFrame()`을 수행한다.
+
+현재 문자 UI 경로는 `CGameFramework`의 swap-chain 수명과 플레이어의 게임 시작 상태
+갱신에 결합되어 있다. 상태 갱신과 출력을 먼저 분리한 뒤 DX12 기반 UI로 교체하는 작업을
+`refactoring_plan.md`의 최우선 항목으로 관리한다. 교체가 끝나면 D3D11On12·D2D·DirectWrite
+코드, wrapped back buffer, 관련 헤더와 링크 라이브러리를 모두 제거한다.
 
 ## 4) 서버 시뮬레이션 루프
 

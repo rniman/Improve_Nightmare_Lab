@@ -37,6 +37,7 @@
 | M-003 | Network | 패킷 파싱과 상태 적용 결합 | 수신 처리에서 프로토콜 해석과 게임 객체 변경이 섞여 있다. 안정성 수정이 필요한 처리부터 두 단계를 분리한다. |
 | M-004 | Resource | 일부 raw pointer 및 수동 수명 관리 | 전체 일괄 교체는 하지 않는다. 소유권이 불명확하거나 오류가 재현되는 리소스부터 정리한다. |
 | M-005 | Source layout | 큰 클래스와 긴 함수 | 월드 구성은 `ServerWorldBuilder`로 분리했다. 크기 자체를 문제로 보지 않고, `TCPServer`에 남은 패킷 처리·연결/송신·복제·세션 책임 중 반복 수정되는 경로만 동작 단계 기준으로 추출한다. |
+| M-006 | Rendering/UI | DX11 계열 문자 출력과 게임 로직 결합 | `CGameFramework`가 D3D11On12·D2D·DirectWrite와 wrapped back buffer를 소유하며, 플레이어의 `RenderTextUI()`가 거리·안내 문구 출력과 일부 카운트다운 상태 갱신을 함께 수행한다. 먼저 상태 갱신과 출력을 분리하고 DX12 UI로 교체한 뒤 D3D11On12·D2D·DirectWrite 코드, 헤더와 링크 의존성을 모두 제거한다. |
 
 ## Deferred
 
@@ -45,7 +46,6 @@
 | D-001 | Shadow | shadow map 렌더링 최적화 | 그림자 패스가 실제 프레임 병목으로 측정될 때 재개한다. |
 | D-002 | SSAO | SSAO 및 blur GPU 시간 측정 | 프레임 저하 또는 품질 옵션 요구가 생길 때 재개한다. |
 | D-003 | Rendering | GPU 동기화 구조 개선 | `WaitForGpuComplete`가 병목으로 확인될 때 재개한다. |
-| D-004 | UI | D2D text UI 및 readback 비용 분석 | UI가 프레임 저하 원인으로 확인될 때 재개한다. |
 | D-005 | Structure | 디렉토리 및 대규모 API 재구성 | 모듈 경계가 안정되고 별도 작업으로 승인될 때 진행한다. |
 | D-007 | Simulation | 메시지 부하에 따른 server tick 변동 | tick 지연이나 CPU 점유 문제가 재현되면 고정 tick과 대기 방식을 검토한다. |
 
