@@ -58,12 +58,16 @@ D3D11 device context를 `Flush()`한다. swap-chain resize도 D3D11On12/D2D 리�
 1. 표시 항목, 입력 데이터, 표시 조건과 현재 결과를 기록한다. — 코드 기준선 기록 완료
 2. 카운트다운 시간과 상태 변경을 프레임 업데이트 경로로 옮기고 문자 출력은 읽기만 하게 한다.
    — 구현 완료, 생존자·좀비·레이더 문자 출력과 게임 시작 흐름 실행 확인
-3. 문자 생성과 렌더링 책임을 플레이어 및 `CGameFramework`에서 작은 UI 경계로 격리한다.
-4. 기존 UI 셰이더와 텍스처 경로를 우선 검토해 DX12 기반 문자 표시로 교체한다.
-5. 결과 비교 후 D3D11On12, Direct2D, DirectWrite와 wrapped back buffer 코드를 제거한다.
-6. D3D11/D2D/DirectWrite 관련 헤더 include와 링크 라이브러리를 제거한다.
-7. 코드베이스와 프로젝트 설정에 DX11 계열 의존성이 남지 않았는지 확인한다.
-8. resize, 씬 전환과 인게임 종료 흐름을 다시 검증한다.
+3. `UiOverlayFrameData`로 UI 종류, 숫자 값, 픽셀 위치·크기, 색상·투명도와 표시 여부를
+   기록한다. — 표시 데이터 경계 구현 완료, 기존 D2D 출력은 비교 기준으로 유지
+4. 고정 한글 안내 DDS와 카운트다운·거리 glyph atlas/DDS·FNT를 준비한다.
+   — 로컬 리소스 준비 완료, 기존 `Asset/` ignore 정책 유지
+5. full-screen 처리 이후 DX12 overlay pass를 추가하고 문자 표시 후 back buffer를
+   `RENDER_TARGET`에서 `PRESENT`로 명시적으로 전환한다.
+6. 결과 비교 후 D3D11On12, Direct2D, DirectWrite와 wrapped back buffer 코드를 제거한다.
+7. D3D11/D2D/DirectWrite 관련 헤더 include와 링크 라이브러리를 제거한다.
+8. 코드베이스와 프로젝트 설정에 DX11 계열 의존성이 남지 않았는지 확인한다.
+9. resize, 씬 전환과 인게임 종료 흐름을 다시 검증한다.
 
 완료 기준:
 

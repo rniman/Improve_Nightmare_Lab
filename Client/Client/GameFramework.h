@@ -2,6 +2,7 @@
 #include "../GameLimits.h"
 #include "Timer.h"
 #include "Scene.h"
+#include "UiOverlayData.h"
 
 class CTcpClient;
 
@@ -72,6 +73,7 @@ public:
 	// Text rendering
 	void PrepareDrawText();
 	void RenderTextUI();
+	const UiOverlayFrameData& GetUiOverlayFrameData() const { return m_uiOverlayFrameData; }
 
 	// Interface
 	INT8 GetClientIdFromTcpClient() const;
@@ -99,6 +101,7 @@ private:
 	void BuildLobbyObjects();
 	void BuildMainObjects();
 	void BindPlayersToTcpClient();
+	void RefreshUiOverlayFrameData();
 
 	/* 윈도우 플랫폼 관련 멤버 */
 	HINSTANCE m_hInstance = nullptr;
@@ -106,6 +109,7 @@ private:
 
 	static int m_nWndClientWidth;
 	static int m_nWndClientHeight;
+	UiOverlayFrameData m_uiOverlayFrameData;
 
 	_TCHAR m_pszFrameRate[200] = {};
 

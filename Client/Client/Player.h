@@ -3,6 +3,7 @@
 #include "EnvironmentObject.h"
 #include "GlobalDefine.h"
 #include "Trail.h"
+#include "UiOverlayData.h"
 
 class CMainScene;
 class CCamera;
@@ -124,6 +125,7 @@ public:
 		}
 	}
 	virtual void RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush) {}
+	virtual UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const;
 	//게임시작에 필요한 작업 수행
 	virtual void SetGameStart();
 
@@ -274,9 +276,9 @@ public:
 	void SetFuseItem(shared_ptr<CFuseObject> object) { m_pFuse = object; }
 
 	XMFLOAT4X4* RadarUpdate(float fElapsedTime);
-	bool PlayRadarUI() { return m_fOpenRadarTime == 0.0f && m_bRightClick && m_selectItem == RADAR; }
+	bool PlayRadarUI() const { return m_fOpenRadarTime == 0.0f && m_bRightClick && m_selectItem == RADAR; }
 	XMFLOAT2 GetRadarWindowScreenPos() const { return m_xmf2RadarUIPos; }
-	float GetEscapeLength();
+	float GetEscapeLength() const;
 private:
 	// 레이더 아이템 행렬
 	XMFLOAT4X4 m_xmf4x4Rader;
@@ -299,6 +301,7 @@ public:
 	void SetHitEvent();
 
 	void RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush) override;
+	UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const override;
 	void SetZombiePlayer(shared_ptr<CZombiePlayer>& m_player) { m_pZombiePlayer = m_player; }
 private:
 	float m_fStopMoving = 0.0f;
@@ -378,4 +381,5 @@ public:
 
 	void SetGameStart() override;
 	void RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush) override;
+	UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const override;
 };

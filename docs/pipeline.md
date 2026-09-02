@@ -51,6 +51,8 @@
 
 게임 시작 카운트다운, 좀비 시야 차단과 안개 변경은 프레임의 플레이어 업데이트에서
 `UpdateGameStartState()`가 처리하며, `RenderTextUI()`는 현재 표시 상태를 읽기만 한다.
+플레이어 업데이트 이후 `RefreshUiOverlayFrameData()`는 같은 상태를 읽어 고정 문구 ID 또는
+숫자, 픽셀 위치·크기, RGBA와 표시 여부로 구성된 현재 프레임 데이터를 만든다.
 문자 출력은 여전히 `CGameFramework`의 swap-chain 수명에 결합되어 있으므로 DX12 기반 UI로
 교체하는 작업을 `refactoring_plan.md`의 최우선 항목으로 관리한다. 교체가 끝나면
 D3D11On12·D2D·DirectWrite 코드, wrapped back buffer, 관련 헤더와 링크 라이브러리를 모두 제거한다.

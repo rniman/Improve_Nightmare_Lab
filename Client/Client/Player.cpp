@@ -452,6 +452,11 @@ void CPlayer::SetGameStart()
 	m_fGameStartCount = 10.f;
 }
 
+UiOverlayFrameData CPlayer::BuildUiOverlayFrameData(const XMFLOAT2&, float) const
+{
+	return UiOverlayFrameData{};
+}
+
 void CPlayer::UpdateGameStartState(float fElapsedTime)
 {
 	if (!m_bGameStartWait)
@@ -1159,7 +1164,7 @@ void CBlueSuitPlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext
 		const int len = swprintf_s(
 			text,
 			_countof(text),
-			L"잠시후 적대자가 행동을 시작합니다.\n퓨즈를 모아 탈출구를 찾으세요.");
+			L"잠시후 적대자가 행동을 시작합니다\n퓨즈를 모아 탈출구를 찾으세요");
 
 		POINT pos = CGameFramework::GetClientWindowSize();
 		D2D1_RECT_F textRect = D2D1::RectF(0, 0, pos.x, pos.y / 2);
@@ -1207,6 +1212,31 @@ void CBlueSuitPlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext
 
 	brush->SetColor(previousColor);
 	brush->SetOpacity(previousOpacity);
+}
+
+UiOverlayFrameData CBlueSuitPlayer::BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const
+{
+	UiOverlayFrameData frameData;
+
+	UiOverlayElement& startMessage = frameData.GetElement(UiOverlayType::SurvivorStartMessage);
+	startMessage.centerPosition = XMFLOAT2(viewportSize.x * 0.5f, viewportSize.y * 0.25f);
+	startMessage.size = XMFLOAT2(viewportSize.x, viewportSize.y * 0.5f);
+	startMessage.color = XMFLOAT4(169.0f / 255.0f, 169.0f / 255.0f, 169.0f / 255.0f, 1.0f);
+	startMessage.visible = m_bGameStartWait;
+	if (m_fGameStartCount <= 3.0f)
+	{
+		startMessage.color.w = totalTime - std::floor(totalTime);
+	}
+
+	UiOverlayElement& radarDistance = frameData.GetElement(UiOverlayType::RadarDistance);
+	const XMFLOAT2 radarPosition = GetRadarWindowScreenPos();
+	radarDistance.centerPosition = XMFLOAT2(radarPosition.x + 15.0f, radarPosition.y);
+	radarDistance.size = XMFLOAT2(130.0f, 60.0f);
+	radarDistance.color = XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f);
+	radarDistance.value = static_cast<int>(GetEscapeLength());
+	radarDistance.visible = PlayRadarUI();
+
+	return frameData;
 }
 
 XMFLOAT4X4 CBlueSuitPlayer::GetRightHandItemRaderModelTransform() const
@@ -1291,13 +1321,11 @@ XMFLOAT4X4* CBlueSuitPlayer::RadarUpdate(float fElapsedTime)
 	return &m_xmf4x4Rader;
 }
 
-float CBlueSuitPlayer::GetEscapeLength()
+float CBlueSuitPlayer::GetEscapeLength() const
 {
-	XMFLOAT3 pos = GetPosition();
-	XMFLOAT3 escapePosToPos = Vector3::Subtract(pos, m_fEscapePos);
-	float length = Vector3::Length(escapePosToPos);
-
-	return length;
+	const XMVECTOR position = XMLoadFloat3(&m_xmf3Position);
+	const XMVECTOR escapePosition = XMLoadFloat3(&m_fEscapePos);
+	return XMVectorGetX(XMVector3Length(position - escapePosition));
 }
 
 void CBlueSuitPlayer::AddEnvironmentMineItems(shared_ptr<CMineObject> object)
@@ -1748,4 +1776,25 @@ void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, 
 
 	brush->SetColor(previousColor);
 	brush->SetOpacity(previousOpacity);
+}
+
+UiOverlayFrameData CZombiePlayer::BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const
+{
+	(void)totalTime;
+	UiOverlayFrameData frameData;
+
+	UiOverlayElement& countdown = frameData.GetElement(UiOverlayType::ZombieCountdown);
+	countdown.centerPosition = XMFLOAT2(viewportSize.x * 0.5f, viewportSize.y * 0.5f);
+	countdown.size = viewportSize;
+	countdown.color = XMFLOAT4(1.0f, 99.0f / 255.0f, 71.0f / 255.0f, m_fGameStartTextOpacity);
+	countdown.value = static_cast<int>(std::ceil(m_fGameStartCount));
+	countdown.visible = m_bGameStartWait;
+
+	UiOverlayElement& objective = frameData.GetElement(UiOverlayType::ZombieObjective);
+	objective.centerPosition = XMFLOAT2(viewportSize.x * 0.5f, viewportSize.y * 0.25f);
+	objective.size = XMFLOAT2(viewportSize.x, viewportSize.y * 0.5f);
+	objective.color = XMFLOAT4(169.0f / 255.0f, 169.0f / 255.0f, 169.0f / 255.0f, 1.0f);
+	objective.visible = m_bGameStartWait;
+
+	return frameData;
 }

@@ -37,7 +37,7 @@
 | M-003 | Network | 패킷 파싱과 상태 적용 결합 | 수신 처리에서 프로토콜 해석과 게임 객체 변경이 섞여 있다. 안정성 수정이 필요한 처리부터 두 단계를 분리한다. |
 | M-004 | Resource | 일부 raw pointer 및 수동 수명 관리 | 전체 일괄 교체는 하지 않는다. 소유권이 불명확하거나 오류가 재현되는 리소스부터 정리한다. |
 | M-005 | Source layout | 큰 클래스와 긴 함수 | 월드 구성은 `ServerWorldBuilder`로 분리했다. 크기 자체를 문제로 보지 않고, `TCPServer`에 남은 패킷 처리·연결/송신·복제·세션 책임 중 반복 수정되는 경로만 동작 단계 기준으로 추출한다. |
-| M-006 | Rendering/UI | DX11 계열 문자 출력 경로 | 게임 시작 카운트다운, 좀비 시야 차단과 안개 상태 갱신은 플레이어 `UpdateGameStartState()`로 이동했고 `RenderTextUI()`는 표시 상태를 읽기만 한다. 남은 작업은 DX12 UI 교체 후 `CGameFramework`가 소유한 D3D11On12·D2D·DirectWrite 코드, wrapped back buffer, 헤더와 링크 의존성을 모두 제거하는 것이다. |
+| M-006 | Rendering/UI | DX11 계열 문자 출력 경로 | 게임 상태 갱신은 `UpdateGameStartState()`로 이동했고, DX12 출력이 소비할 `UiOverlayFrameData` 경계를 추가했다. 기존 `RenderTextUI()`와 D3D11On12·D2D·DirectWrite 경로는 결과 비교를 위해 유지 중이며 DX12 overlay 교체 후 wrapped back buffer, 헤더와 링크 의존성까지 제거한다. |
 
 ## Deferred
 

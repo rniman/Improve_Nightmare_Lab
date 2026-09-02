@@ -691,13 +691,15 @@ void CGameFramework::FrameAdvance()
 		}
 		return;
 	}
-	else
+	else //	GAME_STATE::BLUE_SUIT_WIN, GAME_STATE::ZOMBIE_WIN
 	{
 		AnimateEnding();
 		m_fEndingElapsedTime += gGameTimer.GetTimeElapsed();
 
 		m_pMainPlayer->UpdateEnding(m_fEndingElapsedTime, m_nGameState);
 	}
+
+	RefreshUiOverlayFrameData();
 
 	HRESULT hResult = m_d3dCommandAllocator[m_nSwapChainBufferIndex]->Reset();
 	hResult = m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), nullptr);
@@ -1376,6 +1378,19 @@ void CGameFramework::RenderTextUI()
 	// 해제 시 wrapped resource가 생성 당시 지정한 D3D12 PRESENT 상태로 전환된다.
 	m_d3d11On12Device->ReleaseWrappedResources(m_wrappedBackBuffers[m_nSwapChainBufferIndex].GetAddressOf(), 1);
 	m_d3d11DeviceContext->Flush();
+}
+
+void CGameFramework::RefreshUiOverlayFrameData()
+{
+	m_uiOverlayFrameData = UiOverlayFrameData{};
+	if (m_nGameState != GAME_STATE::IN_GAME || !m_pMainPlayer)
+	{
+		return;
+	}
+
+	const POINT windowSize = GetClientWindowSize();
+	const XMFLOAT2 viewportSize(static_cast<float>(windowSize.x), static_cast<float>(windowSize.y));
+	m_uiOverlayFrameData = m_pMainPlayer->BuildUiOverlayFrameData(viewportSize,	gGameTimer.GetTotalTime());
 }
 
 //=========================================================================
