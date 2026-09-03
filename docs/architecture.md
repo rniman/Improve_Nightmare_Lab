@@ -95,8 +95,12 @@ Server.cpp
 7. **DX12 렌더링과 D3D11On12 문자 UI 혼용**
    - `CGameFramework`가 D3D11On12·D2D·DirectWrite 초기화, wrapped back buffer, resize 재생성과 프레임별 acquire/release를 담당한다.
    - 게임 시작 카운트다운, 좀비 시야 차단과 안개 변경은 플레이어 `UpdateGameStartState()`가 담당하며, `RenderTextUI()`는 현재 표시 상태를 읽어 D2D draw call만 수행한다.
-   - `UiOverlayFrameData`는 고정 문구 ID 또는 숫자, 픽셀 위치·크기, RGBA와 표시 여부를 렌더링 API 자원 없이 보관한다. 플레이어 업데이트 이후 `CGameFramework`가 메인 플레이어 상태로 현재 프레임 데이터를 갱신한다.
-   - 다음 단계는 이 데이터를 사용하는 DX12 overlay renderer를 추가하고 기존 D2D 출력을 교체하는 것이다.
+   - `UiOverlayFrameData`는 고정 문구 ID 또는 숫자, 픽셀 위치·layout 영역, RGBA와 표시 여부를 렌더링 API 자원 없이 보관한다. 플레이어 업데이트 이후 `CGameFramework`가 메인 플레이어 상태로 현재 프레임 데이터를 갱신한다.
+   - 인게임 `CMainScene`은 `UiOverlayRenderer`를 소유한다. renderer는 고정 안내와 glyph atlas DDS, 자체 SRV heap, FNT에서 읽은 glyph UV·크기·offset·advance를 관리한다.
+   - `UiOverlayShader`는 clip-space 위치·UV·RGBA 입력과 전용 overlay PSO를 관리한다. pixel shader는 텍스처 alpha를 tint alpha와 곱하며, PSO는 straight-alpha blend와 비활성화된 depth test를 사용한다.
+   - `UiOverlayRenderer`는 프레임 표시 데이터를 CPU에서 quad로 변환한다. 고정 안내는 DDS 원본 크기의 quad, 숫자와 `m`은 FNT glyph metric 크기의 quad를 `layoutSize` 영역 중앙에 배치한다. 픽셀 위치를 NDC로 변환해 persistently mapped upload vertex buffer에 필요한 정점만 복사하며 root signature에 UI 전용 상수는 추가하지 않는다.
+   - 전환 기간에는 `mUseDx12UiOverlay`가 프레임별 출력 경로를 하나만 선택한다. 현재 기본값은 검증된 DX12 경로이며, full-screen 처리 뒤 overlay draw와 `RENDER_TARGET → PRESENT` barrier를 command list에 기록한다. 플래그를 끈 D2D 경로에서는 DX12 command list 실행 뒤 D3D11On12 acquire/draw/release가 `PRESENT` 전환을 담당한다.
+   - 두 경로의 결과 비교가 끝나면 DX12 경로를 기본으로 전환하고 기존 D2D 출력을 제거한다.
    - 교체 완료 후 D3D11 device/context, D3D11On12, D2D, DirectWrite, wrapped back buffer와 관련 헤더·링크 라이브러리를 모두 제거한다.
 
 ## 의존성 고위험 영역

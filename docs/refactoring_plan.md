@@ -64,6 +64,9 @@ D3D11 device context를 `Flush()`한다. swap-chain resize도 D3D11On12/D2D 리�
    — 로컬 리소스 준비 완료, 기존 `Asset/` ignore 정책 유지
 5. full-screen 처리 이후 DX12 overlay pass를 추가하고 문자 표시 후 back buffer를
    `RENDER_TARGET`에서 `PRESENT`로 명시적으로 전환한다.
+   — `UiOverlayRenderer`의 DDS/FNT·glyph metric, 전용 overlay HLSL/PSO, CPU 동적 quad와 draw command 연결 완료
+   — `layoutSize`는 중앙 정렬 영역으로만 사용하고 고정 문구와 glyph quad는 리소스 원본 크기를 사용
+   — 전환 플래그 기본값은 실행 확인된 DX12이며, DX12와 D2D 경로는 같은 프레임에 실행되지 않음
 6. 결과 비교 후 D3D11On12, Direct2D, DirectWrite와 wrapped back buffer 코드를 제거한다.
 7. D3D11/D2D/DirectWrite 관련 헤더 include와 링크 라이브러리를 제거한다.
 8. 코드베이스와 프로젝트 설정에 DX11 계열 의존성이 남지 않았는지 확인한다.

@@ -209,6 +209,8 @@
     <ClInclude Include="TextureBlendObject.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="UiOverlayData.h" />
+    <ClInclude Include="UiOverlayRenderer.h" />
+    <ClInclude Include="UiOverlayShader.h" />
     <ClInclude Include="ParticleShader.h" />
     <ClInclude Include="Trail.h" />
   </ItemGroup>
@@ -247,6 +249,8 @@
     <ClCompile Include="TextureBlendObject.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="Trail.cpp" />
+    <ClCompile Include="UiOverlayRenderer.cpp" />
+    <ClCompile Include="UiOverlayShader.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Client.rc" />
@@ -598,6 +602,12 @@
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">PSTransparent</EntryPointName>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
     </FxCompile>
+    <FxCompile Include="PSUiOverlay.hlsl">
+      <ShaderType>Pixel</ShaderType>
+      <ObjectFileOutput>$(ProjectDir)\cso\%(Filename).cso</ObjectFileOutput>
+      <EntryPointName>PSUiOverlay</EntryPointName>
+      <ShaderModel>5.1</ShaderModel>
+    </FxCompile>
     <FxCompile Include="PSUserInterface.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
@@ -801,6 +811,12 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)\cso\%(Filename).cso</ObjectFileOutput>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)\cso\%(Filename).cso</ObjectFileOutput>
+    </FxCompile>
+    <FxCompile Include="VSUiOverlay.hlsl">
+      <ShaderType>Vertex</ShaderType>
+      <ObjectFileOutput>$(ProjectDir)\cso\%(Filename).cso</ObjectFileOutput>
+      <EntryPointName>VSUiOverlay</EntryPointName>
+      <ShaderModel>5.1</ShaderModel>
     </FxCompile>
     <FxCompile Include="VSUserInterface.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>

@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Scene.h"
+#include "UiOverlayRenderer.h"
 #include "../WindowMessages.h"
 #include "Shader.h"
 #include "ParticleShader.h"
@@ -390,7 +391,7 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 	pd3dRootParameters[17].DescriptorTable.pDescriptorRanges = &pd3dDescriptorRanges[17]; //RWTexture2D
 	pd3dRootParameters[17].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-	D3D12_STATIC_SAMPLER_DESC d3dSamplerDescs[3];
+	D3D12_STATIC_SAMPLER_DESC d3dSamplerDescs[4] = {};
 
 	d3dSamplerDescs[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 	d3dSamplerDescs[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -432,6 +433,20 @@ void CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevice)
 	d3dSamplerDescs[2].ShaderRegister = 3;
 	d3dSamplerDescs[2].RegisterSpace = 0;
 	d3dSamplerDescs[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+	d3dSamplerDescs[3].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	d3dSamplerDescs[3].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	d3dSamplerDescs[3].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	d3dSamplerDescs[3].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	d3dSamplerDescs[3].MipLODBias = 0.0f;
+	d3dSamplerDescs[3].MaxAnisotropy = 1;
+	d3dSamplerDescs[3].ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	d3dSamplerDescs[3].BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+	d3dSamplerDescs[3].MinLOD = 0.0f;
+	d3dSamplerDescs[3].MaxLOD = D3D12_FLOAT32_MAX;
+	d3dSamplerDescs[3].ShaderRegister = 4;
+	d3dSamplerDescs[3].RegisterSpace = 0;
+	d3dSamplerDescs[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 	D3D12_ROOT_SIGNATURE_FLAGS d3dRootSignatureFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -1153,6 +1168,16 @@ void CMainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	m_pTextureToScreenShaderShader = make_shared<CTextureToScreenShader>(m_pBlurComputeShader->GetTextureComposite());
 	m_pTextureToScreenShaderShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature.Get(), 1, nullptr, DXGI_FORMAT_D24_UNORM_S8_UINT);
 
+	mUiOverlayRenderer = make_unique<UiOverlayRenderer>();
+	if (!mUiOverlayRenderer->Initialize(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature.Get()
+	))
+	{
+		throw std::runtime_error("Failed to initialize UI overlay resources.");
+	}
+
 	m_apPlayer[mainPlayerId]->SetPlayerVolume(1.0f);
 }
 
@@ -1533,6 +1558,11 @@ void CMainScene::ReleaseShaderVariables()
 
 void CMainScene::ReleaseUploadBuffers()
 {
+	if (mUiOverlayRenderer)
+	{
+		mUiOverlayRenderer->ReleaseUploadBuffers();
+	}
+
 	for (auto& m : m_vMesh)
 	{
 		m->ReleaseUploadBuffers();
@@ -1541,6 +1571,26 @@ void CMainScene::ReleaseUploadBuffers()
 	for (auto& s : m_vShader)
 	{
 		s->ReleaseUploadBuffers();
+	}
+}
+
+void CMainScene::BuildUiOverlayFrameGeometry(
+	const UiOverlayFrameData& frameData,
+	const XMFLOAT2& viewportSize)
+{
+	if (mUiOverlayRenderer)
+	{
+		mUiOverlayRenderer->BuildFrameGeometry(frameData, viewportSize);
+	}
+}
+
+void CMainScene::RenderUiOverlay(
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView)
+{
+	if (mUiOverlayRenderer)
+	{
+		mUiOverlayRenderer->Render(pd3dCommandList, renderTargetView);
 	}
 }
 

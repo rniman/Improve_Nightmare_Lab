@@ -1220,7 +1220,7 @@ UiOverlayFrameData CBlueSuitPlayer::BuildUiOverlayFrameData(const XMFLOAT2& view
 
 	UiOverlayElement& startMessage = frameData.GetElement(UiOverlayType::SurvivorStartMessage);
 	startMessage.centerPosition = XMFLOAT2(viewportSize.x * 0.5f, viewportSize.y * 0.25f);
-	startMessage.size = XMFLOAT2(viewportSize.x, viewportSize.y * 0.5f);
+	startMessage.layoutSize = XMFLOAT2(viewportSize.x, viewportSize.y * 0.5f);
 	startMessage.color = XMFLOAT4(169.0f / 255.0f, 169.0f / 255.0f, 169.0f / 255.0f, 1.0f);
 	startMessage.visible = m_bGameStartWait;
 	if (m_fGameStartCount <= 3.0f)
@@ -1231,7 +1231,7 @@ UiOverlayFrameData CBlueSuitPlayer::BuildUiOverlayFrameData(const XMFLOAT2& view
 	UiOverlayElement& radarDistance = frameData.GetElement(UiOverlayType::RadarDistance);
 	const XMFLOAT2 radarPosition = GetRadarWindowScreenPos();
 	radarDistance.centerPosition = XMFLOAT2(radarPosition.x + 15.0f, radarPosition.y);
-	radarDistance.size = XMFLOAT2(130.0f, 60.0f);
+	radarDistance.layoutSize = XMFLOAT2(130.0f, 60.0f);
 	radarDistance.color = XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f);
 	radarDistance.value = static_cast<int>(GetEscapeLength());
 	radarDistance.visible = PlayRadarUI();
@@ -1785,14 +1785,14 @@ UiOverlayFrameData CZombiePlayer::BuildUiOverlayFrameData(const XMFLOAT2& viewpo
 
 	UiOverlayElement& countdown = frameData.GetElement(UiOverlayType::ZombieCountdown);
 	countdown.centerPosition = XMFLOAT2(viewportSize.x * 0.5f, viewportSize.y * 0.5f);
-	countdown.size = viewportSize;
+	countdown.layoutSize = viewportSize;
 	countdown.color = XMFLOAT4(1.0f, 99.0f / 255.0f, 71.0f / 255.0f, m_fGameStartTextOpacity);
 	countdown.value = static_cast<int>(std::ceil(m_fGameStartCount));
 	countdown.visible = m_bGameStartWait;
 
 	UiOverlayElement& objective = frameData.GetElement(UiOverlayType::ZombieObjective);
 	objective.centerPosition = XMFLOAT2(viewportSize.x * 0.5f, viewportSize.y * 0.25f);
-	objective.size = XMFLOAT2(viewportSize.x, viewportSize.y * 0.5f);
+	objective.layoutSize = XMFLOAT2(viewportSize.x, viewportSize.y * 0.5f);
 	objective.color = XMFLOAT4(169.0f / 255.0f, 169.0f / 255.0f, 169.0f / 255.0f, 1.0f);
 	objective.visible = m_bGameStartWait;
 

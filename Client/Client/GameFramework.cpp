@@ -704,6 +704,7 @@ void CGameFramework::FrameAdvance()
 	HRESULT hResult = m_d3dCommandAllocator[m_nSwapChainBufferIndex]->Reset();
 	hResult = m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), nullptr);
 	m_pScene->PrepareCommandListState(m_d3dCommandList.Get());
+	bool useD2dOverlayThisFrame = false;
 
 	switch (m_nGameState)
 	{
@@ -763,6 +764,33 @@ void CGameFramework::FrameAdvance()
 		pMainScene->BlurDispatch(m_d3dCommandList.Get(), m_pCamera.lock(), d3dRtvCPUDescriptorHandle);
 		pMainScene->ForwardRender(m_nGameState, m_d3dCommandList.Get(), m_pCamera.lock());
 		pMainScene->FullScreenProcessingRender(m_d3dCommandList.Get());
+
+		if (mUseDx12UiOverlay)
+		{
+			pMainScene->RenderUiOverlay(
+				m_d3dCommandList.Get(),
+				d3dRtvCPUDescriptorHandle
+			);
+			SynchronizeResourceTransition(
+				m_d3dCommandList.Get(),
+				m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
+				D3D12_RESOURCE_STATE_RENDER_TARGET,
+				D3D12_RESOURCE_STATE_PRESENT
+			);
+		}
+		else if (m_nGameState == GAME_STATE::IN_GAME)
+		{
+			useD2dOverlayThisFrame = true;
+		}
+		else
+		{
+			SynchronizeResourceTransition(
+				m_d3dCommandList.Get(),
+				m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
+				D3D12_RESOURCE_STATE_RENDER_TARGET,
+				D3D12_RESOURCE_STATE_PRESENT
+			);
+		}
 		break;
 	}
 	default:
@@ -774,7 +802,10 @@ void CGameFramework::FrameAdvance()
 	ID3D12CommandList* ppd3dCommandLists[] = { m_d3dCommandList.Get() };
 	m_d3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
 
-	RenderTextUI();
+	if (useD2dOverlayThisFrame)
+	{
+		RenderTextUI();
+	}
 
 	WaitForGpuComplete();
 
@@ -1383,14 +1414,25 @@ void CGameFramework::RenderTextUI()
 void CGameFramework::RefreshUiOverlayFrameData()
 {
 	m_uiOverlayFrameData = UiOverlayFrameData{};
-	if (m_nGameState != GAME_STATE::IN_GAME || !m_pMainPlayer)
+	const POINT windowSize = GetClientWindowSize();
+	const XMFLOAT2 viewportSize(
+		static_cast<float>(windowSize.x),
+		static_cast<float>(windowSize.y)
+	);
+
+	if (m_nGameState == GAME_STATE::IN_GAME && m_pMainPlayer)
 	{
-		return;
+		m_uiOverlayFrameData = m_pMainPlayer->BuildUiOverlayFrameData(
+			viewportSize,
+			gGameTimer.GetTotalTime()
+		);
 	}
 
-	const POINT windowSize = GetClientWindowSize();
-	const XMFLOAT2 viewportSize(static_cast<float>(windowSize.x), static_cast<float>(windowSize.y));
-	m_uiOverlayFrameData = m_pMainPlayer->BuildUiOverlayFrameData(viewportSize,	gGameTimer.GetTotalTime());
+	const shared_ptr<CMainScene> mainScene = dynamic_pointer_cast<CMainScene>(m_pScene);
+	if (mainScene)
+	{
+		mainScene->BuildUiOverlayFrameGeometry(m_uiOverlayFrameData, viewportSize);
+	}
 }
 
 //=========================================================================

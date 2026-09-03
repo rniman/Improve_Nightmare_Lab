@@ -18,7 +18,7 @@ struct UiOverlayElement
 {
 	UiOverlayType type = UiOverlayType::SurvivorStartMessage;
 	DirectX::XMFLOAT2 centerPosition = {};
-	DirectX::XMFLOAT2 size = {};
+	DirectX::XMFLOAT2 layoutSize = {};
 	DirectX::XMFLOAT4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
 	int value = 0;
 	bool visible = false;

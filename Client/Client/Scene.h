@@ -198,6 +198,8 @@ private:
 
 class CBlurComputeShader;
 class CTextureToScreenShader;
+class UiOverlayRenderer;
+struct UiOverlayFrameData;
 
 class CMainScene : public CScene
 {
@@ -237,6 +239,14 @@ public:
 		const shared_ptr<CCamera>& pCamera,
 		D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle);
 	void FullScreenProcessingRender(ID3D12GraphicsCommandList* pd3dCommandList);
+	void BuildUiOverlayFrameGeometry(
+		const UiOverlayFrameData& frameData,
+		const XMFLOAT2& viewportSize
+	);
+	void RenderUiOverlay(
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
+	);
 
 	void ReleaseObjects();
 	void ReleaseShaderVariables();
@@ -296,6 +306,7 @@ private:
 	shared_ptr<CBlurComputeShader> m_pBlurComputeShader;
 	shared_ptr<CTextureToScreenShader> m_pTextureToScreenShaderShader;
 	unique_ptr<CFullScreenProcessingShader> m_vFullScreenProcessingShader;
+	unique_ptr<UiOverlayRenderer> mUiOverlayRenderer;
 
 	ComPtr<ID3D12Resource> m_pd3dcbLights;
 	ComPtr<ID3D12Resource> m_pd3dcbTime;

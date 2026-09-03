@@ -74,6 +74,8 @@ public:
 	void PrepareDrawText();
 	void RenderTextUI();
 	const UiOverlayFrameData& GetUiOverlayFrameData() const { return m_uiOverlayFrameData; }
+	void SetUseDx12UiOverlay(bool useDx12UiOverlay) { mUseDx12UiOverlay = useDx12UiOverlay; }
+	bool IsUsingDx12UiOverlay() const { return mUseDx12UiOverlay; }
 
 	// Interface
 	INT8 GetClientIdFromTcpClient() const;
@@ -110,6 +112,7 @@ private:
 	static int m_nWndClientWidth;
 	static int m_nWndClientHeight;
 	UiOverlayFrameData m_uiOverlayFrameData;
+	bool mUseDx12UiOverlay = true;
 
 	_TCHAR m_pszFrameRate[200] = {};
 

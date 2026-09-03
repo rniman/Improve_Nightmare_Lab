@@ -108,6 +108,12 @@
     <ClInclude Include="UiOverlayData.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="UiOverlayRenderer.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="UiOverlayShader.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="PlayerController.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -171,6 +177,12 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Scene.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="UiOverlayRenderer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="UiOverlayShader.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Timer.cpp">
@@ -282,6 +294,9 @@
     <FxCompile Include="VSUserInterface.hlsl">
       <Filter>HLSL%28cso%29</Filter>
     </FxCompile>
+    <FxCompile Include="VSUiOverlay.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
     <FxCompile Include="VSBlend.hlsl">
       <Filter>HLSL%28cso%29</Filter>
     </FxCompile>
@@ -295,6 +310,9 @@
       <Filter>HLSL%28cso%29</Filter>
     </FxCompile>
     <FxCompile Include="PSUserInterface.hlsl">
+      <Filter>HLSL%28cso%29</Filter>
+    </FxCompile>
+    <FxCompile Include="PSUiOverlay.hlsl">
       <Filter>HLSL%28cso%29</Filter>
     </FxCompile>
     <FxCompile Include="PSBlend.hlsl">
