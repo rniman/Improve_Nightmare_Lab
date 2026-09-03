@@ -53,8 +53,6 @@
 `UpdateGameStartState()`가 처리한다.
 플레이어 업데이트 이후 `RefreshUiOverlayFrameData()`는 같은 상태를 읽어 고정 문구 ID 또는
 숫자, 픽셀 위치·layout 영역, RGBA와 표시 여부로 구성된 현재 프레임 데이터를 만든다.
-문자 출력은 DX12 overlay pass로 통합됐으며 D3D11On12·D2D·DirectWrite와 wrapped back
-buffer 의존성은 제거됐다.
 
 ## 4) 서버 시뮬레이션 루프
 

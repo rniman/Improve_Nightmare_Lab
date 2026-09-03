@@ -69,6 +69,7 @@
 | RS-015 | Server structure | TCPServer의 월드 구성 책임 집중 | 월드 구성을 `ServerWorldBuilder`로 분리하고 초기화 성공·실패를 `TCPServer::Initialize()`까지 전달하도록 정리했다. 정상적인 서버 시작·게임 진행과 `ServerScene.bin` 누락 시 네트워크 초기화 전 종료를 확인했다. |
 | RS-016 | Shared limits | 공통 인원 제한의 네트워크 헤더 종속 | `MAX_CLIENT`와 `MAX_SURVIVOR`를 공통 `GameLimits.h`로 이동하고 사용하는 헤더가 직접 참조하게 했다. `Scene.h`와 `ServerCollision.h`의 불필요한 네트워크 헤더 의존을 제거하고 Client/Server 빌드와 실행을 확인했다. |
 | RS-017 | Item replication | 서랍 아이템의 30 Hz 행렬 복제로 인한 움직임 끊김 | 아이템 배치를 서랍 부모 ID와 로컬 행렬 event/snapshot으로 동기화하고 클라이언트가 매 프레임 서랍 월드 행렬과 결합하도록 했다. 빈 패킷만 남은 `NEARBY_OBJECTS` 송수신과 주변 셀 조사 경로를 제거하고 Release 로컬 2인 실행에서 정기 TX 120 packet/s와 송신 큐 0을 확인했다. |
+| RS-018 | Rendering/UI | DX11 계열 문자 출력 혼용 | 문자 상태를 `UiOverlayFrameData`로 분리하고 DX12 overlay pass로 출력한다. D3D11On12·Direct2D·DirectWrite 코드와 빌드 의존성을 제거하고 역할별 UI와 게임 흐름을 실행 확인했다. |
 
 ## 항목 작성 규칙
 
