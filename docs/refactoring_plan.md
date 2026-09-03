@@ -32,6 +32,7 @@
 - 상태 복제 구조 개선 후 Release 로컬 3인 측정에서 서버 TX는 변경 전보다 96.57% 감소했다.
 - 서버 월드 구성은 `ServerWorldBuilder`로 분리했다.
 - SSAO의 비결정적 결과와 원형 밴딩을 수정하고 bilateral blur 경로를 구성했다.
+- 문자 UI를 DX12 overlay pass로 전환하고 D3D11On12·Direct2D·DirectWrite 코드와 빌드 의존성을 제거했다.
 - `GameFramework`와 네트워크의 일부 역의존 및 공통 상수·메시지 헤더 의존을 정리했다.
 - 서버 추가 분리와 최대 인원·느린 네트워크 검증은 현재 보류한다.
 
@@ -39,19 +40,17 @@
 
 ## 현재 우선순위
 
-### P1. DX11 계열 문자 출력 완전 제거
+### P1. DX11 계열 문자 출력 완전 제거 — 완료
 
-현재 `CGameFramework`는 D3D11On12, Direct2D, DirectWrite를 사용해 DX12 swap-chain의
-wrapped back buffer에 문자를 그린다. 이 경로는 다음 UI를 담당한다.
+기존 `CGameFramework`는 D3D11On12, Direct2D, DirectWrite를 사용해 DX12 swap-chain의
+wrapped back buffer에 다음 UI를 그렸다.
 
 - 레이더 아이템의 탈출구 거리
 - 생존자 게임 시작 안내
 - 좀비 게임 시작 카운트다운 및 목표 안내
 
-문자 출력은 DX12 command list 실행 후 매 프레임 wrapped resource를 획득·반환하고
-D3D11 device context를 `Flush()`한다. swap-chain resize도 D3D11On12/D2D 리소스의
-해제와 재생성에 결합되어 있다. 일부 카운트다운 상태 갱신도 `RenderTextUI()` 안에 있어
-렌더링과 게임 로직의 책임이 섞여 있다.
+현재 문자 출력은 DX12 overlay pass로 교체됐고 D3D11On12·Direct2D·DirectWrite 코드와
+빌드 의존성은 제거됐다. 제거 후 실행을 통해 기존 UI 출력과 게임 흐름을 다시 확인했다.
 
 가장 작은 단계부터 다음 순서로 진행한다.
 
@@ -59,18 +58,21 @@ D3D11 device context를 `Flush()`한다. swap-chain resize도 D3D11On12/D2D 리�
 2. 카운트다운 시간과 상태 변경을 프레임 업데이트 경로로 옮기고 문자 출력은 읽기만 하게 한다.
    — 구현 완료, 생존자·좀비·레이더 문자 출력과 게임 시작 흐름 실행 확인
 3. `UiOverlayFrameData`로 UI 종류, 숫자 값, 픽셀 위치·크기, 색상·투명도와 표시 여부를
-   기록한다. — 표시 데이터 경계 구현 완료, 기존 D2D 출력은 비교 기준으로 유지
+   기록한다. — 표시 데이터 경계 구현 완료
 4. 고정 한글 안내 DDS와 카운트다운·거리 glyph atlas/DDS·FNT를 준비한다.
    — 로컬 리소스 준비 완료, 기존 `Asset/` ignore 정책 유지
 5. full-screen 처리 이후 DX12 overlay pass를 추가하고 문자 표시 후 back buffer를
    `RENDER_TARGET`에서 `PRESENT`로 명시적으로 전환한다.
    — `UiOverlayRenderer`의 DDS/FNT·glyph metric, 전용 overlay HLSL/PSO, CPU 동적 quad와 draw command 연결 완료
    — `layoutSize`는 중앙 정렬 영역으로만 사용하고 고정 문구와 glyph quad는 리소스 원본 크기를 사용
-   — 전환 플래그 기본값은 실행 확인된 DX12이며, DX12와 D2D 경로는 같은 프레임에 실행되지 않음
 6. 결과 비교 후 D3D11On12, Direct2D, DirectWrite와 wrapped back buffer 코드를 제거한다.
+   — 구현 완료
 7. D3D11/D2D/DirectWrite 관련 헤더 include와 링크 라이브러리를 제거한다.
+   — 구현 완료
 8. 코드베이스와 프로젝트 설정에 DX11 계열 의존성이 남지 않았는지 확인한다.
+   — 외부 DDS loader의 설명 주석을 제외한 의존성 제거 확인
 9. resize, 씬 전환과 인게임 종료 흐름을 다시 검증한다.
+   — 제거 후 실행 확인 완료
 
 완료 기준:
 
@@ -160,7 +162,7 @@ P1을 첫 번째 실제 사례로 삼아 클라이언트의 책임 경계를 점
 - `docs/pipeline.md`: 클라이언트/서버 런타임 및 네트워크 파이프라인
 - `docs/code_smells.md`: 활성 위험, 기술 부채와 해결된 항목
 - `docs/ssao.md`: SSAO와 blur 구현 및 검증 기준
-- `docs/memo/text_rendering.md`: 현재 D3D11On12 문자 출력과 DX12 대체 방향
+- `docs/memo/text_rendering.md`: 기존 D3D11On12 문자 출력과 DX12 전환 기록
 - `docs/memo/network_traffic_comparison.md`: 네트워크 전송량 비교
 - `docs/memo/network_protocol_draft.md`: 패킷 구조와 필드 검토
 - `docs/memo/server.md`: 서버 조사 및 구현 기록

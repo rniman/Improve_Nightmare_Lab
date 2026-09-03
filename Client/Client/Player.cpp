@@ -1140,80 +1140,6 @@ void CBlueSuitPlayer::SetHitEvent()
 	}
 }
 
-void CBlueSuitPlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush)
-{
-	wchar_t text[128]; // 변환된 유니코드 문자열을 저장할 버퍼
-	const D2D1_COLOR_F previousColor = brush->GetColor();
-	const float previousOpacity = brush->GetOpacity();
-
-	//// 화면 중앙에 숫자 렌더링
-	//POINT windowSize = CGameFramework::GetClientWindowSize();
-	////윈도우 좌표 주의.
-	//D2D1_RECT_F TimetextRect = D2D1::RectF(0.f, 0.f, (float)windowSize.x, (float)windowSize.y);
-	//int length = swprintf(text, 43, L"%d:%d", ((int)gGameTimer.GetTotalTime()) / 60, ((int)gGameTimer.GetTotalTime()) % 60);
-	//text[length + 1] = '\0';
-	//d2dDeviceContext->DrawText(
-	//	text,
-	//	/*_countof(text)*/length,
-	//	CGameFramework::m_idwSpeakerTextFormat.Get(),
-	//	&TimetextRect,
-	//	brush.Get()
-	//);
-
-	if (m_bGameStartWait) {
-		const int len = swprintf_s(
-			text,
-			_countof(text),
-			L"잠시후 적대자가 행동을 시작합니다\n퓨즈를 모아 탈출구를 찾으세요");
-
-		POINT pos = CGameFramework::GetClientWindowSize();
-		D2D1_RECT_F textRect = D2D1::RectF(0, 0, pos.x, pos.y / 2);
-
-		brush->SetColor(D2D1::ColorF(D2D1::ColorF::DarkGray));
-
-		if (m_fGameStartCount <= 3.0f) {
-			float curTime = gGameTimer.GetTotalTime();
-			brush->SetOpacity(curTime - floor(curTime));
-		}
-
-		d2dDeviceContext->DrawText(
-			text,
-			/*_countof(text)*/len,
-			CGameFramework::m_idwSpeakerTextFormat.Get(),
-			&textRect,
-			brush.Get()
-		);
-		brush->SetColor(previousColor);
-		brush->SetOpacity(previousOpacity);
-	}
-
-
-
-	if (PlayRadarUI()) {
-		const float escapelength = GetEscapeLength();
-		// 부동 소수점 값을 문자열로 변환 후 유니코드 문자열로 저장
-		const int len = swprintf_s(text, _countof(text), L"%dm", static_cast<int>(escapelength));
-		//D2D1::Matrix3x2F mat = D2D1::Matrix3x2F::Identity();
-		//mat = mat.Translation(point.x,point.y);
-		//m_d2dDeviceContext->SetTransform(mat);
-		static XMFLOAT2 RadarOffset = { 80.0f,30.0f };
-		XMFLOAT2 point = GetRadarWindowScreenPos();
-		//윈도우 좌표 주의.
-		D2D1_RECT_F textRect = D2D1::RectF(30.0f + point.x - RadarOffset.x, point.y - RadarOffset.y, point.x + RadarOffset.x, point.y + RadarOffset.y);
-		d2dDeviceContext->DrawText(
-			text,
-			/*_countof(text)*/len,
-			textFormat.Get(),
-			&textRect,
-			brush.Get()
-		);
-		//textFormat->set
-	}
-
-	brush->SetColor(previousColor);
-	brush->SetOpacity(previousOpacity);
-}
-
 UiOverlayFrameData CBlueSuitPlayer::BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const
 {
 	UiOverlayFrameData frameData;
@@ -1731,51 +1657,6 @@ void CZombiePlayer::UpdateGameStartState(float fElapsedTime)
 
 	m_pCamera->SetFogColor(XMFLOAT4(fFogColorValue, fFogColorValue, fFogColorValue, fFogColorValue));
 	m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f + m_fInterruption / 2, 1.0f));
-}
-
-void CZombiePlayer::RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush)
-{
-	wchar_t text[128]; // 변환된 유니코드 문자열을 저장할 버퍼
-	const D2D1_COLOR_F previousColor = brush->GetColor();
-	const float previousOpacity = brush->GetOpacity();
-
-	// 부동 소수점 값을 문자열로 변환 후 유니코드 문자열로 저장
-	if (m_bGameStartWait)
-	{
-		const int iCeilGameStartCount = static_cast<int>(ceil(m_fGameStartCount));
-
-		int len = swprintf_s(text, _countof(text), L"%d", iCeilGameStartCount);
-
-		// 화면 중앙에 숫자 렌더링
-		POINT windowSize = CGameFramework::GetClientWindowSize();
-		//윈도우 좌표 주의.
-		D2D1_RECT_F textRect = D2D1::RectF(0.f, 0.f, (float)windowSize.x, (float)windowSize.y);
-		brush->SetColor(D2D1::ColorF(D2D1::ColorF::Tomato));
-		brush->SetOpacity(m_fGameStartTextOpacity);
-
-		d2dDeviceContext->DrawText(
-			text,
-			/*_countof(text)*/len,
-			CGameFramework::m_idwGameCountTextFormat.Get(),
-			&textRect,
-			brush.Get()
-		);
-		brush->SetOpacity(1.0f);
-
-		textRect = D2D1::RectF(0.f, 0.f, (float)windowSize.x, (float)windowSize.y / 2);
-		len = swprintf_s(text, _countof(text), L"모든 생존자를 제거하라");
-		brush->SetColor(D2D1::ColorF(D2D1::ColorF::DarkGray));
-		d2dDeviceContext->DrawText(
-			text,
-			/*_countof(text)*/len,
-			CGameFramework::m_idwSpeakerTextFormat.Get(),
-			&textRect,
-			brush.Get()
-		);
-	}
-
-	brush->SetColor(previousColor);
-	brush->SetOpacity(previousOpacity);
 }
 
 UiOverlayFrameData CZombiePlayer::BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const

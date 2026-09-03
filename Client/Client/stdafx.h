@@ -49,16 +49,6 @@ using namespace std;
 #include <DirectXCollision.h>
 #include <stdexcept>
 
-//-> draw text
-#pragma comment (lib, "d3d11.lib")
-#pragma comment (lib, "d2d1.lib")
-#pragma comment (lib, "dwrite.lib")
-#include <d2d1_3.h>
-#include <dwrite.h>
-#include <d3d11on12.h>
-#include <stdexcept>
-//<-
-
 // PlaySound
 #pragma comment(lib, "winmm.lib")
 #include <Mmsystem.h>

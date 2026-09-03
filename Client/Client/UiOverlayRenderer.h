@@ -76,10 +76,7 @@ public:
 	void Shutdown();
 	void ReleaseUploadBuffers();
 	void BuildFrameGeometry(const UiOverlayFrameData& frameData, const DirectX::XMFLOAT2& viewportSize);
-	void Render(
-		ID3D12GraphicsCommandList* commandList,
-		D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView
-	);
+	void Render(ID3D12GraphicsCommandList* commandList, D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView);
 
 	const UiBitmapFont& GetFont(UiOverlayFont font) const;
 	ID3D12DescriptorHeap* GetDescriptorHeap() const;

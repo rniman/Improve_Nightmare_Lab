@@ -172,15 +172,13 @@ void UiOverlayRenderer::BuildFrameGeometry(
 		return;
 	}
 
-	const UiOverlayElement& survivorMessage =
-		frameData.GetElement(UiOverlayType::SurvivorStartMessage);
+	const UiOverlayElement& survivorMessage = frameData.GetElement(UiOverlayType::SurvivorStartMessage);
 	if (survivorMessage.visible && survivorMessage.color.w > 0.0f)
 	{
 		AppendFixedQuad(survivorMessage, UiOverlayTexture::SurvivorStartMessage);
 	}
 
-	const UiOverlayElement& countdown =
-		frameData.GetElement(UiOverlayType::ZombieCountdown);
+	const UiOverlayElement& countdown =	frameData.GetElement(UiOverlayType::ZombieCountdown);
 	if (countdown.visible && countdown.color.w > 0.0f)
 	{
 		const int countdownValue = countdown.value < 0 ? 0 : countdown.value;
@@ -192,15 +190,13 @@ void UiOverlayRenderer::BuildFrameGeometry(
 		);
 	}
 
-	const UiOverlayElement& zombieObjective =
-		frameData.GetElement(UiOverlayType::ZombieObjective);
+	const UiOverlayElement& zombieObjective = frameData.GetElement(UiOverlayType::ZombieObjective);
 	if (zombieObjective.visible && zombieObjective.color.w > 0.0f)
 	{
 		AppendFixedQuad(zombieObjective, UiOverlayTexture::ZombieObjective);
 	}
 
-	const UiOverlayElement& radarDistance =
-		frameData.GetElement(UiOverlayType::RadarDistance);
+	const UiOverlayElement& radarDistance = frameData.GetElement(UiOverlayType::RadarDistance);
 	if (radarDistance.visible && radarDistance.color.w > 0.0f)
 	{
 		const int distanceValue = radarDistance.value < 0 ? 0 : radarDistance.value;
@@ -222,9 +218,7 @@ void UiOverlayRenderer::BuildFrameGeometry(
 	mVertexBufferView.SizeInBytes = static_cast<UINT>(vertexBytes);
 }
 
-void UiOverlayRenderer::Render(
-	ID3D12GraphicsCommandList* commandList,
-	D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView)
+void UiOverlayRenderer::Render(ID3D12GraphicsCommandList* commandList, D3D12_CPU_DESCRIPTOR_HANDLE renderTargetView)
 {
 	if (!commandList || !mShader || mDrawBatchCount == 0 || mVertexCount == 0)
 	{

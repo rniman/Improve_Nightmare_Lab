@@ -70,13 +70,6 @@ public:
 	void OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	void OnProcessingEndGameMessage(WPARAM& wParam);
 
-	// Text rendering
-	void PrepareDrawText();
-	void RenderTextUI();
-	const UiOverlayFrameData& GetUiOverlayFrameData() const { return m_uiOverlayFrameData; }
-	void SetUseDx12UiOverlay(bool useDx12UiOverlay) { mUseDx12UiOverlay = useDx12UiOverlay; }
-	bool IsUsingDx12UiOverlay() const { return mUseDx12UiOverlay; }
-
 	// Interface
 	INT8 GetClientIdFromTcpClient() const;
 	void SetPlayerObjectOfClient(int nClientId);
@@ -87,6 +80,8 @@ public:
 	void SetMousePoint(POINT ptMouse) { m_ptOldCursorPos = ptMouse; }
 	void SetGameState(int nGameState) { m_nGameState = nGameState; }
 
+	const UiOverlayFrameData& GetUiOverlayFrameData() const { return m_uiOverlayFrameData; }
+
 	// Static Interface
 	static int GetMainClientId() { return m_nMainClientId; }
 	static int GetSwapChainNum() { return m_nSwapChainBuffers; }
@@ -95,9 +90,6 @@ public:
 	// Shared public state (legacy)
 	static std::shared_ptr<CPlayer> m_pMainPlayer; // 클라이언트ID에 해당하는 인덱스가 해당 클라이언트의 Main플레이어로 설정된다
 	static shared_ptr<CPlayer>& GetMainPlayer() { return m_pMainPlayer; }
-
-	static ComPtr<IDWriteTextFormat> m_idwGameCountTextFormat;
-	static ComPtr<IDWriteTextFormat> m_idwSpeakerTextFormat;
 
 private:
 	void BuildLobbyObjects();
@@ -112,7 +104,6 @@ private:
 	static int m_nWndClientWidth;
 	static int m_nWndClientHeight;
 	UiOverlayFrameData m_uiOverlayFrameData;
-	bool mUseDx12UiOverlay = true;
 
 	_TCHAR m_pszFrameRate[200] = {};
 
@@ -153,21 +144,6 @@ private:
 	shared_ptr<CScene> m_pScene;
 	std::array<shared_ptr<CPlayer>, MAX_CLIENT> m_apPlayer; // 클라이언트ID와 인덱스는 동일하다.
 	weak_ptr<CCamera> m_pCamera;
-
-	/* DX11 for Text */
-	ComPtr<ID3D11DeviceContext> m_d3d11DeviceContext;
-	ComPtr<ID3D11On12Device> m_d3d11On12Device;
-	ComPtr<IDWriteFactory> m_dWriteFactory;
-	ComPtr<ID3D11Resource> m_wrappedBackBuffers[m_nSwapChainBuffers];
-	ComPtr<ID2D1Factory3> m_d2dFactory;
-	ComPtr<ID2D1Device2> m_d2dDevice;
-	ComPtr<ID2D1Bitmap1> m_d2dRenderTargets[m_nSwapChainBuffers];
-	ComPtr<ID2D1DeviceContext2> m_d2dDeviceContext;
-
-	ComPtr<ID2D1SolidColorBrush> m_textBrush;
-	ComPtr<IDWriteTextFormat> m_textFormat;
-
-	bool m_bPrepareDrawText = false;
 
 	/* TCP 관련 */
 	unique_ptr<CTcpClient> m_pTcpClient;

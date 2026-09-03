@@ -14,7 +14,6 @@ Nightmare Lab은 Win32 기반 멀티플레이어 게임으로, 두 개의 실행
 ## 핵심 모듈
 ### 1) 애플리케이션 / 프레임워크
 - `CGameFramework`는 윈도우 생명주기, DX12 디바이스/스왑체인/커맨드 리스트 설정, 씬 전환, 입력 라우팅, 소켓 메시지 라우팅을 관리한다.
-- 현재는 D3D11On12·Direct2D·DirectWrite 문자 출력 리소스와 swap-chain wrapped back buffer도 소유한다.
 
 ### 2) 씬 / 게임 로직
 - `CScene`은 기본 인터페이스이다.
@@ -26,7 +25,7 @@ Nightmare Lab은 Win32 기반 멀티플레이어 게임으로, 두 개의 실행
 - `CShader` 계층 구조가 파이프라인 상태와 드로우 동작을 캡슐화한다.
 - 렌더 단계는 섀도우 패스, 메인/디퍼드 패스, 후처리, 블러 컴퓨트, 포워드/UI 패스, 풀스크린 합성으로 구성된다.
 - command list 공통 상태인 graphics/compute root signature와 CBV/SRV/UAV descriptor heap은 각 `Reset()` 직후 한 번 설정한다.
-- 문자 UI는 DX12 패스 실행 후 D3D11On12 wrapped back buffer를 통해 D2D로 그린다. 레이더 거리와 게임 시작 안내를 표시하며, DX12 UI로 교체한 뒤 D3D11On12·D2D·DirectWrite 코드와 빌드 의존성을 모두 제거할 최우선 정리 대상이다.
+- 문자 UI는 full-screen 처리 이후 `UiOverlayRenderer`가 DX12 back buffer에 마지막 overlay pass로 기록한다. 레이더 거리와 게임 시작 안내를 표시한 뒤 resource barrier로 `PRESENT` 상태를 명시한다.
 
 ### 4) 리소스 관리
 - `CTexture`, `CMaterial`, `CGameObject`가 런타임 리소스, 모델 로딩, 오브젝트별 셰이더 데이터를 관리한다.
@@ -50,7 +49,7 @@ Client.cpp
   -> CGameFramework
       -> 씬 (CScene / CLobbyScene / CMainScene)
       -> 렌더러 (Shader/Object/Camera/Mesh)
-      -> D3D11On12 / D2D / DirectWrite 문자 UI
+      -> UiOverlayRenderer / UiOverlayShader
       -> CTcpClient
       -> SoundManager / Timer / CollisionManager
 
@@ -92,16 +91,13 @@ Server.cpp
    - 입력은 108 byte `KEYS_BUFFER`로 렌더 루프에서 `steady_clock` 기준 최대 60 Hz로 제한하고, 서버 상태 복제는 입력 수신과 분리된 `steady_clock` 기준 최대 60 Hz로 실행한다. 서버는 모든 활성 클라이언트의 로딩 완료 이후에만 최신 상태를 복제한다.
    - 플레이어 상태는 461 byte `PLAYER_STATE`로 최대 60 Hz 전송한다. 문·서랍과 아이템은 상태 변경 event와 로딩 완료 후 snapshot으로 동기화하며, 기존 `UPDATE_DATA`와 `NEARBY_OBJECTS` head는 제거됐다.
 
-7. **DX12 렌더링과 D3D11On12 문자 UI 혼용**
-   - `CGameFramework`가 D3D11On12·D2D·DirectWrite 초기화, wrapped back buffer, resize 재생성과 프레임별 acquire/release를 담당한다.
-   - 게임 시작 카운트다운, 좀비 시야 차단과 안개 변경은 플레이어 `UpdateGameStartState()`가 담당하며, `RenderTextUI()`는 현재 표시 상태를 읽어 D2D draw call만 수행한다.
+7. **DX12 문자 UI 전환 완료**
+   - 게임 시작 카운트다운, 좀비 시야 차단과 안개 변경은 플레이어 `UpdateGameStartState()`가 담당한다.
    - `UiOverlayFrameData`는 고정 문구 ID 또는 숫자, 픽셀 위치·layout 영역, RGBA와 표시 여부를 렌더링 API 자원 없이 보관한다. 플레이어 업데이트 이후 `CGameFramework`가 메인 플레이어 상태로 현재 프레임 데이터를 갱신한다.
    - 인게임 `CMainScene`은 `UiOverlayRenderer`를 소유한다. renderer는 고정 안내와 glyph atlas DDS, 자체 SRV heap, FNT에서 읽은 glyph UV·크기·offset·advance를 관리한다.
    - `UiOverlayShader`는 clip-space 위치·UV·RGBA 입력과 전용 overlay PSO를 관리한다. pixel shader는 텍스처 alpha를 tint alpha와 곱하며, PSO는 straight-alpha blend와 비활성화된 depth test를 사용한다.
    - `UiOverlayRenderer`는 프레임 표시 데이터를 CPU에서 quad로 변환한다. 고정 안내는 DDS 원본 크기의 quad, 숫자와 `m`은 FNT glyph metric 크기의 quad를 `layoutSize` 영역 중앙에 배치한다. 픽셀 위치를 NDC로 변환해 persistently mapped upload vertex buffer에 필요한 정점만 복사하며 root signature에 UI 전용 상수는 추가하지 않는다.
-   - 전환 기간에는 `mUseDx12UiOverlay`가 프레임별 출력 경로를 하나만 선택한다. 현재 기본값은 검증된 DX12 경로이며, full-screen 처리 뒤 overlay draw와 `RENDER_TARGET → PRESENT` barrier를 command list에 기록한다. 플래그를 끈 D2D 경로에서는 DX12 command list 실행 뒤 D3D11On12 acquire/draw/release가 `PRESENT` 전환을 담당한다.
-   - 두 경로의 결과 비교가 끝나면 DX12 경로를 기본으로 전환하고 기존 D2D 출력을 제거한다.
-   - 교체 완료 후 D3D11 device/context, D3D11On12, D2D, DirectWrite, wrapped back buffer와 관련 헤더·링크 라이브러리를 모두 제거한다.
+   - full-screen 처리 뒤 overlay draw와 `RENDER_TARGET → PRESENT` barrier를 command list에 기록한다. D3D11On12·Direct2D·DirectWrite와 wrapped back buffer 의존성은 제거됐다.
 
 ## 의존성 고위험 영역
 1. **GameFramework ↔ Scene ↔ TCPClient 경계**
@@ -121,9 +117,6 @@ Server.cpp
 
 6. **입력·복제 주기와 패킷 크기**
    - 입력 호출점은 렌더 루프에 남아 있어 낮은 FPS에서는 입력 빈도도 낮아진다. 상태 복제는 입력 수신과 분리했으며, 고정 `UPDATE_DATA`는 `PLAYER_STATE`와 오브젝트별 event/snapshot으로 교체했다. `NEARBY_OBJECTS` 제거 후 Release 로컬 2인에서 서버 TX 55,320 byte/s, 120 packet/s와 빈 송신 큐를 확인했으며, 5인·느린 네트워크·강제 partial I/O 검증은 현재 보류 상태다.
-
-7. **swap-chain ↔ D3D11On12/D2D 문자 UI 경계**
-   - 매 프레임 DX12 command 실행 이후 wrapped back buffer를 D2D가 획득하고 반환하며 D3D11 context를 `Flush()`한다. resize 시 관련 래퍼와 렌더 타겟을 모두 다시 만들므로 프레임 순서와 swap-chain 수명 변경의 영향 범위가 넓다.
 
 ## 점진적 리팩토링 참고 사항
 - 동작 보존을 최우선으로 하며, 작고 모듈 내부에 국한된 변경을 선호한다.

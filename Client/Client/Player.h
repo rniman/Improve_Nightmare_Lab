@@ -124,7 +124,6 @@ public:
 			m_pHitDamageScreenObject->SetRender(val);
 		}
 	}
-	virtual void RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush) {}
 	virtual UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const;
 	//게임시작에 필요한 작업 수행
 	virtual void SetGameStart();
@@ -300,7 +299,6 @@ private:
 public:
 	void SetHitEvent();
 
-	void RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush) override;
 	UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const override;
 	void SetZombiePlayer(shared_ptr<CZombiePlayer>& m_player) { m_pZombiePlayer = m_player; }
 private:
@@ -380,6 +378,5 @@ public:
 	void SetAttackTrail(shared_ptr<Trail> trail);
 
 	void SetGameStart() override;
-	void RenderTextUI(ComPtr<ID2D1DeviceContext2>& d2dDeviceContext, ComPtr<IDWriteTextFormat>& textFormat, ComPtr<ID2D1SolidColorBrush>& brush) override;
 	UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const override;
 };

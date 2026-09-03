@@ -16,13 +16,10 @@ extern UINT gnDsvDescriptorIncrementSize;
 
 int CGameFramework::m_nWndClientWidth = FRAME_BUFFER_WIDTH;
 int CGameFramework::m_nWndClientHeight = FRAME_BUFFER_HEIGHT;
-ComPtr<IDWriteTextFormat> CGameFramework::m_idwGameCountTextFormat;
-ComPtr<IDWriteTextFormat> CGameFramework::m_idwSpeakerTextFormat;
 
 UCHAR CGameFramework::m_pKeysBuffer[256] = {};
 int CGameFramework::m_nMainClientId = -1;
 
-float textX = 0.0f, textY = 0.0f;
 std::shared_ptr<CPlayer> CGameFramework::m_pMainPlayer;
 
 //=========================================================================
@@ -57,8 +54,6 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	ChangeSwapChainState();
 #endif
 
-	CoInitialize(NULL);
-
 	SoundManager& soundManager = SoundManager::GetInstance();
 	soundManager.Initialize();
 
@@ -70,8 +65,6 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 void CGameFramework::OnDestroy()
 {
 	ReleaseObjects();
-
-	CoUninitialize();
 
 	if (m_hFenceEvent)
 	{
@@ -509,33 +502,11 @@ void CGameFramework::ChangeSwapChainState()
 		}
 	}
 
-	// ResizeBuffers 전에 D3D11-on-12와 D2D가 소유한 백 버퍼 참조를 모두 해제해야 한다.
-	if (m_bPrepareDrawText)
-	{
-		m_d3d11DeviceContext.Reset();
-		m_d3d11On12Device.Reset();
-		m_wrappedBackBuffers[0].Reset();
-		m_wrappedBackBuffers[1].Reset();
-		m_d2dFactory.Reset();
-		m_d2dDevice.Reset();
-		m_d2dRenderTargets[0].Reset();
-		m_d2dRenderTargets[1].Reset();
-		m_d2dDeviceContext.Reset();
-
-		m_textBrush.Reset();
-	}
-
 	hResult = m_dxgiSwapChain->ResizeBuffers(2, m_nWndClientWidth, m_nWndClientHeight, dxgiSwapChainDesc.BufferDesc.Format, dxgiSwapChainDesc.Flags);
 
 	m_nSwapChainBufferIndex = m_dxgiSwapChain->GetCurrentBackBufferIndex();
 
 	CreateRenderTargetViews();
-
-	// 새 백 버퍼에 대한 D3D11-on-12 래퍼와 D2D 렌더 타겟을 다시 만든다.
-	if (m_bPrepareDrawText)
-	{
-		PrepareDrawText();
-	}
 }
 
 //=========================================================================
@@ -704,7 +675,6 @@ void CGameFramework::FrameAdvance()
 	HRESULT hResult = m_d3dCommandAllocator[m_nSwapChainBufferIndex]->Reset();
 	hResult = m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), nullptr);
 	m_pScene->PrepareCommandListState(m_d3dCommandList.Get());
-	bool useD2dOverlayThisFrame = false;
 
 	switch (m_nGameState)
 	{
@@ -764,33 +734,13 @@ void CGameFramework::FrameAdvance()
 		pMainScene->BlurDispatch(m_d3dCommandList.Get(), m_pCamera.lock(), d3dRtvCPUDescriptorHandle);
 		pMainScene->ForwardRender(m_nGameState, m_d3dCommandList.Get(), m_pCamera.lock());
 		pMainScene->FullScreenProcessingRender(m_d3dCommandList.Get());
-
-		if (mUseDx12UiOverlay)
-		{
-			pMainScene->RenderUiOverlay(
-				m_d3dCommandList.Get(),
-				d3dRtvCPUDescriptorHandle
-			);
-			SynchronizeResourceTransition(
-				m_d3dCommandList.Get(),
-				m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
-				D3D12_RESOURCE_STATE_RENDER_TARGET,
-				D3D12_RESOURCE_STATE_PRESENT
-			);
-		}
-		else if (m_nGameState == GAME_STATE::IN_GAME)
-		{
-			useD2dOverlayThisFrame = true;
-		}
-		else
-		{
-			SynchronizeResourceTransition(
-				m_d3dCommandList.Get(),
-				m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
-				D3D12_RESOURCE_STATE_RENDER_TARGET,
-				D3D12_RESOURCE_STATE_PRESENT
-			);
-		}
+		pMainScene->RenderUiOverlay(m_d3dCommandList.Get(), d3dRtvCPUDescriptorHandle);
+		SynchronizeResourceTransition(
+			m_d3dCommandList.Get(),
+			m_d3dSwapChainBackBuffers[m_nSwapChainBufferIndex].Get(),
+			D3D12_RESOURCE_STATE_RENDER_TARGET,
+			D3D12_RESOURCE_STATE_PRESENT
+		);
 		break;
 	}
 	default:
@@ -801,11 +751,6 @@ void CGameFramework::FrameAdvance()
 
 	ID3D12CommandList* ppd3dCommandLists[] = { m_d3dCommandList.Get() };
 	m_d3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
-
-	if (useD2dOverlayThisFrame)
-	{
-		RenderTextUI();
-	}
 
 	WaitForGpuComplete();
 
@@ -1138,8 +1083,6 @@ void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM
 		break;
 	}
 }
-bool TESTBOOL = true;
-
 void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	if (!m_bConnected)
@@ -1169,14 +1112,6 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 	case WM_KEYUP:
 		switch (wParam)
 		{
-		case VK_UP:
-		{
-			TESTBOOL = false;
-			break;
-		}
-		case VK_DOWN:
-			textY += 10.f;
-			break;
 		case VK_ESCAPE:
 			::PostQuitMessage(0);
 			break;
@@ -1266,149 +1201,6 @@ void CGameFramework::OnProcessingEndGameMessage(WPARAM& wParam)
 	{
 		dynamic_cast<CZombieUserInterfaceShader*>(pMainScene->GetForwardRenderShader(USER_INTERFACE_SHADER))->SetGameState(m_nGameState);
 	}
-}
-
-//=========================================================================
-// Text Rendering
-//=========================================================================
-
-void CGameFramework::PrepareDrawText()
-{
-	D2D1_FACTORY_OPTIONS d2dFactoryOptions = {};
-	d2dFactoryOptions.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
-
-	ComPtr<ID3D11Device> d3d11Device;
-	D3D11On12CreateDevice(
-		m_d3d12Device.Get(),
-		D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-		nullptr,
-		0,
-		reinterpret_cast<IUnknown**>(m_d3dCommandQueue.GetAddressOf()),
-		1,
-		0,
-		d3d11Device.GetAddressOf(),
-		m_d3d11DeviceContext.GetAddressOf(),
-		nullptr
-	);
-
-	ThrowIfFailed(d3d11Device.As(&m_d3d11On12Device));
-	{
-		D2D1_DEVICE_CONTEXT_OPTIONS deviceOptions = D2D1_DEVICE_CONTEXT_OPTIONS_NONE;
-		ThrowIfFailed(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory3), &d2dFactoryOptions, &m_d2dFactory));
-		ComPtr<IDXGIDevice> dxgiDevice;
-		ThrowIfFailed(m_d3d11On12Device.As(&dxgiDevice));
-		ThrowIfFailed(m_d2dFactory->CreateDevice(dxgiDevice.Get(), &m_d2dDevice));
-		ThrowIfFailed(m_d2dDevice->CreateDeviceContext(deviceOptions, &m_d2dDeviceContext));
-		if (!m_dWriteFactory) {
-			ThrowIfFailed(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), &m_dWriteFactory));
-		}
-	}
-
-	float dpiX;
-	float dpiY;
-
-#pragma warning(push)
-#pragma warning(disable : 4996) // GetDesktopDpi is deprecated.
-	m_d2dFactory->GetDesktopDpi(&dpiX, &dpiY);
-#pragma warning(pop)
-	D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1(
-		D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-		D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED),
-		dpiX,
-		dpiY
-	);
-
-	for (UINT n = 0; n < m_nSwapChainBuffers; n++)
-	{
-		D3D11_RESOURCE_FLAGS d3d11Flags = { D3D11_BIND_RENDER_TARGET };
-		ThrowIfFailed(m_d3d11On12Device->CreateWrappedResource(
-			m_d3dSwapChainBackBuffers[n].Get(),
-			&d3d11Flags,
-			D3D12_RESOURCE_STATE_RENDER_TARGET,
-			D3D12_RESOURCE_STATE_PRESENT,
-			IID_PPV_ARGS(&m_wrappedBackBuffers[n])
-		));
-
-		ComPtr<IDXGISurface> surface;
-		ThrowIfFailed(m_wrappedBackBuffers[n].As(&surface));
-		ThrowIfFailed(m_d2dDeviceContext->CreateBitmapFromDxgiSurface(
-			surface.Get(),
-			&bitmapProperties,
-			&m_d2dRenderTargets[n]
-		));
-
-	}
-
-	{
-		ThrowIfFailed(m_d2dDeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Cyan), &m_textBrush));
-
-		if (m_dWriteFactory && !m_textFormat) {
-			ThrowIfFailed(m_dWriteFactory->CreateTextFormat(
-				L"Verdana",
-				NULL,
-				DWRITE_FONT_WEIGHT_NORMAL,
-				DWRITE_FONT_STYLE_NORMAL,
-				DWRITE_FONT_STRETCH_NORMAL,
-				50,
-				L"ko-KR",
-				&m_textFormat
-			));
-			ThrowIfFailed(m_textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
-			ThrowIfFailed(m_textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
-
-			ThrowIfFailed(m_dWriteFactory->CreateTextFormat(
-				L"궁서",
-				NULL,
-				DWRITE_FONT_WEIGHT_NORMAL,
-				DWRITE_FONT_STYLE_NORMAL,
-				DWRITE_FONT_STRETCH_NORMAL,
-				400.f,
-				L"ko-KR",
-				&m_idwGameCountTextFormat
-			));
-			ThrowIfFailed(m_idwGameCountTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
-			ThrowIfFailed(m_idwGameCountTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
-
-			ThrowIfFailed(m_dWriteFactory->CreateTextFormat(
-				L"궁서",
-				NULL,
-				DWRITE_FONT_WEIGHT_NORMAL,
-				DWRITE_FONT_STYLE_NORMAL,
-				DWRITE_FONT_STRETCH_NORMAL,
-				35,
-				L"ko-KR",
-				&m_idwSpeakerTextFormat
-			));
-			ThrowIfFailed(m_idwSpeakerTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
-			ThrowIfFailed(m_idwSpeakerTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
-
-		}
-
-	}
-
-	m_bPrepareDrawText = true;
-}
-
-void CGameFramework::RenderTextUI()
-{
-	if (m_nGameState != GAME_STATE::IN_GAME)
-	{
-		return;
-	}
-
-	D2D1_SIZE_F rtSize = m_d2dRenderTargets[m_nSwapChainBufferIndex]->GetSize();
-
-	// D3D12 백 버퍼를 D2D가 사용할 동안 wrapped resource의 상태 전환 소유권을 획득한다.
-	m_d3d11On12Device->AcquireWrappedResources(m_wrappedBackBuffers[m_nSwapChainBufferIndex].GetAddressOf(), 1);
-	m_d2dDeviceContext->SetTarget(m_d2dRenderTargets[m_nSwapChainBufferIndex].Get());
-	m_d2dDeviceContext->BeginDraw();
-
-	m_pMainPlayer->RenderTextUI(m_d2dDeviceContext, m_textFormat, m_textBrush);
-
-	ThrowIfFailed(m_d2dDeviceContext->EndDraw());
-	// 해제 시 wrapped resource가 생성 당시 지정한 D3D12 PRESENT 상태로 전환된다.
-	m_d3d11On12Device->ReleaseWrappedResources(m_wrappedBackBuffers[m_nSwapChainBufferIndex].GetAddressOf(), 1);
-	m_d3d11DeviceContext->Flush();
 }
 
 void CGameFramework::RefreshUiOverlayFrameData()
@@ -1538,8 +1330,6 @@ void CGameFramework::BuildMainObjects()
 		}
 	}
 	m_pCamera = m_pMainPlayer->GetCamera();
-
-	PrepareDrawText();
 }
 
 void CGameFramework::BindPlayersToTcpClient()

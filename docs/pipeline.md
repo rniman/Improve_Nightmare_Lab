@@ -43,19 +43,18 @@
    - 블러 컴퓨트 디스패치
    - 포워드/UI 렌더
    - 풀스크린 처리
-6. DX12 커맨드 리스트를 닫고 실행한다.
-7. 인게임에서는 D3D11On12 wrapped back buffer를 획득해 D2D/DirectWrite로
-   레이더 거리와 게임 시작 안내 문구를 그리고, 반환 후 D3D11 context를 `Flush()`한다.
+6. `UiOverlayRenderer`가 레이더 거리와 게임 시작 안내를 DX12 overlay로 기록하고
+   back buffer를 `RENDER_TARGET`에서 `PRESENT`로 전환한다.
+7. DX12 커맨드 리스트를 닫고 실행한다.
 8. `WaitForGpuComplete()`로 GPU 완료를 기다리고 필요한 readback을 처리한다.
 9. 스왑체인을 `Present()`한 뒤 `MoveToNextFrame()`을 수행한다.
 
 게임 시작 카운트다운, 좀비 시야 차단과 안개 변경은 프레임의 플레이어 업데이트에서
-`UpdateGameStartState()`가 처리하며, `RenderTextUI()`는 현재 표시 상태를 읽기만 한다.
+`UpdateGameStartState()`가 처리한다.
 플레이어 업데이트 이후 `RefreshUiOverlayFrameData()`는 같은 상태를 읽어 고정 문구 ID 또는
-숫자, 픽셀 위치·크기, RGBA와 표시 여부로 구성된 현재 프레임 데이터를 만든다.
-문자 출력은 여전히 `CGameFramework`의 swap-chain 수명에 결합되어 있으므로 DX12 기반 UI로
-교체하는 작업을 `refactoring_plan.md`의 최우선 항목으로 관리한다. 교체가 끝나면
-D3D11On12·D2D·DirectWrite 코드, wrapped back buffer, 관련 헤더와 링크 라이브러리를 모두 제거한다.
+숫자, 픽셀 위치·layout 영역, RGBA와 표시 여부로 구성된 현재 프레임 데이터를 만든다.
+문자 출력은 DX12 overlay pass로 통합됐으며 D3D11On12·D2D·DirectWrite와 wrapped back
+buffer 의존성은 제거됐다.
 
 ## 4) 서버 시뮬레이션 루프
 
