@@ -399,7 +399,7 @@ FodyWeavers.xsd
 
 # Custom Ignore Rules for Nightmare Lab
 Asset/
-/Client/Client/Sound/resource
+/NightmareLab/Client/Sound/resource
 /Sound/resource
-/Client/Client/cso/*.cso
+/NightmareLab/Client/cso/*.cso
 docs/memo

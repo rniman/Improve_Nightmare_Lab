@@ -105,12 +105,12 @@ D3D12 규칙에 맞지 않으며 결과는 보장되지 않는다. Debug Layer�
 
 ## 수정 파일
 
-- `Client/Client/CSBlurHorizontal.hlsl`
+- `NightmareLab/Client/CSBlurHorizontal.hlsl`
   - 두 번째 패스 입력 `gInputTexture(t14)` 추가
   - X축 샘플링으로 수정
-- `Client/Client/CSBlurVertical.hlsl`
+- `NightmareLab/Client/CSBlurVertical.hlsl`
   - Y축 샘플링으로 수정
-- `Client/Client/BlurComputeShader.cpp`
+- `NightmareLab/Client/BlurComputeShader.cpp`
   - 중간 텍스처를 `NON_PIXEL_SHADER_RESOURCE` 상태로 전환
 
 ## 검증 방법

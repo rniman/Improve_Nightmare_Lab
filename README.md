@@ -23,7 +23,7 @@ Originally developed as a graduation project.
 ## Project Structure
 
 ```
-Client/
+NightmareLab/
 ├── Client/          # Game client
 │   ├── *.cpp / *.h  # Engine, gameplay, rendering
 │   ├── *.hlsl       # Vertex / Pixel / Compute shaders
