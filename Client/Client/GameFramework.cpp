@@ -211,9 +211,10 @@ void CGameFramework::OnDestroyEntryWindow()
 
 void CGameFramework::OnButtonClick(HWND hWnd)
 {
-	GetWindowText(m_hIPAddressEdit, m_pszIPAddress, 20);
+	GetWindowText(m_hIPAddressEdit, m_pszIPAddress, static_cast<int>(std::size(m_pszIPAddress)));
+	const TCHAR* ipAddress = m_pszIPAddress[0] == _T('\0') ? _T("127.0.0.1") : m_pszIPAddress;
 
-	if (m_pTcpClient->CreateSocket(hWnd, m_pszIPAddress))
+	if (m_pTcpClient->CreateSocket(hWnd, ipAddress))
 	{
 		SendMessage(hWnd, ClientWindowMessage::WM_CREATE_TCP, NULL, NULL);
 	}
