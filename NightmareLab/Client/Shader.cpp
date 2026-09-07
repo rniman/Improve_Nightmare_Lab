@@ -4,7 +4,6 @@
 #include "Scene.h"
 #include "Player.h"
 #include "GameFramework.h"
-#include "Component.h"
 
 #define _WITH_WFOPEN
 //#define _WITH_STD_STREAM
@@ -2572,10 +2571,7 @@ void CFullScreenProcessingShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12G
 
 		shared_ptr<CFullScreenTextureObject> pObject = make_shared<CFullScreenTextureObject>(pd3dDevice, pd3dCommandList, pMaterial);
 		pObject->SetAlphaValue(0.3f);
-		shared_ptr<ComponentTimeOnOff> timeonoffComponent = make_shared<ComponentTimeOnOff>();
-		timeonoffComponent->RegisterVariable(&pObject->GetBoolRender());
-		timeonoffComponent->SetLimitTime(2.0f);
-		pObject->SetComponent(timeonoffComponent);
+		pObject->SetFadeOutDuration(2.0f);
 		//Main클라이언트 플레이어에게 스크린 객체 공유
 		mainPlayer->SetHitDamageScreenObject(pObject);
 		m_pMainPlayer = mainPlayer;

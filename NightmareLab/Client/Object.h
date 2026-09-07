@@ -2,7 +2,6 @@
 #include "Mesh.h"
 #include "Camera.h"
 #include "Collision.h"
-#include "Component.h"
 
 enum class MeshType {
 	Standard = 0,
@@ -585,18 +584,15 @@ public:
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList);
 
 	void SetAlphaValue(float val);
-	void SetRender(bool val) {
-		m_bRender = val;
-		if (m_Component) {
-			m_Component->Init();
-		}
-	}
-	bool& GetBoolRender() { return m_bRender; }
-	void SetComponent(shared_ptr<Component> component);
+	void SetRender(bool val);
+	/// @brief 화면을 켤 때마다 적용할 페이드아웃 시간을 설정한다.
+	/// @param durationSeconds 0보다 큰 지속 시간(초).
+	void SetFadeOutDuration(float durationSeconds);
 private:
 	float m_fSetAlpha;
 	bool m_bRender;
 
-	shared_ptr<Component> m_Component;
+	float mFadeOutDuration = 0.0f;
+	float mFadeOutRemainingTime = 0.0f;
 };
 

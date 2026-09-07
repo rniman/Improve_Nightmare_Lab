@@ -29,6 +29,12 @@ Nightmare Lab은 Win32 기반 멀티플레이어 게임으로, 두 개의 실행
   `UiOverlayRenderer`가 소비한다. full-screen 처리 뒤 DX12 back buffer에 그리고
   `RENDER_TARGET → PRESENT` barrier를 기록한다.
 
+- `CFullScreenTextureObject`는 화면 표시 여부와 선택적 페이드아웃 시간을 직접 소유한다.
+  피격 화면은 `SetFadeOutDuration(2.0f)`로 설정하고 `SetRender(true)`로 재시작한다.
+  `Render()`에서 남은 시간 비율로 알파를 계산한 뒤 시간을 차감하며, 만료 프레임까지
+  그린 후 다음 호출부터 표시하지 않는다. 로비 로딩 화면은 페이드 설정 없이 계속 표시한다.
+  기존 `Component`/`ComponentTimeOnOff`와 외부 `bool*` 등록 방식은 제거했다.
+
 ### 4) 리소스 관리
 - `CTexture`, `CMaterial`, `CGameObject`가 런타임 리소스, 모델 로딩, 오브젝트별 셰이더 데이터를 관리한다.
 - 디스크립터 힙 할당 헬퍼는 `CScene` 정적 멤버에 중앙 집중되어 있다.

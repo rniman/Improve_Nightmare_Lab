@@ -3,6 +3,7 @@
 #include "Shader.h"
 #include "Scene.h"
 #include "TextureBlendMesh.h"
+#include "Timer.h"
 
 
 vector<shared_ptr<CStandardMesh>> CStandardMesh::g_vAllstandardMesh;
@@ -2213,25 +2214,21 @@ CFullScreenTextureObject::CFullScreenTextureObject(ID3D12Device* pd3dDevice, ID3
 
 void CFullScreenTextureObject::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	if (!m_bRender) {
+	if (!m_bRender)
+	{
 		return;
 	}
 
-	if (m_Component) {
-
-		switch (m_Component->GetComponentType())
+	if (mFadeOutDuration > 0.0f)
+	{
+		// 기존 효과와 동일하게 시간 차감 전 알파로 만료 프레임까지 그린다.
+		m_cbMappedObject->option.alphaValue = (mFadeOutRemainingTime / mFadeOutDuration) * m_fSetAlpha;
+		mFadeOutRemainingTime -= gGameTimer.GetTimeElapsed();
+		if (mFadeOutRemainingTime <= 0.0f)
 		{
-		case Component::TIMEONOFF: {
-			float fTime = static_pointer_cast<ComponentTimeOnOff>(m_Component)->GetTime();
-			float fSetTime = static_pointer_cast<ComponentTimeOnOff>(m_Component)->GetSetTime();
-			m_cbMappedObject->option.alphaValue = (fTime / fSetTime) * m_fSetAlpha;
-			break;
+			mFadeOutRemainingTime = mFadeOutDuration;
+			m_bRender = false;
 		}
-		default:
-			assert(0);
-		}
-
-		m_Component->Update();
 	}
 
 	m_vpMaterials[0]->UpdateShaderVariable(pd3dCommandList, m_cbMappedObject);
@@ -2248,7 +2245,20 @@ void CFullScreenTextureObject::SetAlphaValue(float val)
 	m_fSetAlpha = val;
 }
 
-void CFullScreenTextureObject::SetComponent(shared_ptr<Component> component)
+void CFullScreenTextureObject::SetRender(bool val)
 {
-	m_Component = component;
+	m_bRender = val;
+	mFadeOutRemainingTime = mFadeOutDuration;
+}
+
+void CFullScreenTextureObject::SetFadeOutDuration(float durationSeconds)
+{
+	assert(durationSeconds > 0.0f);
+	if (durationSeconds <= 0.0f)
+	{
+		return;
+	}
+
+	mFadeOutDuration = durationSeconds;
+	mFadeOutRemainingTime = durationSeconds;
 }

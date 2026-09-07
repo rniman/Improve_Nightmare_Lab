@@ -181,7 +181,6 @@
     <ClInclude Include="BlurSSAOComputeShader.h" />
     <ClInclude Include="Client.h" />
     <ClInclude Include="Collision.h" />
-    <ClInclude Include="Component.h" />
     <ClInclude Include="CTrailShader.h" />
     <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DDSTextureLoader12.h" />
@@ -220,7 +219,6 @@
     <ClCompile Include="BlurSSAOComputeShader.cpp" />
     <ClCompile Include="Client.cpp" />
     <ClCompile Include="Collision.cpp" />
-    <ClCompile Include="Component.cpp" />
     <ClCompile Include="CTrailShader.cpp" />
     <ClCompile Include="DDSTextureLoader12.cpp" />
     <ClCompile Include="EnvironmentObject.cpp" />

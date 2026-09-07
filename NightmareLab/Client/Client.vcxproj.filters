@@ -36,9 +36,6 @@
     <Filter Include="SwordTrail">
       <UniqueIdentifier>{e1bc8f89-06e7-4fb1-a7a5-86f73ec0613f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Script">
-      <UniqueIdentifier>{35cb9766-724e-407f-8749-106f509e09e5}</UniqueIdentifier>
-    </Filter>
     <Filter Include="HLSL%28cso%29\Particle">
       <UniqueIdentifier>{0d7d2a93-78bf-405e-953f-fb45952d1aaa}</UniqueIdentifier>
     </Filter>
@@ -153,9 +150,6 @@
     <ClInclude Include="CTrailShader.h">
       <Filter>SwordTrail</Filter>
     </ClInclude>
-    <ClInclude Include="Component.h">
-      <Filter>Script</Filter>
-    </ClInclude>
     <ClInclude Include="BlurComputeShader.h">
       <Filter>Blur</Filter>
     </ClInclude>
@@ -247,9 +241,6 @@
     </ClCompile>
     <ClCompile Include="CTrailShader.cpp">
       <Filter>SwordTrail</Filter>
-    </ClCompile>
-    <ClCompile Include="Component.cpp">
-      <Filter>Script</Filter>
     </ClCompile>
     <ClCompile Include="BlurComputeShader.cpp">
       <Filter>Blur</Filter>
