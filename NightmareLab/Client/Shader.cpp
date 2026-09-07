@@ -2587,7 +2587,9 @@ void CFullScreenProcessingShader::Render(ID3D12GraphicsCommandList* pd3dCommandL
 
 	for (auto& ob : m_vGameObjects)
 	{
-		ob->Render(pd3dCommandList);
+		auto screenObject = static_pointer_cast<CFullScreenTextureObject>(ob);
+		screenObject->SetFrameElapsedTime(pPlayer->GetFrameElapsedTime());
+		screenObject->Render(pd3dCommandList);
 	}
 
 	if (m_pMainPlayer)

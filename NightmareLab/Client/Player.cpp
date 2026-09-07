@@ -452,7 +452,7 @@ void CPlayer::SetGameStart()
 	m_fGameStartCount = 10.f;
 }
 
-UiOverlayFrameData CPlayer::BuildUiOverlayFrameData(const XMFLOAT2&, float) const
+UiOverlayFrameData CPlayer::BuildUiOverlayFrameData(const XMFLOAT2&) const
 {
 	return UiOverlayFrameData{};
 }
@@ -632,7 +632,7 @@ void CBlueSuitPlayer::Update(float fElapsedTime)
 		position.y += 1.5f;
 		sharedobject.m_vParticleObjects[int(CParticleMesh::TP)]->SetParticlePosition(m_iTeleportParticleId, position);
 
-		if (gGameTimer.GetTotalTime() - 2.8f > m_fCreateParticleTime) {
+		if (GetFrameTotalTime() - 2.8f > m_fCreateParticleTime) {
 			m_bTeleportUse = false;
 			m_iTeleportParticleId = -1;
 		}
@@ -950,7 +950,7 @@ void CBlueSuitPlayer::UpdatePicking()
 	//}
 }
 
-void CBlueSuitPlayer::RightClickProcess(float fCurTime)
+void CBlueSuitPlayer::RightClickProcess()
 {
 	switch (m_selectItem)
 	{
@@ -1068,8 +1068,9 @@ void CBlueSuitPlayer::UseFuse()
 
 void CBlueSuitPlayer::Teleport()
 {
+	const float totalTime = GetFrameTotalTime();
 	if (m_fCreateParticleTime != 0.0f) {
-		if (gGameTimer.GetTotalTime() - 3.0f < m_fCreateParticleTime) {
+		if (totalTime - 3.0f < m_fCreateParticleTime) {
 			return;
 		}
 	}
@@ -1077,11 +1078,11 @@ void CBlueSuitPlayer::Teleport()
 	//soundManager.SetVolume(sound::USE_TP_BLUESUIT, m_fPlayerVolume);
 	if (m_fPlayerVolume - EPSILON >= 0.0f) soundManager.PlaySoundWithName(sound::USE_TP_BLUESUIT, m_fPlayerVolume);
 
-	m_fCreateParticleTime = gGameTimer.GetTotalTime();
+	m_fCreateParticleTime = totalTime;
 
 	XMFLOAT3 position = GetPosition();
 	position.y += 1.5f;
-	m_iTeleportParticleId = sharedobject.m_vParticleObjects[int(CParticleMesh::TP)]->SetParticleInsEnable(-1, true, gGameTimer.GetTotalTime(), position);
+	m_iTeleportParticleId = sharedobject.m_vParticleObjects[int(CParticleMesh::TP)]->SetParticleInsEnable(-1, true, totalTime, position);
 	if (m_iTeleportParticleId != -1) {
 		m_bTeleportUse = true;
 	}
@@ -1140,8 +1141,9 @@ void CBlueSuitPlayer::SetHitEvent()
 	}
 }
 
-UiOverlayFrameData CBlueSuitPlayer::BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const
+UiOverlayFrameData CBlueSuitPlayer::BuildUiOverlayFrameData(const XMFLOAT2& viewportSize) const
 {
+	const float totalTime = GetFrameTotalTime();
 	UiOverlayFrameData frameData;
 
 	UiOverlayElement& startMessage = frameData.GetElement(UiOverlayType::SurvivorStartMessage);
@@ -1659,9 +1661,8 @@ void CZombiePlayer::UpdateGameStartState(float fElapsedTime)
 	m_pCamera->SetFogInfo(XMFLOAT4(1.0f, 10.0f, 0.1f + m_fInterruption / 2, 1.0f));
 }
 
-UiOverlayFrameData CZombiePlayer::BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const
+UiOverlayFrameData CZombiePlayer::BuildUiOverlayFrameData(const XMFLOAT2& viewportSize) const
 {
-	(void)totalTime;
 	UiOverlayFrameData frameData;
 
 	UiOverlayElement& countdown = frameData.GetElement(UiOverlayType::ZombieCountdown);

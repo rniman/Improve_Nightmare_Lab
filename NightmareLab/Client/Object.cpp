@@ -3,7 +3,6 @@
 #include "Shader.h"
 #include "Scene.h"
 #include "TextureBlendMesh.h"
-#include "Timer.h"
 
 
 vector<shared_ptr<CStandardMesh>> CStandardMesh::g_vAllstandardMesh;
@@ -2223,7 +2222,7 @@ void CFullScreenTextureObject::Render(ID3D12GraphicsCommandList* pd3dCommandList
 	{
 		// 기존 효과와 동일하게 시간 차감 전 알파로 만료 프레임까지 그린다.
 		m_cbMappedObject->option.alphaValue = (mFadeOutRemainingTime / mFadeOutDuration) * m_fSetAlpha;
-		mFadeOutRemainingTime -= gGameTimer.GetTimeElapsed();
+		mFadeOutRemainingTime -= mFrameElapsedTime;
 		if (mFadeOutRemainingTime <= 0.0f)
 		{
 			mFadeOutRemainingTime = mFadeOutDuration;

@@ -129,7 +129,7 @@ public:
 	~CTcpClient();
 
 	bool CreateSocket(HWND window, const TCHAR* ipAddress);
-	void OnProcessingSocketMessage(HWND window, UINT messageId, WPARAM wParam, LPARAM lParam);
+	void OnProcessingSocketMessage(HWND window, UINT messageId, WPARAM wParam, LPARAM lParam, float totalTime);
 	void SendInputIfDue(const UCHAR* keysBuffer);
 	void RequestSend();
 	void SendLoadingComplete();
@@ -220,6 +220,9 @@ private:
 	ReceiveHead mReceiveHead = ReceiveHead::Invalid;
 	bool mHasReceiveHead = false;
 	bool mHasPayloadSize = false;
+
+	// 프레임워크가 소켓 이벤트 진입 시 전달한 마지막 프레임의 시각.
+	float mFrameTotalTime = 0.0f;
 
 	std::array<CS_PLAYER_STATE, MAX_CLIENT> mClientInfo = {};
 	std::array<std::shared_ptr<CPlayer>, MAX_CLIENT> mPlayers;

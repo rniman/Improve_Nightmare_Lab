@@ -27,12 +27,12 @@ public:
 	~Trail() {}
 
 	void CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
-	void Render(ID3D12GraphicsCommandList* pd3dCommandList);
-	void Update();
+	void Render(ID3D12GraphicsCommandList* pd3dCommandList, float elapsedTime, float totalTime);
+	void Update(float elapsedTime, float totalTime);
 	void TrailInit();
-	void TrailStart();
+	void TrailStart(float totalTime);
 
-	void FirstTrailGenerate(float interval);
+	void FirstTrailGenerate(float interval, float totalTime);
 
 	D3D12_PRIMITIVE_TOPOLOGY m_d3dPrimitiveTopology;
 

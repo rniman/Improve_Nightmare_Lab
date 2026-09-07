@@ -292,8 +292,9 @@ bool CTcpClient::CreateSocket(HWND window, const TCHAR* ipAddress)
 	return true;
 }
 
-void CTcpClient::OnProcessingSocketMessage(HWND window, UINT, WPARAM wParam, LPARAM lParam)
+void CTcpClient::OnProcessingSocketMessage(HWND window, UINT, WPARAM wParam, LPARAM lParam, float totalTime)
 {
+	mFrameTotalTime = totalTime;
 	const int socketError = WSAGETSELECTERROR(lParam);
 	if (socketError != 0)
 	{
@@ -1555,7 +1556,7 @@ void CTcpClient::UpdateSurvivorPlayer(int playerIndex)
 			{
 				if (!itemObject->IsObtained())
 				{
-					sharedobject.EnableItemGetParticle(itemObject);
+					sharedobject.EnableItemGetParticle(itemObject, mFrameTotalTime);
 				}
 				itemObject->SetObtain(true);
 				if (playerIndex == mMainClientId && !survivorPlayer->IsSlotItemObtain(slotIndex))
@@ -1601,7 +1602,7 @@ void CTcpClient::UpdateSurvivorPlayer(int playerIndex)
 			{
 				if (!itemObject->IsObtained())
 				{
-					sharedobject.EnableItemGetParticle(itemObject);
+					sharedobject.EnableItemGetParticle(itemObject, mFrameTotalTime);
 				}
 				itemObject->SetObtain(true);
 				if (playerIndex == mMainClientId && !survivorPlayer->IsFuseObtain(fuseIndex))

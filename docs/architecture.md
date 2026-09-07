@@ -50,6 +50,27 @@ Nightmare Lab은 Win32 기반 멀티플레이어 게임으로, 두 개의 실행
 IOCP나 다중 스레드 서버로 교체할 필요는 없다. 다만 이 선택과 별개로 TCP 스트림의
 partial send/recv, 송신 대기 데이터 보존, 입력값 검증은 보장되어야 한다.
 
+### 6) 공통 타이머
+- `NightmareLab/Common/Timer.h/.cpp`의 인스턴스형 `Timer`가 QPC 기반 시간 측정,
+  최대 50개 샘플의 평균 경과 시간, FPS 계산·제한과 정지·재개를 담당한다.
+- Client는 `CGameFramework::mTimer`가 공통 타이머를 직접 소유한다.
+  Client 전용 Timer 파일, `CGameTimer`와 `gGameTimer` 전역 접근은 제거했다.
+- `FrameAdvance()`는 Tick 직후 누적 시간을 캐시하고 각 Player에 경과·누적 시간을 전달한다.
+  씬 생성 후 Player를 연결할 때도 같은 값을 전달하므로 초기 렌더와 애니메이션 콜백에 적용된다.
+- Player의 순간이동·UI는 저장된 프레임 시간을 사용하며, 우클릭 처리에는 시간 인자를 전달하지 않는다.
+  순간이동·아이템 획득 효과·발자국·공격 궤적은 전달받은 시간으로 생성 시각을 기록한다.
+- TCPClient는 소켓 이벤트 진입 시 받은 누적 시간을 멤버에 저장한다. 내부 수신 함수는 시간 인자를 중계하지 않고, 파티클 생성 시에만 멤버 값을 전달한다.
+- Player는 시간 값만 보관하며 타이머를 소유하거나 갱신하지 않는다.
+  공격 궤적과 피격 화면의 렌더 경로도 Player에 전달된 경과 시간을 사용하며,
+  기존처럼 렌더 시점에 시간을 차감한다.
+- Server도 전용 Timer 파일과 호환 별칭 없이 `TCPServer::mTimer`가 공통 `Timer`를 직접 소유한다.
+  서버의 누적 시간 조회는 정지 상태 또는 마지막 측정 카운터로 계산한다.
+- 각 실행 파일이 공통 소스를 별도로 컴파일하므로 타이머 상태는 프로세스 간 공유되지 않는다.
+  공통 구현은 프로젝트별 PCH를 사용하지 않으며, `CommonTimer.obj`로 컴파일한다.
+- 기존 샘플 평균, busy wait FPS 제한, `Reset()`의 샘플·정지 누적값 유지 동작은 보존한다.
+  일반 인스턴스로도 안전하게 생성되도록 멤버 초기값은 명시한다.
+- FPS 표시 책임 분리와 시간 정책 변경은 별도 리팩터링 범위다.
+
 ## 의존성 개요
 개념적 의존성 맵:
 ```text
@@ -75,7 +96,7 @@ Server.cpp
   `TCPClient.cpp`는 `GameFramework` 정적 상태에 의존하지 않는다.
 - 클라이언트와 서버의 Win32 메시지 ID는 공통 `WindowMessages.h`가 네임스페이스별로 소유하며,
   메시지를 발신하거나 처리하는 구현 파일이 직접 참조한다.
-- 전역/싱글턴 방식의 접근이 일반적이다 (`g_collisionManager`, `gGameTimer`, `SharedObject`, `SoundManager`).
+- 전역/싱글턴 방식의 접근이 일반적이다 (`g_collisionManager`, `SharedObject`, `SoundManager`).
 
 ## 알려진 아키텍처 이슈
 1. **과도한 책임 집중**

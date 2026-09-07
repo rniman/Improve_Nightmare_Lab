@@ -583,6 +583,7 @@ public:
 
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList);
 
+	void SetFrameElapsedTime(float elapsedTime) { mFrameElapsedTime = elapsedTime; }
 	void SetAlphaValue(float val);
 	void SetRender(bool val);
 	/// @brief 화면을 켤 때마다 적용할 페이드아웃 시간을 설정한다.
@@ -592,6 +593,7 @@ private:
 	float m_fSetAlpha;
 	bool m_bRender;
 
+	float mFrameElapsedTime = 0.0f;
 	float mFadeOutDuration = 0.0f;
 	float mFadeOutRemainingTime = 0.0f;
 };

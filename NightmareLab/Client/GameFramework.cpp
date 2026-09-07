@@ -89,7 +89,7 @@ void CGameFramework::OnDestroy()
 
 void CGameFramework::BuildObjects()
 {
-	gGameTimer.Reset();
+	mTimer.Reset();
 
 	m_d3dCommandList->Reset(m_d3dCommandAllocator[m_nSwapChainBufferIndex].Get(), NULL);
 	if (m_nGameState == GAME_STATE::IN_LOBBY)
@@ -563,15 +563,18 @@ void CGameFramework::ProcessInput()
 		{
 			continue;
 		}
-		pPlayer->Update(gGameTimer.GetTimeElapsed());
+		pPlayer->Update(mTimer.GetTimeElapsed());
 	}
 }
 
 void CGameFramework::AnimateObjects()
 {
-	float fElapsedTime = gGameTimer.GetTimeElapsed();
+	float fElapsedTime = mTimer.GetTimeElapsed();
 
-	if (m_pScene) m_pScene->AnimateObjects(fElapsedTime, gGameTimer.GetTotalTime());
+	if (m_pScene)
+	{
+		m_pScene->AnimateObjects(fElapsedTime, mFrameTotalTime);
+	}
 }
 
 void CGameFramework::AnimateEnding()
@@ -584,7 +587,7 @@ void CGameFramework::AnimateEnding()
 		g_collisionManager.GetCollisionObjectWithNumber(m_pTcpClient->GetEscapeDoorId()).lock()->UpdatePicking();
 		bUpdateElevatorDoor = true;
 	}
-	pDoor->Animate(gGameTimer.GetTimeElapsed());
+	pDoor->Animate(mTimer.GetTimeElapsed());
 	AnimateObjects();
 
 }
@@ -640,7 +643,15 @@ void CGameFramework::PreRenderTasks(shared_ptr<CMainScene>& pMainScene)
 
 void CGameFramework::FrameAdvance()
 {
-	gGameTimer.Tick();
+	mTimer.Tick();
+	mFrameTotalTime = mTimer.GetTotalTime();
+	for (const auto& player : m_apPlayer)
+	{
+		if (player)
+		{
+			player->SetFrameTime(mTimer.GetTimeElapsed(), mFrameTotalTime);
+		}
+	}
 
 	SoundManager& soundManager = SoundManager::GetInstance();
 	soundManager.UpdateSystem();
@@ -666,7 +677,7 @@ void CGameFramework::FrameAdvance()
 	else //	GAME_STATE::BLUE_SUIT_WIN, GAME_STATE::ZOMBIE_WIN
 	{
 		AnimateEnding();
-		m_fEndingElapsedTime += gGameTimer.GetTimeElapsed();
+		m_fEndingElapsedTime += mTimer.GetTimeElapsed();
 
 		m_pMainPlayer->UpdateEnding(m_fEndingElapsedTime, m_nGameState);
 	}
@@ -764,7 +775,7 @@ void CGameFramework::FrameAdvance()
 
 	MoveToNextFrame();
 
-	gGameTimer.GetFrameRate(m_pszFrameRate + 15, 37);
+	mTimer.GetFrameRate(m_pszFrameRate + 15, 37);
 	size_t nLength = _tcslen(m_pszFrameRate);
 	XMFLOAT3 xmf3Position = xmf3Position = m_pMainPlayer->GetPosition();
 
@@ -903,8 +914,8 @@ void CGameFramework::MoveToNextFrame()
 
 void CGameFramework::UpdateFrameworkShaderVariable()
 {
-	m_cbFramework_info->m_fCurrentTime = gGameTimer.GetTotalTime();
-	m_cbFramework_info->m_fElapsedTime = gGameTimer.GetTimeElapsed();
+	m_cbFramework_info->m_fCurrentTime = mFrameTotalTime;
+	m_cbFramework_info->m_fElapsedTime = mTimer.GetTimeElapsed();
 
 	m_d3dCommandList->SetGraphicsRootDescriptorTable(14, m_d3dFramework_info_CbvGPUDescriptorHandle);
 }
@@ -984,9 +995,9 @@ void CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARA
 	case WM_ACTIVATE:
 	{
 		if (LOWORD(wParam) == WA_INACTIVE)
-			gGameTimer.Stop();
+			mTimer.Stop();
 		else
-			gGameTimer.Start();
+			mTimer.Start();
 		break;
 	}
 	case WM_SIZE:
@@ -1031,7 +1042,7 @@ void CGameFramework::OnProcessingSocketMessage(HWND hWnd, UINT nMessageID, WPARA
 	case FD_READ:	// 소켓이 데이터를 읽을 준비가 되었다.
 	case FD_CLOSE:
 	{
-		m_pTcpClient->OnProcessingSocketMessage(hWnd, nMessageID, wParam, lParam);
+		m_pTcpClient->OnProcessingSocketMessage(hWnd, nMessageID, wParam, lParam, mFrameTotalTime);
 
 		// CTcpClient가 recv()==0 또는 실제 소켓 오류로 내부에서 닫은 경우까지 프레임워크 상태에 반영한다.
 		const bool bDisconnected =
@@ -1137,7 +1148,7 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			{
 				break;
 			}
-			m_pMainPlayer->ChangeCamera((DWORD)(wParam - VK_F1 + 1), gGameTimer.GetTimeElapsed());
+			m_pMainPlayer->ChangeCamera((DWORD)(wParam - VK_F1 + 1), mTimer.GetTimeElapsed());
 			m_pCamera = m_pMainPlayer->GetCamera();
 			break;
 		case VK_F3:
@@ -1216,8 +1227,7 @@ void CGameFramework::RefreshUiOverlayFrameData()
 	if (m_nGameState == GAME_STATE::IN_GAME && m_pMainPlayer)
 	{
 		m_uiOverlayFrameData = m_pMainPlayer->BuildUiOverlayFrameData(
-			viewportSize,
-			gGameTimer.GetTotalTime()
+			viewportSize
 		);
 	}
 
@@ -1321,7 +1331,7 @@ void CGameFramework::BuildMainObjects()
 	for (auto& pPlayer : m_apPlayer)
 	{
 		pPlayer->ChangeCamera(FIRST_PERSON_CAMERA, 0.0f);
-		pPlayer->Update(gGameTimer.GetTimeElapsed());
+		pPlayer->Update(mTimer.GetTimeElapsed());
 
 		auto survivor = dynamic_pointer_cast<CBlueSuitPlayer>(pPlayer);
 		if (survivor)
@@ -1342,6 +1352,7 @@ void CGameFramework::BindPlayersToTcpClient()
 	for (int i = 0; i < MAX_CLIENT; ++i)
 	{
 		m_apPlayer[i] = m_pScene->GetPlayer(i);
+		m_apPlayer[i]->SetFrameTime(mTimer.GetTimeElapsed(), mFrameTotalTime);
 		m_pTcpClient->SetPlayer(m_pScene->GetPlayer(i), i);
 		int nClientId = m_pTcpClient->GetClientId(i);
 		m_apPlayer[i]->SetClientId(nClientId);

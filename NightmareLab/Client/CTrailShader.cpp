@@ -115,6 +115,6 @@ void CTrailShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, const shar
 
 	for (auto& trail : m_vpTrail)
 	{
-		trail->Render(pd3dCommandList);
+		trail->Render(pd3dCommandList, pPlayer->GetFrameElapsedTime(), pPlayer->GetFrameTotalTime());
 	}
 }

@@ -805,22 +805,22 @@ void CZombieAnimationController::AdvanceTime(float fElapsedTime, CGameObject* pR
 
 					if (k == 1) {
 						if (IsEqual(0.4f, m_vAnimationTracks[k].m_fPosition, 0.05f)) {
-							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nLeftToeBase]->GetPosition());
+							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nLeftToeBase]->GetPosition(), m_pPlayer->GetFrameTotalTime());
 						}
 						else if (IsEqual(0.8f, m_vAnimationTracks[k].m_fPosition, 0.05f)) {
-							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nRightToeBase]->GetPosition());
+							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nRightToeBase]->GetPosition(), m_pPlayer->GetFrameTotalTime());
 						}
 						else if (IsEqual(1.2f, m_vAnimationTracks[k].m_fPosition, 0.05f)) {
-							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nLeftToeBase]->GetPosition());
+							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nLeftToeBase]->GetPosition(), m_pPlayer->GetFrameTotalTime());
 						}
 						else if (IsEqual(1.6f, m_vAnimationTracks[k].m_fPosition, 0.05f)) {
-							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nRightToeBase]->GetPosition());
+							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nRightToeBase]->GetPosition(), m_pPlayer->GetFrameTotalTime());
 						}
 						else if (IsEqual(2.0f, m_vAnimationTracks[k].m_fPosition, 0.05f)) {
-							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nLeftToeBase]->GetPosition());
+							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nLeftToeBase]->GetPosition(), m_pPlayer->GetFrameTotalTime());
 						}
 						else if (IsEqual(2.4f, m_vAnimationTracks[k].m_fPosition, 0.05f)) {
-							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nRightToeBase]->GetPosition());
+							sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nRightToeBase]->GetPosition(), m_pPlayer->GetFrameTotalTime());
 						}
 					}
 				}
@@ -894,10 +894,10 @@ void CZombieAnimationController::AdvanceTime(float fElapsedTime, CGameObject* pR
 
 		if (m_vAnimationTracks[2].m_bEnable)
 		{
-			m_pPlayer->m_pRightHandTrail->TrailStart();
-			m_pPlayer->m_pLeftHandTrail->TrailStart();
+			m_pPlayer->m_pRightHandTrail->TrailStart(m_pPlayer->GetFrameTotalTime());
+			m_pPlayer->m_pLeftHandTrail->TrailStart(m_pPlayer->GetFrameTotalTime());
 			//sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nEndSpine]->GetPosition());
-			//sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nLeftHandThumb4]->GetPosition());			
+			//sharedobject.AddParticle(CParticleMesh::FOOTPRINT, m_pAnimationSets->m_vpBoneFrameCaches[m_nLeftHandThumb4]->GetPosition());
 		}
 		OnRootMotion(pRootGameObject);
 		OnAnimationIK(pRootGameObject);

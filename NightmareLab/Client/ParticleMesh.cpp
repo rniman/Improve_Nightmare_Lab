@@ -1,7 +1,6 @@
 #pragma once
 #include "stdafx.h"
 #include "ParticleMesh.h"
-#include "Timer.h"
 
 
 void CParticleMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList)
@@ -366,7 +365,7 @@ void CFootPrintParticleMesh::Update(float fcurtime)
 
 }
 
-void CFootPrintParticleMesh::AddParticle(XMFLOAT3& pos)
+void CFootPrintParticleMesh::AddParticle(XMFLOAT3& pos, float totalTime)
 {
 	if (m_nVertices >= 99999) {
 		m_nVertices = 0;
@@ -376,7 +375,7 @@ void CFootPrintParticleMesh::AddParticle(XMFLOAT3& pos)
 	m_pd3dVertexBuffer->Map(0, nullptr, (void**)&pData);
 	ParticleVertex* vertices = reinterpret_cast<ParticleVertex*>(pData);
 
-	vertices[m_nVertices].lifeTime = gGameTimer.GetTotalTime() + 2.0f;
+	vertices[m_nVertices].lifeTime = totalTime + 2.0f;
 	vertices[m_nVertices].position.x = pos.x;
 	vertices[m_nVertices].position.y = pos.y;//vertices[m_nVertices - 1].position.y + 1.0f;
 	vertices[m_nVertices].position.z = pos.z;

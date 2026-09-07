@@ -173,7 +173,10 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="TCPServer.cpp" />
-    <ClCompile Include="Timer.cpp" />
+    <ClCompile Include="..\Common\Timer.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <ObjectFileName>$(IntDir)CommonTimer.obj</ObjectFileName>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Client\GlobalDefine.h" />
@@ -185,7 +188,7 @@
     <ClInclude Include="ServerWorldBuilder.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="TCPServer.h" />
-    <ClInclude Include="Timer.h" />
+    <ClInclude Include="..\Common\Timer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -64,7 +64,7 @@ public:
 	virtual int SetParticleInsEnable(int id, bool val, float fCurTime, XMFLOAT3& pos);
 	void SetParticlePosition(int id, XMFLOAT3& pos);
 	void UpdateUploadBuffer(int newCount, int oldCount, vector<int>& v_enable);
-	virtual void AddParticle(XMFLOAT3& pos) {}
+	virtual void AddParticle(XMFLOAT3& pos, float totalTime) {}
 };
 
 class CSOParticleMesh : public CParticleMesh {
@@ -124,6 +124,6 @@ public:
 	void CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	void Update(float fcurtime);
 
-	void AddParticle(XMFLOAT3& pos);
+	void AddParticle(XMFLOAT3& pos, float totalTime);
 public:
 };

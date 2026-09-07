@@ -1,6 +1,6 @@
 #pragma once
 #include "../GameLimits.h"
-#include "Timer.h"
+#include "../Common/Timer.h"
 #include "Scene.h"
 #include "UiOverlayData.h"
 
@@ -92,6 +92,10 @@ public:
 	static shared_ptr<CPlayer>& GetMainPlayer() { return m_pMainPlayer; }
 
 private:
+	Timer mTimer;
+	// 입력/소켓 이벤트도 마지막 Tick 시점의 누적 시간을 사용한다.
+	float mFrameTotalTime = 0.0f;
+
 	void BuildLobbyObjects();
 	void BuildMainObjects();
 	void BindPlayersToTcpClient();

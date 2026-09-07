@@ -773,7 +773,7 @@ bool CMainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 	{
 	case WM_RBUTTONDOWN:
 		m_pMainPlayer->SetRightClick(true);
-		m_pMainPlayer->RightClickProcess(gGameTimer.GetTotalTime());
+		m_pMainPlayer->RightClickProcess();
 		break;
 	case WM_LBUTTONUP:
 	case WM_RBUTTONUP:

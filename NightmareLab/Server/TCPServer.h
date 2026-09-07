@@ -9,7 +9,7 @@
 #include "../GameLimits.h"
 #include "../Client/GlobalDefine.h"
 #include "NetworkStatistics.h"
-#include "Timer.h"
+#include "../Common/Timer.h"
 constexpr WORD KEY_W{ 0x01 };
 constexpr WORD KEY_S{ 0x02 };
 constexpr WORD KEY_A{ 0x04 };
@@ -289,7 +289,7 @@ private:
 	void ReportNetworkStatisticsIfDue();
 
 	GameState mGameState = GameState::InLobby;
-	CTimer mTimer;
+	Timer mTimer;
 	ServerNetworkStatisticsReporter mNetworkStatisticsReporter;
 	std::chrono::steady_clock::time_point mNextStateReplicationTime = {};
 	default_random_engine mRandomEngine;

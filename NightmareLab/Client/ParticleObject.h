@@ -31,8 +31,8 @@ public:
 	void SetParticlePosition(int id, XMFLOAT3& pos) {
 		m_pParticleMesh->SetParticlePosition(id, pos);
 	}
-	void AddParticle(XMFLOAT3& pos) {
-		m_pParticleMesh->AddParticle(pos);
+	void AddParticle(XMFLOAT3& pos, float totalTime) {
+		m_pParticleMesh->AddParticle(pos, totalTime);
 	}
 };
 

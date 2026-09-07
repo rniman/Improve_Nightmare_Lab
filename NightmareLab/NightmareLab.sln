@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Commons", "Commons", "{942D
 	ProjectSection(SolutionItems) = preProject
 		Common.h = Common.h
 		GameLimits.h = GameLimits.h
+		Common\Timer.cpp = Common\Timer.cpp
+		Common\Timer.h = Common\Timer.h
 		WindowMessages.h = WindowMessages.h
 	EndProjectSection
 EndProject

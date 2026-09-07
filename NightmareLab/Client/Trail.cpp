@@ -1,7 +1,6 @@
 #pragma once
 #include "stdafx.h"
 #include "Trail.h"
-#include "Timer.h"
 #include "Scene.h"
 
 Trail::Trail(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
@@ -52,7 +51,7 @@ void Trail::CreateShaderVariable(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 }
 
 
-void Trail::Render(ID3D12GraphicsCommandList* pd3dCommandList)
+void Trail::Render(ID3D12GraphicsCommandList* pd3dCommandList, float elapsedTime, float totalTime)
 {
 	m_pMaterial->UpdateShaderVariable(pd3dCommandList, nullptr);
 
@@ -62,10 +61,10 @@ void Trail::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 
 	pd3dCommandList->DrawInstanced(m_nVertices, 1, 0, 0);
 
-	Update();
+	Update(elapsedTime, totalTime);
 }
 
-void Trail::Update()
+void Trail::Update(float elapsedTime, float totalTime)
 {
 	if (!m_bStart) {
 		return;
@@ -77,7 +76,7 @@ void Trail::Update()
 		return;
 	}
 
-	m_fUVTime += gGameTimer.GetTimeElapsed();
+	m_fUVTime += elapsedTime;
 	if (m_fUVTime >= 0.65f) {
 		m_fUVTime = 0.0f;
 		m_bStart = false;
@@ -85,7 +84,7 @@ void Trail::Update()
 	}
 
 	/*XMMATRIX mtxRotate = XMMatrixRotationRollPitchYaw(XMConvertToRadians(0.0f),
-		XMConvertToRadians(360.0f * gGameTimer.GetTimeElapsed()), XMConvertToRadians(0.0f));
+		XMConvertToRadians(360.0f * elapsedTime), XMConvertToRadians(0.0f));
 	testobject->m_xmf4x4ToParent = Matrix4x4::Multiply(testobject->m_xmf4x4ToParent, mtxRotate);
 	testobject->UpdateTransform(nullptr);
 
@@ -98,7 +97,7 @@ void Trail::Update()
 
 	if (m_nVertices == 0) {
 		// 첫 1 삼각형
-		FirstTrailGenerate(interval);
+		FirstTrailGenerate(interval, totalTime);
 	}
 	else {
 		void* pData;
@@ -113,28 +112,28 @@ void Trail::Update()
 		// 1 삼각형
 		Tv[m_nVertices].position = Tv[m_nVertices - 3].position;//오른쪽 위 --- 3 [이전 삼각형의 왼쪽 위 3 재사용]
 		Tv[m_nVertices].uv = XMFLOAT2(m_fUVTime * 2 / 3, 0.0f);
-		Tv[m_nVertices].startTime = gGameTimer.GetTotalTime();
+		Tv[m_nVertices].startTime = totalTime;
 		Tv[m_nVertices + 1].position = Tv[m_nVertices - 1].position;//오른쪽 아래 --- 4 [이전 삼각형의 왼쪽아래 4 재사용]
 		Tv[m_nVertices + 1].uv = XMFLOAT2(m_fUVTime * 2 / 3, 1.f);
-		Tv[m_nVertices + 1].startTime = gGameTimer.GetTotalTime();
+		Tv[m_nVertices + 1].startTime = totalTime;
 		temp = Vector3::Add(pos, right, -interval);
 		temp = Vector3::Add(temp, up, interval);
 		Tv[m_nVertices + 2].position = temp;//왼쪽 위 --- 5 [새로 생성하는 정점]
 		Tv[m_nVertices + 2].uv = XMFLOAT2(m_fUVTime * 2 / 3, 0.f);
-		Tv[m_nVertices + 2].startTime = gGameTimer.GetTotalTime();
+		Tv[m_nVertices + 2].startTime = totalTime;
 
 		// 2 삼각형
 		Tv[m_nVertices + 3].position = Tv[m_nVertices + 2].position;//왼쪽 위 --- 5 [5] 재사용
 		Tv[m_nVertices + 3].uv = XMFLOAT2(m_fUVTime * 2 / 3, 0.f);
-		Tv[m_nVertices + 3].startTime = gGameTimer.GetTotalTime();
+		Tv[m_nVertices + 3].startTime = totalTime;
 		Tv[m_nVertices + 4].position = Tv[m_nVertices + 1].position;//오른쪽 아래 --- 4 [4] 재사용 -> 인덱스가 아니므로 사실상 다른 정점임을 유의하자.
 		Tv[m_nVertices + 4].uv = XMFLOAT2(m_fUVTime * 2 / 3, 1.f);
-		Tv[m_nVertices + 4].startTime = gGameTimer.GetTotalTime();
+		Tv[m_nVertices + 4].startTime = totalTime;
 		temp = Vector3::Add(pos, right, -interval);
 		temp = Vector3::Add(temp, up, -interval);
 		Tv[m_nVertices + 5].position = temp;//왼쪽 아래 --- 6 [새 정점]
 		Tv[m_nVertices + 5].uv = XMFLOAT2(m_fUVTime * 2 / 3, 1.f);
-		Tv[m_nVertices + 5].startTime = gGameTimer.GetTotalTime();
+		Tv[m_nVertices + 5].startTime = totalTime;
 
 		m_nVertices += 6; // 생성 후 증가시킨다.
 
@@ -144,7 +143,7 @@ void Trail::Update()
 
 }
 
-void Trail::FirstTrailGenerate(float interval)
+void Trail::FirstTrailGenerate(float interval, float totalTime)
 {
 	void* pData;
 	m_pd3dVertexBuffer->Map(0, nullptr, &pData);
@@ -160,30 +159,30 @@ void Trail::FirstTrailGenerate(float interval)
 	temp = Vector3::Add(temp, up, interval);
 	Tv[m_nVertices].position = temp;//오른쪽 위 --- 1
 	Tv[m_nVertices].uv = XMFLOAT2(0.f, 0.0f);
-	Tv[m_nVertices].startTime = gGameTimer.GetTotalTime();
+	Tv[m_nVertices].startTime = totalTime;
 	temp = Vector3::Add(pos, right, interval);
 	temp = Vector3::Add(temp, up, -interval);
 	Tv[m_nVertices + 1].position = temp;//오른쪽 아래 --- 2
 	Tv[m_nVertices + 1].uv = XMFLOAT2(0.f, 0.f);
-	Tv[m_nVertices + 1].startTime = gGameTimer.GetTotalTime();
+	Tv[m_nVertices + 1].startTime = totalTime;
 	temp = Vector3::Add(pos, right, -interval);
 	temp = Vector3::Add(temp, up, interval);
 	Tv[m_nVertices + 2].position = temp;//왼쪽 위 --- 3
 	Tv[m_nVertices + 2].uv = XMFLOAT2(0.f, 0.f);
-	Tv[m_nVertices + 2].startTime = gGameTimer.GetTotalTime();
+	Tv[m_nVertices + 2].startTime = totalTime;
 
 	// 첫 2 삼각형
 	Tv[m_nVertices + 3].position = Tv[m_nVertices + 2].position;//왼쪽 위 --- 3 [3] 재사용
 	Tv[m_nVertices + 3].uv = XMFLOAT2(0.f, 0.f);
-	Tv[m_nVertices + 3].startTime = gGameTimer.GetTotalTime();
+	Tv[m_nVertices + 3].startTime = totalTime;
 	Tv[m_nVertices + 4].position = Tv[m_nVertices + 1].position;//오른쪽 아래 --- 2 [2] 재사용
 	Tv[m_nVertices + 4].uv = XMFLOAT2(0.f, 0.f);
-	Tv[m_nVertices + 4].startTime = gGameTimer.GetTotalTime();
+	Tv[m_nVertices + 4].startTime = totalTime;
 	temp = Vector3::Add(pos, right, -interval);
 	temp = Vector3::Add(temp, up, -interval);
 	Tv[m_nVertices + 5].position = temp;//왼쪽 아래 --- 4
 	Tv[m_nVertices + 5].uv = XMFLOAT2(0.f, 0.f);
-	Tv[m_nVertices + 5].startTime = gGameTimer.GetTotalTime();
+	Tv[m_nVertices + 5].startTime = totalTime;
 
 	m_nVertices += 6; // 생성 후 증가시킨다.
 
@@ -197,12 +196,12 @@ void Trail::TrailInit()
 	m_d3dVertexBufferView.SizeInBytes = sizeof(TrailVertex) * m_nVertices;
 }
 
-void Trail::TrailStart()
+void Trail::TrailStart(float totalTime)
 {
 	if (m_bStart) {
 		return;
 	}
 	m_bStart = true;
 
-	FirstTrailGenerate(0.25f);
+	FirstTrailGenerate(0.25f, totalTime);
 }

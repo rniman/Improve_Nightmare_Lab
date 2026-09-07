@@ -52,6 +52,14 @@ public:
 	virtual shared_ptr<CCamera> ChangeCamera(DWORD nNewCameraMode, float fElapsedTime);
 
 	// Interface
+	/// @brief 프레임워크가 전달한 시간을 애니메이션 콜백과 효과 렌더링에 사용한다.
+	void SetFrameTime(float elapsedTime, float totalTime)
+	{
+		mFrameElapsedTime = elapsedTime;
+		mFrameTotalTime = totalTime;
+	}
+	float GetFrameElapsedTime() const { return mFrameElapsedTime; }
+	float GetFrameTotalTime() const { return mFrameTotalTime; }
 	XMFLOAT3 GetPosition() const { return m_xmf3Position; }
 	XMFLOAT3 GetOldPosition() const { return m_xmf3OldPosition; }
 	XMFLOAT3 GetLookVector() const { return(m_xmf3Look); }
@@ -99,7 +107,7 @@ public:
 	void SetRight(const XMFLOAT3& xmf3Right) { m_xmf3Right = xmf3Right; }
 	void SetUp(const XMFLOAT3& xmf3Up) { m_xmf3Up = xmf3Up; }
 
-	virtual void RightClickProcess(float fCurTime) {}
+	virtual void RightClickProcess() {}
 	bool IsRightClick() { return m_bRightClick; }
 	void SetRightClick(bool val) { m_bRightClick = val; }
 
@@ -124,7 +132,7 @@ public:
 			m_pHitDamageScreenObject->SetRender(val);
 		}
 	}
-	virtual UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const;
+	virtual UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize) const;
 	//게임시작에 필요한 작업 수행
 	virtual void SetGameStart();
 
@@ -190,6 +198,10 @@ protected:
 	bool	m_bGameStartWait = false;
 
 	bool	m_bSense = false;
+
+private:
+	float mFrameElapsedTime = 0.0f;
+	float mFrameTotalTime = 0.0f;
 };
 
 constexpr float BLUESUIT_STAMINA_MAX{ 5.0f };
@@ -215,7 +227,7 @@ public:
 	virtual void MainPlayerRender(ID3D12GraphicsCommandList* pd3dCommandList);
 
 	virtual void UpdatePicking() override;
-	virtual void RightClickProcess(float fCurTime) override;
+	virtual void RightClickProcess() override;
 
 	int AddItem(const shared_ptr<CGameObject>& pGameObject);
 	virtual void UseItem(int nSlot) override;
@@ -299,7 +311,7 @@ private:
 public:
 	void SetHitEvent();
 
-	UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const override;
+	UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize) const override;
 	void SetZombiePlayer(shared_ptr<CZombiePlayer>& m_player) { m_pZombiePlayer = m_player; }
 private:
 	float m_fStopMoving = 0.0f;
@@ -378,5 +390,5 @@ public:
 	void SetAttackTrail(shared_ptr<Trail> trail);
 
 	void SetGameStart() override;
-	UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize, float totalTime) const override;
+	UiOverlayFrameData BuildUiOverlayFrameData(const XMFLOAT2& viewportSize) const override;
 };

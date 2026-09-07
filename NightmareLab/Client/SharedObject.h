@@ -16,8 +16,8 @@ public:
 		return instance;
 	}
 
-	void EnableItemGetParticle(const shared_ptr<CGameObject>& object);
-	void AddParticle(CParticleMesh::TYPE particleType, XMFLOAT3 pos);
+	void EnableItemGetParticle(const shared_ptr<CGameObject>& object, float totalTime);
+	void AddParticle(CParticleMesh::TYPE particleType, XMFLOAT3 pos, float totalTime);
 
 	vector<shared_ptr<CParticleObject>> m_vParticleObjects;
 };
